@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
 
-from app.models import AlertType, Product
+from app.models import Alert
 
 
-class NotificationDestination(ABC):
+class NotificationProvider(ABC):
     @abstractmethod
-    async def send(self, alert_type: AlertType, product: Product, message: str) -> bool:
+    async def send(self, alert: Alert) -> bool:
         """Deliver an alert and return whether delivery succeeded."""
+
+
+# Backwards-compatible name for code built on the initial contract.
+NotificationDestination = NotificationProvider

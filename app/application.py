@@ -6,6 +6,7 @@ import logging
 from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
+from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 
 LOGGER = logging.getLogger("monitor")
@@ -22,6 +23,7 @@ class Application:
             max_retries=config.monitor.max_retries,
         )
         self.scheduler = Scheduler()
+        self.notifier = DiscordNotifier(config.notifications, self.database)
         self.stop_event = asyncio.Event()
 
     async def start(self) -> None:
@@ -46,6 +48,7 @@ class Application:
     async def close(self) -> None:
         LOGGER.info("Application stopping")
         await self.scheduler.stop()
+        await self.notifier.close()
         await self.http.close()
         await self.database.close()
         LOGGER.info("Application stopped")

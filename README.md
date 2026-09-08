@@ -1,8 +1,9 @@
 # Loungefly Monitor
 
 A lightweight, asynchronous foundation for continuously monitoring Loungefly Mini Backpack
-availability. This stage provides lifecycle management, normalized models, SQLite persistence,
-configuration, HTTP transport, logging, and scheduling. **No retailer scraping is implemented.**
+availability. It provides lifecycle management, normalized models, SQLite persistence,
+configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
+**No retailer scraping is implemented.**
 
 ## Requirements
 
@@ -30,6 +31,7 @@ Press `Ctrl+C` or send `SIGTERM` to stop cleanly. Runtime defaults are in
 - `app/scheduler.py`: independent asynchronous interval jobs
 - `app/monitors/base.py`: contract for future retailer adapters
 - `app/notifications/base.py`: contract for notification destinations
+- `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
 - `app/application.py`: startup and graceful shutdown orchestration
 
@@ -43,5 +45,28 @@ pytest
 python -m compileall -q app tests
 ```
 
-Retailer discovery/check implementations, notification providers, alert transition rules,
-and historical product states are intentionally reserved for later stages.
+## Discord notifications
+
+Set product and administrator webhook URLs in `.env` (never in committed YAML):
+
+```dotenv
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+DISCORD_ADMIN_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+Product alerts use the first URL; monitor error and recovery alerts use the administrator URL.
+Successful deliveries are persistently deduplicated in SQLite. Failed deliveries remain eligible
+for retry and return `False` rather than crashing the monitor.
+
+To safely generate a standalone sample event (with no retailer adapter involved), configure
+`DISCORD_WEBHOOK_URL` and run:
+
+```bash
+python -m app.tools.test_notification
+```
+
+The command prints an error and sends nothing when the applicable webhook is not configured.
+Use `--admin` to test routing to `DISCORD_ADMIN_WEBHOOK_URL`.
+
+Retailer discovery/check implementations, alert transition rules, SMS delivery, and historical
+product states are intentionally reserved for later stages.

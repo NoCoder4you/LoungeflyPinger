@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_product_sent ON alerts(product_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_type_sent ON alerts(alert_type, sent_at);
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+    deduplication_key TEXT PRIMARY KEY,
+    alert_type TEXT NOT NULL,
+    destination TEXT NOT NULL,
+    sent_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_sent_at
+    ON notification_deliveries(sent_at);
 """
 
 

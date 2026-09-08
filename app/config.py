@@ -31,11 +31,19 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class NotificationConfig:
+    """Secret notification endpoints loaded exclusively from the environment."""
+
+    discord_webhook_url: str | None = None
+    discord_admin_webhook_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     monitor: MonitorConfig
     database_path: Path
     logging: LoggingConfig
-    notifications: dict[str, Any] = field(default_factory=dict)
+    notifications: NotificationConfig = field(default_factory=NotificationConfig)
     retailers: dict[str, Any] = field(default_factory=dict)
 
 
@@ -89,8 +97,12 @@ def load_config(path: str | Path = "config/retailers.yaml", env_path: str | Path
     if not isinstance(database_raw, dict):
         raise ConfigurationError("database settings must be a mapping")
     database_path = Path(os.getenv("LOUNGEFLY_DATABASE_PATH", database_raw.get("path", "data/loungefly.db")))
-    notifications = raw.get("notifications", {})
+    notifications_raw = raw.get("notifications", {})
     retailers = raw.get("retailers", {})
-    if not isinstance(notifications, dict) or not isinstance(retailers, dict):
+    if not isinstance(notifications_raw, dict) or not isinstance(retailers, dict):
         raise ConfigurationError("notifications and retailers must be mappings")
+    notifications = NotificationConfig(
+        discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
+        discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
+    )
     return AppConfig(monitor, database_path, logging_config, notifications, retailers)
