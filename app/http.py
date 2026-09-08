@@ -26,15 +26,26 @@ class HttpClientError(RuntimeError):
 class AsyncHttpClient:
     def __init__(self, *, timeout_seconds: float, concurrency_limit: int, user_agent: str, max_retries: int) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-        self._connector = aiohttp.TCPConnector(limit=concurrency_limit, ttl_dns_cache=300)
+        self._concurrency_limit = concurrency_limit
         self._headers = {"User-Agent": user_agent, "Accept": "text/html,application/json"}
         self._semaphore = asyncio.Semaphore(concurrency_limit)
         self._max_retries = max_retries
+        self._connector: aiohttp.TCPConnector | None = None
         self._session: aiohttp.ClientSession | None = None
+        self._lifecycle_lock = asyncio.Lock()
 
     async def start(self) -> None:
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=self._timeout, connector=self._connector, headers=self._headers)
+        async with self._lifecycle_lock:
+            if self._session is not None and not self._session.closed:
+                return
+            # ClientSession owns and closes its connector. Always create these as
+            # a pair so restarting the client never reuses a closed connector.
+            self._connector = aiohttp.TCPConnector(limit=self._concurrency_limit, ttl_dns_cache=300)
+            self._session = aiohttp.ClientSession(
+                timeout=self._timeout,
+                connector=self._connector,
+                headers=self._headers,
+            )
 
     async def get_text(self, url: str) -> str:
         await self.start()
@@ -71,6 +82,8 @@ class AsyncHttpClient:
             raise HttpClientError(HttpErrorKind.PARSER, "Response was not valid JSON") from exc
 
     async def close(self) -> None:
-        if self._session is not None:
-            await self._session.close()
+        async with self._lifecycle_lock:
+            if self._session is not None:
+                await self._session.close()
             self._session = None
+            self._connector = None
