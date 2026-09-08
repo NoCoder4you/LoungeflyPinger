@@ -1,0 +1,1 @@
+"""Loungefly Monitor application package."""

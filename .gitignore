@@ -206,6 +206,11 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Runtime state
+data/*.db
+data/*.db-*
+logs/*.log*
+
 # PyPI configuration file
 .pypirc
 
