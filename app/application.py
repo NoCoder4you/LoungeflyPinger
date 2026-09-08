@@ -6,8 +6,10 @@ import logging
 from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
+from app.monitors import GeekCoreMonitor
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
+from app.services.monitor_service import MonitorService
 
 LOGGER = logging.getLogger("monitor")
 
@@ -31,6 +33,15 @@ class Application:
         await self.database.connect()
         await self.database.initialize()
         await self.http.start()
+        geekcore = self.config.retailers.get("geekcore", {})
+        if isinstance(geekcore, dict) and geekcore.get("enabled", False):
+            interval = float(geekcore.get("interval_minutes", self.config.monitor.default_interval_minutes))
+            service = MonitorService(
+                GeekCoreMonitor(self.http), self.database, self.notifier, retailer_name="GeekCore"
+            )
+            self.scheduler.add_interval_job(
+                "geekcore", service.synchronize, interval * 60, jitter_fraction=0.05
+            )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
 
     def request_shutdown(self) -> None:
