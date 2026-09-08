@@ -71,7 +71,12 @@ def load_config(path: str | Path = "config/retailers.yaml", env_path: str | Path
     )
     if not monitor.user_agent:
         raise ConfigurationError("user_agent must not be empty")
-    level = os.getenv("LOUNGEFLY_LOG_LEVEL", logging_raw.get("level", "INFO")).upper()
+    configured_level = os.getenv("LOUNGEFLY_LOG_LEVEL")
+    if configured_level is None:
+        configured_level = logging_raw.get("level", "INFO")
+    if not isinstance(configured_level, str):
+        raise ConfigurationError("logging level must be a string")
+    level = configured_level.strip().upper()
     if level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
         raise ConfigurationError("logging level is invalid")
     logging_config = LoggingConfig(
