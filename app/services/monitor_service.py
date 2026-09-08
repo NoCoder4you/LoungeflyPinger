@@ -49,7 +49,10 @@ class MonitorService:
                 alert_type = AlertType.NEW_PRODUCT
             elif previous == Availability.OUT_OF_STOCK and product.availability == Availability.IN_STOCK:
                 alert_type = AlertType.RESTOCK
-            await self.stock.record(product_id, product)
+            # A failed parse/check provides no inventory evidence. Preserve the
+            # last known stock state until a successful observation replaces it.
+            if product.availability != Availability.ERROR:
+                await self.stock.record(product_id, product)
             if alert_type is not None:
                 alert = Alert(alert_type, product, product_id, previous_availability=previous)
                 alerts.append(alert)
