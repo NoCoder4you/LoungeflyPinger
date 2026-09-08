@@ -20,5 +20,7 @@ notifications:
   sms:
     enabled: false
 
-# Retailer adapters and their schedules will be configured here in a later stage.
-retailers: {}
+retailers:
+  geekcore:
+    enabled: true
+    interval_minutes: 5

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 from collections.abc import Awaitable, Callable
 
 LOGGER = logging.getLogger(__name__)
@@ -12,16 +13,30 @@ class Scheduler:
         self._tasks: set[asyncio.Task[None]] = set()
         self._stopping = asyncio.Event()
 
-    def add_interval_job(self, name: str, callback: Callable[[], Awaitable[None]], interval_seconds: float) -> None:
+    def add_interval_job(
+        self,
+        name: str,
+        callback: Callable[[], Awaitable[None]],
+        interval_seconds: float,
+        *,
+        jitter_fraction: float = 0.0,
+    ) -> None:
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be positive")
         if self._stopping.is_set():
             raise RuntimeError("scheduler is stopping")
-        task = asyncio.create_task(self._run_job(name, callback, interval_seconds), name=f"scheduler:{name}")
+        if not 0 <= jitter_fraction <= 1:
+            raise ValueError("jitter_fraction must be between zero and one")
+        task = asyncio.create_task(
+            self._run_job(name, callback, interval_seconds, jitter_fraction),
+            name=f"scheduler:{name}",
+        )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _run_job(self, name: str, callback: Callable[[], Awaitable[None]], interval: float) -> None:
+    async def _run_job(
+        self, name: str, callback: Callable[[], Awaitable[None]], interval: float, jitter_fraction: float
+    ) -> None:
         while not self._stopping.is_set():
             try:
                 await callback()
@@ -30,7 +45,8 @@ class Scheduler:
             except Exception:
                 LOGGER.exception("Scheduled job failed", extra={"job": name})
             try:
-                await asyncio.wait_for(self._stopping.wait(), timeout=interval)
+                jitter = random.uniform(-jitter_fraction, jitter_fraction) * interval
+                await asyncio.wait_for(self._stopping.wait(), timeout=max(0.1, interval + jitter))
             except TimeoutError:
                 pass
 

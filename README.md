@@ -3,7 +3,7 @@
 A lightweight, asynchronous foundation for continuously monitoring Loungefly Mini Backpack
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
-**No retailer scraping is implemented.**
+GeekCore UK is monitored through Shopify's public structured collection feeds.
 
 ## Requirements
 
@@ -29,7 +29,8 @@ Press `Ctrl+C` or send `SIGTERM` to stop cleanly. Runtime defaults are in
 - `app/database.py`: SQLite schema and asynchronous connection lifecycle
 - `app/http.py`: pooled HTTP client with bounded concurrency and finite retries
 - `app/scheduler.py`: independent asynchronous interval jobs
-- `app/monitors/base.py`: contract for future retailer adapters
+- `app/monitors/base.py`: contract for retailer adapters
+- `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
@@ -70,5 +71,7 @@ python -m app.tools.test_notification
 The command prints an error and sends nothing when the applicable webhook is not configured.
 Use `--admin` to test routing to `DISCORD_ADMIN_WEBHOOK_URL`.
 
-Retailer discovery/check implementations, alert transition rules, SMS delivery, and historical
-product states are intentionally reserved for later stages.
+The first successful GeekCore run is a silent baseline synchronization: products and stock are
+persisted without flooding Discord. Later discoveries emit `NEW_PRODUCT`, and an
+`OUT_OF_STOCK` to `IN_STOCK` transition emits `RESTOCK`. SMS delivery and historical product
+states are reserved for later stages.

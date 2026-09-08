@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from app.database import Database
 from app.models import Product
+from app.models import Availability
 
 
 class StockService:
@@ -24,3 +25,15 @@ class StockService:
              product.currency, product.preorder, datetime.now(UTC).isoformat()),
         )
         await connection.commit()
+
+    async def current_availability(self, product_id: int) -> Availability | None:
+        """Return the persisted state, or ``None`` for a never-synchronized product."""
+        connection = self.database.connection
+        if connection is None:
+            raise RuntimeError("database is not connected")
+        row = await (
+            await connection.execute(
+                "SELECT availability FROM product_states WHERE product_id = ?", (product_id,)
+            )
+        ).fetchone()
+        return Availability(row[0]) if row else None
