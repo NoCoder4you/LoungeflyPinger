@@ -1,0 +1,6 @@
+aiohttp==3.12.15
+aiosqlite==0.21.0
+python-dotenv==1.1.1
+PyYAML==6.0.2
+pytest==8.4.2
+pytest-asyncio==1.1.0

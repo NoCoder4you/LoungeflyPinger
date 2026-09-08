@@ -1,0 +1,24 @@
+monitor:
+  default_interval_minutes: 5
+  request_timeout_seconds: 20
+  concurrency_limit: 5
+  max_retries: 3
+  user_agent: "LoungeflyMonitor/0.1 (+self-hosted product availability monitor)"
+
+database:
+  path: data/loungefly.db
+
+logging:
+  level: INFO
+  path: logs/loungefly-monitor.log
+  max_bytes: 5242880
+  backup_count: 3
+
+notifications:
+  discord:
+    enabled: false
+  sms:
+    enabled: false
+
+# Retailer adapters and their schedules will be configured here in a later stage.
+retailers: {}
