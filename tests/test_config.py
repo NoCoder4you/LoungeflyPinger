@@ -13,6 +13,18 @@ def test_load_config(tmp_path: Path) -> None:
     assert config.database_path == Path("custom.db")
 
 
+def test_discord_webhooks_are_loaded_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/product")
+    monkeypatch.setenv("DISCORD_ADMIN_WEBHOOK_URL", "https://discord.example/admin")
+
+    config = load_config(path, tmp_path / ".env")
+
+    assert config.notifications.discord_webhook_url == "https://discord.example/product"
+    assert config.notifications.discord_admin_webhook_url == "https://discord.example/admin"
+
+
 def test_invalid_config_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 0\n", encoding="utf-8")

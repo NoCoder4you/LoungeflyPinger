@@ -1,9 +1,11 @@
 """Normalized domain models shared by monitors and services."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from urllib.parse import urlparse
+from uuid import uuid4
 
 
 class Availability(StrEnum):
@@ -76,3 +78,37 @@ class Product:
             return
         if not isinstance(value, str) or urlparse(value).scheme not in {"http", "https"} or not urlparse(value).netloc:
             raise ValueError(f"{field} must be a valid HTTP(S) URL")
+
+
+@dataclass(frozen=True, slots=True)
+class Alert:
+    """A provider-independent notification event."""
+
+    alert_type: AlertType
+    product: Product | None = None
+    product_id: int | None = None
+    previous_price: Decimal | None = None
+    previous_availability: Availability | None = None
+    new_state: str | None = None
+    message: str | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    occurrence_id: str = field(default_factory=lambda: uuid4().hex)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "alert_type", AlertType(self.alert_type))
+        if self.previous_price is not None:
+            price = Decimal(str(self.previous_price))
+            if not price.is_finite() or price < 0:
+                raise ValueError("previous_price must be a finite, non-negative value")
+            object.__setattr__(self, "previous_price", price)
+        if self.previous_availability is not None:
+            object.__setattr__(self, "previous_availability", Availability(self.previous_availability))
+        if not isinstance(self.occurrence_id, str) or not self.occurrence_id.strip():
+            raise ValueError("occurrence_id must be a non-empty string")
+        object.__setattr__(self, "occurrence_id", self.occurrence_id.strip())
+        if self.timestamp.tzinfo is None:
+            raise ValueError("timestamp must be timezone-aware")
+
+    @property
+    def is_admin(self) -> bool:
+        return self.alert_type in {AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED}
