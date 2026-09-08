@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from urllib.parse import urlparse
+from uuid import uuid4
 
 
 class Availability(StrEnum):
@@ -91,6 +92,7 @@ class Alert:
     new_state: str | None = None
     message: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    occurrence_id: str = field(default_factory=lambda: uuid4().hex)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alert_type", AlertType(self.alert_type))
@@ -101,6 +103,9 @@ class Alert:
             object.__setattr__(self, "previous_price", price)
         if self.previous_availability is not None:
             object.__setattr__(self, "previous_availability", Availability(self.previous_availability))
+        if not isinstance(self.occurrence_id, str) or not self.occurrence_id.strip():
+            raise ValueError("occurrence_id must be a non-empty string")
+        object.__setattr__(self, "occurrence_id", self.occurrence_id.strip())
         if self.timestamp.tzinfo is None:
             raise ValueError("timestamp must be timezone-aware")
 

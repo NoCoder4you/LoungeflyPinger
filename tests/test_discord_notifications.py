@@ -109,7 +109,7 @@ async def test_missing_webhook_configuration_does_not_attempt_delivery(tmp_path:
 @pytest.mark.asyncio
 async def test_duplicate_is_suppressed_across_notifier_instances(tmp_path: Path, product: Product) -> None:
     path = tmp_path / "dedup.db"
-    alert = Alert(AlertType.RESTOCK, product, product_id=42)
+    alert = Alert(AlertType.RESTOCK, product, product_id=42, occurrence_id="restock-episode-1")
     first_session = FakeSession()
     async with Database(path) as database:
         notifier = DiscordNotifier(NotificationConfig("https://normal"), database, session=first_session)
@@ -117,9 +117,42 @@ async def test_duplicate_is_suppressed_across_notifier_instances(tmp_path: Path,
     second_session = FakeSession()
     async with Database(path) as database:
         notifier = DiscordNotifier(NotificationConfig("https://normal"), database, session=second_session)
-        assert await notifier.send(alert)
+        restored_alert = Alert(
+            AlertType.RESTOCK, product, product_id=42, occurrence_id="restock-episode-1"
+        )
+        assert await notifier.send(restored_alert)
     assert len(first_session.calls) == 1
     assert second_session.calls == []
+
+
+@pytest.mark.asyncio
+async def test_separate_alert_episodes_with_same_state_are_delivered(tmp_path: Path, product: Product) -> None:
+    async with Database(tmp_path / "episodes.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(NotificationConfig("https://normal"), database, session=session)
+        first = Alert(AlertType.RESTOCK, product, product_id=42, occurrence_id="restock-episode-1")
+        second = Alert(AlertType.RESTOCK, product, product_id=42, occurrence_id="restock-episode-2")
+
+        assert await notifier.send(first)
+        assert await notifier.send(second)
+
+        assert len(session.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_separate_identical_monitor_failure_episodes_are_delivered(tmp_path: Path) -> None:
+    async with Database(tmp_path / "monitor-episodes.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_admin_webhook_url="https://admin"), database, session=session
+        )
+        first = Alert(AlertType.MONITOR_ERROR, message="Store unavailable", occurrence_id="failure-episode-1")
+        second = Alert(AlertType.MONITOR_ERROR, message="Store unavailable", occurrence_id="failure-episode-2")
+
+        assert await notifier.send(first)
+        assert await notifier.send(second)
+
+        assert len(session.calls) == 2
 
 
 @pytest.mark.asyncio

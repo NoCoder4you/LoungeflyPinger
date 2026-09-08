@@ -110,7 +110,10 @@ class DiscordNotifier(NotificationProvider):
             product_key = f"{alert.product.retailer}:{alert.product.retailer_product_id}"
         state = alert.new_state or (alert.product.availability.value if alert.product else alert.message)
         price = str(alert.product.price) if alert.product and alert.product.price is not None else None
-        identity = json.dumps([product_key, alert.alert_type.value, state, price], separators=(",", ":"))
+        identity = json.dumps(
+            [alert.occurrence_id, product_key, alert.alert_type.value, state, price],
+            separators=(",", ":"),
+        )
         return hashlib.sha256(identity.encode()).hexdigest()
 
     async def _claim(self, alert: Alert, destination: str) -> bool:

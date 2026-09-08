@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-from datetime import UTC, datetime
 
 from app.config import load_config
 from app.database import Database
@@ -24,8 +23,7 @@ async def _send(admin: bool) -> bool:
             currency="GBP",
         ),
         message="Manual Discord admin notification test" if admin else None,
-        # A manual invocation should always be deliverable while production events deduplicate.
-        new_state=f"manual-test-{datetime.now(UTC).isoformat()}",
+        new_state="manual-test",
     )
     async with Database(config.database_path) as database:
         notifier = DiscordNotifier(config.notifications, database)
