@@ -24,3 +24,6 @@ retailers:
   geekcore:
     enabled: true
     interval_minutes: 5
+  truffleshuffle:
+    enabled: true
+    interval_minutes: 10
