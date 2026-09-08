@@ -55,10 +55,10 @@ DISCORD_ADMIN_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
 Product alerts use the first URL; monitor error and recovery alerts use the administrator URL.
-Successful deliveries are persistently deduplicated in SQLite by alert occurrence. Reuse an
-alert's `occurrence_id` when retrying or restoring that event; create a new `Alert` for a later
-episode, even when its product state and price match an earlier episode. Failed deliveries remain
-eligible for retry and return `False` rather than crashing the monitor.
+Deliveries are persisted for deduplication only after Discord accepts them. Reuse an alert's
+`occurrence_id` when retrying or restoring that event; create a new `Alert` for a later episode,
+even when its product state and price match an earlier episode. Failed or cancelled requests remain
+eligible for retry, and delivery failures return `False` rather than crashing the monitor.
 
 To safely generate a standalone sample event (with no retailer adapter involved), configure
 `DISCORD_WEBHOOK_URL` and run:

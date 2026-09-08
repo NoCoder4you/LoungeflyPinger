@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 from pathlib import Path
 
@@ -33,6 +34,18 @@ class FakeSession:
             raise error
         status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
         return FakeResponse(status)
+
+
+class BlockingSession(FakeSession):
+    def __init__(self) -> None:
+        super().__init__()
+        self.request_started = asyncio.Event()
+
+    async def post(self, url: str, *, json: dict[str, object]) -> FakeResponse:
+        self.calls.append((url, json))
+        self.request_started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
 
 
 @pytest.fixture
@@ -164,3 +177,33 @@ async def test_webhook_failure_returns_false_and_remains_retryable(tmp_path: Pat
         assert not await notifier.send(alert)
         assert await notifier.send(alert)
         assert len(session.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_cancelled_delivery_is_not_persisted_and_can_retry_after_restart(
+    tmp_path: Path, product: Product
+) -> None:
+    path = tmp_path / "cancelled.db"
+    alert = Alert(AlertType.RESTOCK, product, product_id=42, occurrence_id="cancelled-episode")
+    blocking_session = BlockingSession()
+    async with Database(path) as database:
+        notifier = DiscordNotifier(
+            NotificationConfig("https://normal"), database, session=blocking_session
+        )
+        delivery = asyncio.create_task(notifier.send(alert))
+        await blocking_session.request_started.wait()
+        delivery.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await delivery
+        count = await (
+            await database.connection.execute("SELECT count(*) FROM notification_deliveries")
+        ).fetchone()
+        assert count == (0,)
+
+    retry_session = FakeSession()
+    async with Database(path) as database:
+        notifier = DiscordNotifier(
+            NotificationConfig("https://normal"), database, session=retry_session
+        )
+        assert await notifier.send(alert)
+    assert len(retry_session.calls) == 1

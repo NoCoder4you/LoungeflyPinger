@@ -1,8 +1,10 @@
 """Discord webhook notification provider."""
 
+import asyncio
 import hashlib
 import json
 import logging
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -98,6 +100,7 @@ class DiscordNotifier(NotificationProvider):
         self._database = database
         self._session = session
         self._owns_session = session is None
+        self._delivery_lock = asyncio.Lock()
 
     def _webhook(self, alert: Alert) -> str | None:
         return (self._config.discord_admin_webhook_url if alert.is_admin
@@ -116,17 +119,28 @@ class DiscordNotifier(NotificationProvider):
         )
         return hashlib.sha256(identity.encode()).hexdigest()
 
-    async def _claim(self, alert: Alert, destination: str) -> bool:
+    async def _was_delivered(self, alert: Alert) -> bool:
         connection = self._database.connection
         if connection is None:
             raise RuntimeError("database is not connected")
-        cursor = await connection.execute(
+        row = await (
+            await connection.execute(
+                "SELECT 1 FROM notification_deliveries WHERE deduplication_key = ?",
+                (self.deduplication_key(alert),),
+            )
+        ).fetchone()
+        return row is not None
+
+    async def _record_delivery(self, alert: Alert, destination: str) -> None:
+        connection = self._database.connection
+        if connection is None:
+            raise RuntimeError("database is not connected")
+        await connection.execute(
             "INSERT OR IGNORE INTO notification_deliveries "
             "(deduplication_key, alert_type, destination, sent_at) VALUES (?, ?, ?, ?)",
-            (self.deduplication_key(alert), alert.alert_type.value, destination, alert.timestamp.isoformat()),
+            (self.deduplication_key(alert), alert.alert_type.value, destination, datetime.now(UTC).isoformat()),
         )
         await connection.commit()
-        return cursor.rowcount == 1
 
     async def send(self, alert: Alert) -> bool:
         webhook = self._webhook(alert)
@@ -134,35 +148,26 @@ class DiscordNotifier(NotificationProvider):
             LOGGER.warning("Discord webhook is not configured", extra={"admin": alert.is_admin})
             return False
         destination = "discord_admin" if alert.is_admin else "discord"
-        if not await self._claim(alert, destination):
-            LOGGER.info("Suppressing duplicate Discord alert", extra={"alert_type": alert.alert_type.value})
-            return True
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
-            self._owns_session = True
-        try:
-            response = await self._session.post(webhook, json=build_discord_payload(alert))
-            try:
-                if response.status < 200 or response.status >= 300:
-                    LOGGER.error("Discord webhook rejected notification", extra={"status": response.status})
-                    await self._release(alert)
-                    return False
+        async with self._delivery_lock:
+            if await self._was_delivered(alert):
+                LOGGER.info("Suppressing duplicate Discord alert", extra={"alert_type": alert.alert_type.value})
                 return True
-            finally:
-                response.release()
-        except Exception as exc:
-            LOGGER.error("Discord webhook delivery failed: %s", type(exc).__name__)
-            await self._release(alert)
-            return False
-
-    async def _release(self, alert: Alert) -> None:
-        connection = self._database.connection
-        assert connection is not None
-        await connection.execute(
-            "DELETE FROM notification_deliveries WHERE deduplication_key = ?",
-            (self.deduplication_key(alert),),
-        )
-        await connection.commit()
+            if self._session is None or self._session.closed:
+                self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
+                self._owns_session = True
+            try:
+                response = await self._session.post(webhook, json=build_discord_payload(alert))
+                try:
+                    if response.status < 200 or response.status >= 300:
+                        LOGGER.error("Discord webhook rejected notification", extra={"status": response.status})
+                        return False
+                    await self._record_delivery(alert, destination)
+                    return True
+                finally:
+                    response.release()
+            except Exception as exc:
+                LOGGER.error("Discord webhook delivery failed: %s", type(exc).__name__)
+                return False
 
     async def close(self) -> None:
         if self._owns_session and self._session is not None:
