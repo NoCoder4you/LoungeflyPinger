@@ -27,7 +27,9 @@ class AsyncHttpClient:
     def __init__(self, *, timeout_seconds: float, concurrency_limit: int, user_agent: str, max_retries: int) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self._concurrency_limit = concurrency_limit
-        self._headers = {"User-Agent": user_agent, "Accept": "text/html,application/json"}
+        # Use the conventional general-purpose request accept value. Individual
+        # parsers still validate the returned representation before trusting it.
+        self._headers = {"User-Agent": user_agent, "Accept": "*/*"}
         self._semaphore = asyncio.Semaphore(concurrency_limit)
         self._max_retries = max_retries
         self._connector: aiohttp.TCPConnector | None = None

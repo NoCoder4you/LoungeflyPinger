@@ -6,7 +6,7 @@ import logging
 from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
-from app.monitors import GeekCoreMonitor, TruffleShuffleMonitor
+from app.monitors import GeekCoreMonitor, LoungeflyUKMonitor, TruffleShuffleMonitor
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.monitor_service import MonitorService
@@ -55,6 +55,20 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "truffleshuffle", service.synchronize, interval * 60, jitter_fraction=0.05
+            )
+        loungefly_uk = self.config.retailers.get("loungefly_uk", {})
+        if isinstance(loungefly_uk, dict) and loungefly_uk.get("enabled", False):
+            interval = float(
+                loungefly_uk.get("interval_minutes", self.config.monitor.default_interval_minutes)
+            )
+            service = MonitorService(
+                LoungeflyUKMonitor(self.http),
+                self.database,
+                self.notifier,
+                retailer_name="Loungefly UK",
+            )
+            self.scheduler.add_interval_job(
+                "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
 
