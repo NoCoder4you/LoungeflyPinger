@@ -4,7 +4,7 @@ A lightweight, asynchronous foundation for continuously monitoring Loungefly Min
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
 GeekCore UK is monitored through Shopify's public structured collection feeds, and
-TruffleShuffle UK is monitored through its public product JSON-LD.
+TruffleShuffle UK and Loungefly UK are monitored through public product JSON-LD.
 
 ## Retailer status
 
@@ -13,6 +13,7 @@ TruffleShuffle UK is monitored through its public product JSON-LD.
 | GeekCore | Working | Public Shopify product feeds |
 | TruffleShuffle | Working | Public category and product JSON-LD |
 | HMV | Requires browser | Normal HTTP requests receive a Cloudflare managed challenge |
+| Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
 
 HMV is present in the retailer configuration with its own interval but is disabled. Its home,
 search, and sitemap responses do not expose product IDs, prices, availability, preorder state, or
@@ -47,6 +48,7 @@ Press `Ctrl+C` or send `SIGTERM` to stop cleanly. Runtime defaults are in
 - `app/monitors/base.py`: contract for retailer adapters
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
+- `app/monitors/loungefly_uk.py`: official Loungefly UK JSON-LD discovery and normalization
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
@@ -87,7 +89,7 @@ python -m app.tools.test_notification
 The command prints an error and sends nothing when the applicable webhook is not configured.
 Use `--admin` to test routing to `DISCORD_ADMIN_WEBHOOK_URL`.
 
-The first successful GeekCore run is a silent baseline synchronization: products and stock are
+The first successful retailer run is a silent baseline synchronization: products and stock are
 persisted without flooding Discord. Later discoveries emit `NEW_PRODUCT`, and an
 `OUT_OF_STOCK` to `IN_STOCK` transition emits `RESTOCK`. SMS delivery and historical product
 states are reserved for later stages.
