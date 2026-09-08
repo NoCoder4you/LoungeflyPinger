@@ -45,6 +45,7 @@ class AsyncHttpClient:
                 timeout=self._timeout,
                 connector=self._connector,
                 headers=self._headers,
+                trust_env=True,
             )
 
     async def get_text(self, url: str) -> str:

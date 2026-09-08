@@ -3,7 +3,22 @@
 A lightweight, asynchronous foundation for continuously monitoring Loungefly Mini Backpack
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
-GeekCore UK is monitored through Shopify's public structured collection feeds.
+GeekCore UK is monitored through Shopify's public structured collection feeds, and
+TruffleShuffle UK is monitored through its public product JSON-LD.
+
+## Retailer status
+
+| Retailer | Status | Data source |
+| --- | --- | --- |
+| GeekCore | Working | Public Shopify product feeds |
+| TruffleShuffle | Working | Public category and product JSON-LD |
+| HMV | Requires browser | Normal HTTP requests receive a Cloudflare managed challenge |
+
+HMV is present in the retailer configuration with its own interval but is disabled. Its home,
+search, and sitemap responses do not expose product IDs, prices, availability, preorder state, or
+exclusive markers to reasonable HTTP requests. The monitor deliberately does not solve or bypass
+that challenge, and no selectors or stock rules are guessed from it. Consequently there is no HMV
+adapter until HMV makes a stable public product representation available to normal HTTP clients.
 
 ## Requirements
 
@@ -31,6 +46,7 @@ Press `Ctrl+C` or send `SIGTERM` to stop cleanly. Runtime defaults are in
 - `app/scheduler.py`: independent asynchronous interval jobs
 - `app/monitors/base.py`: contract for retailer adapters
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
+- `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
