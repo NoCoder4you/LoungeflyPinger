@@ -13,6 +13,16 @@ def test_load_config(tmp_path: Path) -> None:
     assert config.database_path == Path("custom.db")
 
 
+def test_hmv_is_explicitly_disabled_when_browser_access_is_required() -> None:
+    config = load_config()
+
+    assert config.retailers["hmv"] == {
+        "enabled": False,
+        "interval_minutes": 10,
+        "status": "REQUIRES_BROWSER",
+    }
+
+
 def test_discord_webhooks_are_loaded_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("{}", encoding="utf-8")
