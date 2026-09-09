@@ -4,10 +4,9 @@ import asyncio
 import logging
 
 from app.config import AppConfig
-from app.browser import BrowserService
 from app.database import Database
 from app.http import AsyncHttpClient
-from app.monitors import GeekCoreMonitor, HMVMonitor, LoungeflyUKMonitor, TruffleShuffleMonitor
+from app.monitors import GeekCoreMonitor, LoungeflyUKMonitor, TruffleShuffleMonitor
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.monitor_service import MonitorService
@@ -25,7 +24,6 @@ class Application:
             user_agent=config.monitor.user_agent,
             max_retries=config.monitor.max_retries,
         )
-        self.browser = BrowserService(config.browser)
         self.scheduler = Scheduler()
         self.notifier = DiscordNotifier(config.notifications, self.database)
         self.stop_event = asyncio.Event()
@@ -72,16 +70,6 @@ class Application:
             self.scheduler.add_interval_job(
                 "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05
             )
-        hmv = self.config.retailers.get("hmv", {})
-        if isinstance(hmv, dict) and hmv.get("enabled", False):
-            if hmv.get("transport") != "browser":
-                LOGGER.error("HMV disabled: transport must be browser")
-            elif await self.browser.start():
-                interval = float(hmv.get("interval_minutes", 15))
-                service = MonitorService(HMVMonitor(self.browser), self.database, self.notifier, retailer_name="HMV")
-                self.scheduler.add_interval_job("hmv", service.synchronize, interval * 60, jitter_fraction=0.05)
-            else:
-                LOGGER.error("HMV disabled because Chromium is unavailable; HTTP retailers remain active")
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
 
     def request_shutdown(self) -> None:
@@ -100,7 +88,6 @@ class Application:
         LOGGER.info("Application stopping")
         await self.scheduler.stop()
         await self.notifier.close()
-        await self.browser.close()
         await self.http.close()
         await self.database.close()
         LOGGER.info("Application stopped")

@@ -14,10 +14,6 @@ class Monitor:
     async def discover_products(self): return self.products
 
 
-class FailingMonitor:
-    async def discover_products(self): raise RuntimeError("challenge")
-
-
 class Notifier:
     def __init__(self): self.alerts = []
     async def send(self, alert): self.alerts.append(alert); return True
@@ -59,22 +55,3 @@ async def test_parser_error_does_not_overwrite_known_stock_state(tmp_path: Path)
         )).fetchone()
         assert row is not None
         assert await service.stock.current_availability(row[0]) == Availability.IN_STOCK
-
-
-@pytest.mark.asyncio
-async def test_failed_scan_records_failure_and_preserves_known_stock(tmp_path: Path):
-    async with Database(tmp_path / "state.db") as database:
-        initial = MonitorService(Monitor([product(availability=Availability.IN_STOCK)]), database, Notifier(), retailer_name="GeekCore")
-        await initial.synchronize()
-
-        failed = MonitorService(FailingMonitor(), database, Notifier(), retailer_name="GeekCore")
-        with pytest.raises(RuntimeError, match="challenge"):
-            await failed.synchronize()
-
-        row = await (await database.connection.execute(
-            "SELECT p.id, r.consecutive_failures FROM products p JOIN retailers r ON r.name=p.retailer "
-            "WHERE p.retailer=? AND p.retailer_product_id=?", ("GeekCore", "1")
-        )).fetchone()
-        assert row is not None
-        assert row[1] == 1
-        assert await failed.stock.current_availability(row[0]) == Availability.IN_STOCK

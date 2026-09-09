@@ -20,12 +20,6 @@ notifications:
   sms:
     enabled: false
 
-# Playwright is started lazily and only when an enabled browser retailer needs it.
-browser:
-  enabled: true
-  max_concurrent_pages: 1
-  navigation_timeout_seconds: 30
-
 retailers:
   geekcore:
     enabled: true
@@ -37,10 +31,3 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
-  # Controlled ordinary-Playwright verification (2026-09-08) still received
-  # Cloudflare's managed challenge. Do not enable unattended monitoring.
-  hmv:
-    enabled: false
-    transport: browser
-    interval_minutes: 15
-    status: REQUIRES_BROWSER_CHALLENGE
