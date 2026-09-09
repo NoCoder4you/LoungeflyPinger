@@ -12,14 +12,7 @@ TruffleShuffle UK and Loungefly UK are monitored through public product JSON-LD.
 | --- | --- | --- |
 | GeekCore | Working | Public Shopify product feeds |
 | TruffleShuffle | Working | Public category and product JSON-LD |
-| HMV | Requires browser | Normal HTTP requests receive a Cloudflare managed challenge |
 | Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
-
-HMV is present in the retailer configuration with its own interval but is disabled. Its home,
-search, and sitemap responses do not expose product IDs, prices, availability, preorder state, or
-exclusive markers to reasonable HTTP requests. The monitor deliberately does not solve or bypass
-that challenge, and no selectors or stock rules are guessed from it. Consequently there is no HMV
-adapter until HMV makes a stable public product representation available to normal HTTP clients.
 
 ## Requirements
 

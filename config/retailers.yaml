@@ -31,10 +31,3 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
-  # HMV currently returns a Cloudflare managed challenge to normal HTTP
-  # clients, including its search and sitemap endpoints. Keep it explicitly
-  # disabled rather than treating challenge pages as product or stock data.
-  hmv:
-    enabled: false
-    interval_minutes: 10
-    status: REQUIRES_BROWSER
