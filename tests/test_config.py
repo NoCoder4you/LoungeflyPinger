@@ -18,9 +18,12 @@ def test_hmv_is_explicitly_disabled_when_browser_access_is_required() -> None:
 
     assert config.retailers["hmv"] == {
         "enabled": False,
-        "interval_minutes": 10,
-        "status": "REQUIRES_BROWSER",
+        "transport": "browser",
+        "interval_minutes": 15,
+        "status": "REQUIRES_BROWSER_CHALLENGE",
     }
+    assert config.browser.enabled is True
+    assert config.browser.max_concurrent_pages == 1
 
 
 def test_discord_webhooks_are_loaded_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

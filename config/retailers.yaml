@@ -20,6 +20,12 @@ notifications:
   sms:
     enabled: false
 
+# Playwright is started lazily and only when an enabled browser retailer needs it.
+browser:
+  enabled: true
+  max_concurrent_pages: 1
+  navigation_timeout_seconds: 30
+
 retailers:
   geekcore:
     enabled: true
@@ -31,10 +37,10 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
-  # HMV currently returns a Cloudflare managed challenge to normal HTTP
-  # clients, including its search and sitemap endpoints. Keep it explicitly
-  # disabled rather than treating challenge pages as product or stock data.
+  # Controlled ordinary-Playwright verification (2026-09-08) still received
+  # Cloudflare's managed challenge. Do not enable unattended monitoring.
   hmv:
     enabled: false
-    interval_minutes: 10
-    status: REQUIRES_BROWSER
+    transport: browser
+    interval_minutes: 15
+    status: REQUIRES_BROWSER_CHALLENGE

@@ -39,12 +39,22 @@ class NotificationConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class BrowserConfig:
+    """Settings for the optional, isolated Playwright subsystem."""
+
+    enabled: bool = False
+    max_concurrent_pages: int = 1
+    navigation_timeout_seconds: float = 30
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     monitor: MonitorConfig
     database_path: Path
     logging: LoggingConfig
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
     retailers: dict[str, Any] = field(default_factory=dict)
+    browser: BrowserConfig = field(default_factory=BrowserConfig)
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -98,11 +108,25 @@ def load_config(path: str | Path = "config/retailers.yaml", env_path: str | Path
         raise ConfigurationError("database settings must be a mapping")
     database_path = Path(os.getenv("LOUNGEFLY_DATABASE_PATH", database_raw.get("path", "data/loungefly.db")))
     notifications_raw = raw.get("notifications", {})
+    browser_raw = raw.get("browser", {})
     retailers = raw.get("retailers", {})
-    if not isinstance(notifications_raw, dict) or not isinstance(retailers, dict):
-        raise ConfigurationError("notifications and retailers must be mappings")
+    if not all(isinstance(value, dict) for value in (notifications_raw, browser_raw, retailers)):
+        raise ConfigurationError("browser, notifications and retailers must be mappings")
     notifications = NotificationConfig(
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
     )
-    return AppConfig(monitor, database_path, logging_config, notifications, retailers)
+    enabled = browser_raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigurationError("browser.enabled must be a boolean")
+    browser = BrowserConfig(
+        enabled=enabled,
+        max_concurrent_pages=_positive(
+            browser_raw.get("max_concurrent_pages", 1), "browser.max_concurrent_pages", int
+        ),
+        navigation_timeout_seconds=_positive(
+            browser_raw.get("navigation_timeout_seconds", 30),
+            "browser.navigation_timeout_seconds",
+        ),
+    )
+    return AppConfig(monitor, database_path, logging_config, notifications, retailers, browser)

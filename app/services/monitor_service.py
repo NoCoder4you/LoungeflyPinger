@@ -35,6 +35,23 @@ class MonitorService:
         connection = self.database.connection
         if connection is None:
             raise RuntimeError("database is not connected")
+        try:
+            return await self._synchronize()
+        except Exception:
+            now = datetime.now(UTC).isoformat()
+            await connection.execute(
+                """INSERT INTO retailers(name, last_failure, consecutive_failures) VALUES (?, ?, 1)
+                   ON CONFLICT(name) DO UPDATE SET last_failure=excluded.last_failure,
+                     consecutive_failures=retailers.consecutive_failures + 1""",
+                (self.retailer_name, now),
+            )
+            await connection.commit()
+            LOGGER.exception("Retailer synchronization failed", extra={"retailer": self.retailer_name})
+            raise
+
+    async def _synchronize(self) -> list[Alert]:
+        connection = self.database.connection
+        assert connection is not None
         discovered = await self.monitor.discover_products()
         retailer = discovered[0].retailer if discovered else self.retailer_name
         prior_sync = await (
