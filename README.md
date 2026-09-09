@@ -4,7 +4,8 @@ A lightweight, asynchronous foundation for continuously monitoring Loungefly Min
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
 GeekCore UK is monitored through Shopify's public structured collection feeds, and
-TruffleShuffle UK and Loungefly UK are monitored through public product JSON-LD.
+TruffleShuffle UK and Loungefly UK are monitored through public product JSON-LD. Disney Store UK
+uses its public Loungefly ItemList and structured storefront product telemetry.
 
 ## Retailer status
 
@@ -13,6 +14,7 @@ TruffleShuffle UK and Loungefly UK are monitored through public product JSON-LD.
 | GeekCore | Working | Public Shopify product feeds |
 | TruffleShuffle | Working | Public category and product JSON-LD |
 | Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
+| Disney Store UK | Working | Public ItemList and product telemetry |
 
 ## Requirements
 
@@ -42,6 +44,7 @@ Press `Ctrl+C` or send `SIGTERM` to stop cleanly. Runtime defaults are in
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/monitors/loungefly_uk.py`: official Loungefly UK JSON-LD discovery and normalization
+- `app/monitors/disney_store_uk.py`: Disney Store UK structured storefront adapter
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
