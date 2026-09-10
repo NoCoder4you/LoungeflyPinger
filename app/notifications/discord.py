@@ -78,6 +78,9 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
             add("Character", product.character)
         add("Exclusive", "Yes" if product.exclusive else "No")
         add("Preorder", "Yes" if product.preorder else "No")
+        if alert.watch_matches:
+            add("Matched Watch", "\n".join(match.name for match in alert.watch_matches))
+            add("Priority", alert.priority.value.upper())
         embed["url"] = product.url
         if product.image_url:
             embed["thumbnail"] = {"url": product.image_url}

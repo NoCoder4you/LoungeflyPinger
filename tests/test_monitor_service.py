@@ -7,6 +7,7 @@ import pytest
 from app.database import Database
 from app.models import AlertType, Availability, Product
 from app.services.monitor_service import MonitorService
+from app.watchlist import WatchRule, Watchlist
 
 
 class Monitor:
@@ -55,3 +56,25 @@ async def test_parser_error_does_not_overwrite_known_stock_state(tmp_path: Path)
         )).fetchone()
         assert row is not None
         assert await service.stock.current_availability(row[0]) == Availability.IN_STOCK
+
+
+@pytest.mark.asyncio
+async def test_configured_watchlist_filters_alerts_and_attaches_matches(tmp_path: Path):
+    async with Database(tmp_path / "watch.db") as database:
+        notifier = Notifier()
+        monitor = Monitor([product()])
+        watches = Watchlist((WatchRule("Only wanted", keywords=("wanted",)),))
+        service = MonitorService(
+            monitor, database, notifier, retailer_name="GeekCore", watchlist=watches
+        )
+        await service.synchronize()
+        monitor.products = [
+            product("2"),
+            replace(product("1"), name="Wanted Bag", availability=Availability.IN_STOCK),
+        ]
+        alerts = await service.synchronize()
+
+        assert len(alerts) == 1
+        assert alerts[0].product.retailer_product_id == "1"
+        assert [match.name for match in alerts[0].watch_matches] == ["Only wanted"]
+        assert notifier.alerts == alerts

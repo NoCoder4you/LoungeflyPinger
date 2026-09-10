@@ -7,7 +7,7 @@ import pytest
 
 from app.config import NotificationConfig
 from app.database import Database
-from app.models import Alert, AlertType, Availability, Product
+from app.models import Alert, AlertType, Availability, Priority, Product, WatchMatch
 from app.notifications.discord import DiscordNotifier, build_discord_payload
 
 
@@ -86,6 +86,16 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
         "Character": "Stitch", "Exclusive": "Yes", "Preorder": "No",
     }
     assert payload["allowed_mentions"] == {"parse": []}
+
+
+def test_discord_payload_shows_watches_and_highest_priority(product: Product) -> None:
+    payload = build_discord_payload(Alert(
+        AlertType.NEW_PRODUCT, product=product,
+        watch_matches=(WatchMatch("Any Mini", Priority.LOW), WatchMatch("Stitch Backpacks", Priority.HIGH)),
+    ))
+    fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
+    assert fields["Matched Watch"] == "Any Mini\nStitch Backpacks"
+    assert fields["Priority"] == "HIGH"
 
 
 @pytest.mark.parametrize("alert_type", [
