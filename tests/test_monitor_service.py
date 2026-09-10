@@ -220,3 +220,28 @@ async def test_removed_product_error_retains_reappearance_alert(tmp_path: Path):
         assert await service.synchronize() == []
         monitor.products = [product()]
         assert [a.alert_type for a in await service.synchronize()] == [AlertType.AVAILABILITY]
+
+
+@pytest.mark.asyncio
+async def test_removed_product_preserves_sku_for_watchlist_matching(tmp_path: Path):
+    async with Database(tmp_path / "sku-removal.db") as database:
+        watched_product = replace(product(), sku="LF-SKU-123")
+        monitor = Monitor([watched_product])
+        notifier = Notifier()
+        watches = Watchlist((WatchRule("Exact SKU", sku="lf sku 123"),))
+        service = MonitorService(
+            monitor, database, notifier, retailer_name="GeekCore", watchlist=watches,
+            missing_scan_threshold=1,
+        )
+        await service.synchronize()
+        # A later adapter result may omit a previously known stable SKU.
+        monitor.products = [replace(watched_product, sku=None)]
+        await service.synchronize()
+        monitor.products = []
+
+        alerts = await service.synchronize()
+
+        assert [alert.alert_type for alert in alerts] == [AlertType.PRODUCT_REMOVED]
+        assert alerts[0].product is not None
+        assert alerts[0].product.sku == "LF-SKU-123"
+        assert [match.name for match in alerts[0].watch_matches] == ["Exact SKU"]

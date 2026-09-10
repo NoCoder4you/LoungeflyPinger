@@ -128,7 +128,7 @@ class MonitorService:
                 await self.products.mark_seen(product_id)
         # Absence is only evidence after repeated successful, complete listing scans.
         missing_rows = await (await connection.execute(
-            """SELECT p.id, p.retailer, p.retailer_product_id, p.name, p.url, p.image_url,
+            """SELECT p.id, p.retailer, p.retailer_product_id, p.name, p.url, p.image_url, p.sku,
                       p.product_type, p.franchise, p.character, p.exclusive, p.missing_scans,
                       s.availability, s.price, s.currency, s.preorder
                  FROM products p LEFT JOIN product_states s ON s.product_id=p.id
@@ -138,21 +138,23 @@ class MonitorService:
         for row in missing_rows:
             if row[0] in seen_ids:
                 continue
-            count = row[10] + 1
+            count = row[11] + 1
             removed = count >= self.missing_scan_threshold
             await connection.execute(
                 "UPDATE products SET missing_scans=?, removed_at=? WHERE id=?",
                 (count, now if removed else None, row[0]),
             )
-            if removed and row[11] is not None:
+            if removed and row[12] is not None:
                 missing_product = Product(
-                    row[1], row[2], row[3], row[4], Availability(row[11]), row[5],
-                    Decimal(row[12]) if row[12] is not None else None, row[13], row[6],
-                    row[7], row[8], bool(row[9]), bool(row[14]),
+                    retailer=row[1], retailer_product_id=row[2], name=row[3], url=row[4],
+                    availability=Availability(row[12]), image_url=row[5],
+                    price=Decimal(row[13]) if row[13] is not None else None,
+                    currency=row[14], product_type=row[7], franchise=row[8], character=row[9],
+                    exclusive=bool(row[10]), preorder=bool(row[15]), sku=row[6],
                 )
                 await self._send(Alert(
                     AlertType.PRODUCT_REMOVED, missing_product, row[0],
-                    previous_availability=Availability(row[11]),
+                    previous_availability=Availability(row[12]),
                     watch_matches=self._matches(missing_product),
                 ), alerts)
         await connection.execute(
