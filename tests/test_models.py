@@ -9,7 +9,7 @@ def test_normalized_enums() -> None:
     assert Availability.IN_STOCK.value == "IN_STOCK"
     assert len(Availability) == 8
     assert AlertType.MONITOR_RECOVERED.value == "MONITOR_RECOVERED"
-    assert len(AlertType) == 9
+    assert len(AlertType) == 16
 
 
 def test_product_normalizes_values() -> None:

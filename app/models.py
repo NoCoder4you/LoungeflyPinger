@@ -1,7 +1,7 @@
 """Normalized domain models shared by monitors and services."""
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from urllib.parse import urlparse
@@ -29,6 +29,55 @@ class AlertType(StrEnum):
     AVAILABILITY = "AVAILABILITY"
     MONITOR_ERROR = "MONITOR_ERROR"
     MONITOR_RECOVERED = "MONITOR_RECOVERED"
+    RELEASE_DATE_FOUND = "RELEASE_DATE_FOUND"
+    RELEASE_DATE_CHANGED = "RELEASE_DATE_CHANGED"
+    RELEASE_TIME_FOUND = "RELEASE_TIME_FOUND"
+    RELEASE_TIME_CHANGED = "RELEASE_TIME_CHANGED"
+    RELEASE_DATETIME_CHANGED = "RELEASE_DATETIME_CHANGED"
+    RELEASING_SOON = "RELEASING_SOON"
+    RELEASED = "RELEASED"
+
+
+class ReleasePrecision(StrEnum):
+    EXACT_DATETIME = "EXACT_DATETIME"
+    DATE_ONLY = "DATE_ONLY"
+    MONTH_ONLY = "MONTH_ONLY"
+    COMING_SOON = "COMING_SOON"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseInfo:
+    precision: ReleasePrecision
+    release_date: date | None = None
+    release_time: time | None = None
+    timezone: str | None = None
+    release_datetime: datetime | None = None
+    text: str | None = None
+    source: str | None = None
+    timezone_inferred: bool = False
+    release_month: int | None = None
+    release_year: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "precision", ReleasePrecision(self.precision))
+        if self.release_datetime is not None and self.release_datetime.tzinfo is None:
+            raise ValueError("release_datetime must be timezone-aware")
+        if self.precision == ReleasePrecision.EXACT_DATETIME:
+            if not all((self.release_date, self.release_time, self.timezone, self.release_datetime)):
+                raise ValueError("exact release requires date, time, timezone, and datetime")
+        elif self.release_time is not None or self.release_datetime is not None:
+            raise ValueError("release time/datetime require EXACT_DATETIME precision")
+        if self.precision == ReleasePrecision.DATE_ONLY and self.release_date is None:
+            raise ValueError("date-only release requires a date")
+        if self.precision in {ReleasePrecision.MONTH_ONLY, ReleasePrecision.COMING_SOON} and self.release_date:
+            raise ValueError("lower precision releases cannot contain a fabricated date")
+        if self.precision == ReleasePrecision.MONTH_ONLY and not (
+            self.release_month and self.release_year
+        ):
+            raise ValueError("month-only release requires month and year")
+        if self.timezone_inferred and not self.timezone:
+            raise ValueError("an inferred timezone must be recorded")
 
 
 class Priority(StrEnum):
@@ -67,6 +116,7 @@ class Product:
     exclusive: bool = False
     preorder: bool = False
     sku: str | None = None
+    release: ReleaseInfo | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -120,6 +170,8 @@ class Alert:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     occurrence_id: str = field(default_factory=lambda: uuid4().hex)
     watch_matches: tuple[WatchMatch, ...] = ()
+    previous_release: ReleaseInfo | None = None
+    reminder_seconds: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alert_type", AlertType(self.alert_type))

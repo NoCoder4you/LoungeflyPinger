@@ -13,6 +13,7 @@ import aiohttp
 from app.config import NotificationConfig
 from app.database import Database
 from app.models import Alert, AlertType
+from app.release import format_release
 from app.notifications.base import NotificationProvider
 
 LOGGER = logging.getLogger("monitor.notifications.discord")
@@ -27,6 +28,13 @@ TITLES = {
     AlertType.PRODUCT_REMOVED: "🗑️ LOUNGEFLY PRODUCT REMOVED",
     AlertType.MONITOR_ERROR: "🚨 MONITOR ERROR",
     AlertType.MONITOR_RECOVERED: "✅ MONITOR RECOVERED",
+    AlertType.RELEASE_DATE_FOUND: "📅 LOUNGEFLY RELEASE DATE FOUND",
+    AlertType.RELEASE_DATE_CHANGED: "📅 LOUNGEFLY RELEASE UPDATED",
+    AlertType.RELEASE_TIME_FOUND: "📅 LOUNGEFLY RELEASE TIME FOUND",
+    AlertType.RELEASE_TIME_CHANGED: "📅 LOUNGEFLY RELEASE UPDATED",
+    AlertType.RELEASE_DATETIME_CHANGED: "📅 LOUNGEFLY RELEASE UPDATED",
+    AlertType.RELEASING_SOON: "⏰ LOUNGEFLY RELEASING SOON",
+    AlertType.RELEASED: "🎉 LOUNGEFLY RELEASED",
 }
 
 COLORS = {
@@ -39,6 +47,13 @@ COLORS = {
     AlertType.PRODUCT_REMOVED: 0x747F8D,
     AlertType.MONITOR_ERROR: 0xED4245,
     AlertType.MONITOR_RECOVERED: 0x57F287,
+    AlertType.RELEASE_DATE_FOUND: 0xFEE75C,
+    AlertType.RELEASE_DATE_CHANGED: 0xFEE75C,
+    AlertType.RELEASE_TIME_FOUND: 0xFEE75C,
+    AlertType.RELEASE_TIME_CHANGED: 0xFEE75C,
+    AlertType.RELEASE_DATETIME_CHANGED: 0xFEE75C,
+    AlertType.RELEASING_SOON: 0xF0A000,
+    AlertType.RELEASED: 0x57F287,
 }
 
 
@@ -82,6 +97,17 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
             add("Character", product.character)
         add("Exclusive", "Yes" if product.exclusive else "No")
         add("Preorder", "Yes" if product.preorder else "No")
+        if product.release is not None:
+            if alert.previous_release is not None:
+                add("Previous Release", format_release(alert.previous_release))
+                add("New Release", format_release(product.release))
+            else:
+                add("Release", format_release(product.release))
+            if product.release.timezone_inferred:
+                add("Release Timezone", f"{product.release.timezone} (retailer local timezone inferred)")
+        if alert.reminder_seconds is not None:
+            hours = alert.reminder_seconds / 3600
+            add("Time Remaining", f"approximately {hours:g} hour{'s' if hours != 1 else ''}")
         if alert.watch_matches:
             add("Matched Watch", "\n".join(match.name for match in alert.watch_matches))
             add("Priority", alert.priority.value.upper())
@@ -119,9 +145,11 @@ class DiscordNotifier(NotificationProvider):
         if product_key is None and alert.product:
             product_key = f"{alert.product.retailer}:{alert.product.retailer_product_id}"
         state = alert.new_state or (alert.product.availability.value if alert.product else alert.message)
+        release = alert.product.release if alert.product else None
         price = str(alert.product.price) if alert.product and alert.product.price is not None else None
         identity = json.dumps(
-            [alert.occurrence_id, product_key, alert.alert_type.value, state, price],
+            [alert.occurrence_id, product_key, alert.alert_type.value, state, price,
+             format_release(alert.previous_release), format_release(release)],
             separators=(",", ":"),
         )
         return hashlib.sha256(identity.encode()).hexdigest()

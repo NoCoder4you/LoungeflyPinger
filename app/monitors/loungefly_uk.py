@@ -11,6 +11,7 @@ from urllib.parse import urlencode, urljoin, urlparse
 
 from app.http import AsyncHttpClient, HttpClientError
 from app.models import Availability, Product
+from app.release import parse_release_text
 from app.monitors.base import RetailerMonitor
 
 BASE_URL = "https://loungefly.com"
@@ -191,6 +192,9 @@ class LoungeflyUKMonitor(RetailerMonitor):
         if not isinstance(image, str) or not image:
             raise LoungeflyUKParseError("Product image is missing")
         description = raw.get("description") if isinstance(raw.get("description"), str) else ""
+        release = parse_release_text(
+            description, source="Loungefly UK Product JSON-LD", local_timezone="Europe/London"
+        )
         availability = availability_map[availability_name]
         return Product(
             retailer="Loungefly UK",
@@ -206,4 +210,5 @@ class LoungeflyUKMonitor(RetailerMonitor):
             character=None,
             exclusive="exclusive" in name.lower() or "a loungefly exclusive" in description.lower(),
             preorder=availability == Availability.PREORDER,
+            release=release,
         )

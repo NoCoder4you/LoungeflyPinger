@@ -16,6 +16,20 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
 | Disney Store UK | Working | Public ItemList and product telemetry |
 
+Release metadata is parsed conservatively from retailer-published structured descriptions or
+dedicated telemetry fields. Current capability is:
+
+| Retailer | Release metadata |
+| --- | --- |
+| GeekCore | Partial (explicit Shopify tags/descriptions) |
+| TruffleShuffle | Partial (explicit Product JSON-LD descriptions) |
+| Loungefly UK | Partial (explicit Product JSON-LD descriptions) |
+| Disney Store UK | Partial (dedicated product telemetry messages when published) |
+
+Missing or malformed release text never clears a previously known release. Exact times use the
+configured retailer-local IANA timezone (`Europe/London` for these UK adapters), record that the
+zone was inferred, and are converted with the applicable GMT/BST offset for the release date.
+
 ## Requirements
 
 - Python 3.12+
@@ -118,3 +132,8 @@ The first successful retailer run is a silent baseline synchronization: products
 persisted without flooding Discord. Later discoveries emit `NEW_PRODUCT`, and an
 `OUT_OF_STOCK` to `IN_STOCK` transition emits `RESTOCK`. SMS delivery and historical product
 states are reserved for later stages.
+
+Release reminders and upgrade synchronization are configured in `config/retailers.yaml`.
+`DATE_ONLY`, `MONTH_ONLY`, and `COMING_SOON` releases never receive an invented midnight
+countdown. Existing installations silently enrich known products on the first release-aware scan;
+set `notify_existing_on_upgrade: true` only when those discovery notifications are desired.
