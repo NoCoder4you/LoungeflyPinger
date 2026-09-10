@@ -25,6 +25,14 @@ class MonitorConfig:
     concurrency_limit: int = 5
     max_retries: int = 3
     user_agent: str = "LoungeflyMonitor/0.1"
+    missing_scan_threshold: int = 3
+
+
+@dataclass(frozen=True, slots=True)
+class PriceAlertConfig:
+    enabled: bool = True
+    minimum_drop_percent: float = 10
+    minimum_drop_value: float = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +59,7 @@ class AppConfig:
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
     retailers: dict[str, Any] = field(default_factory=dict)
     watchlist: Watchlist | None = None
+    price_alerts: PriceAlertConfig = field(default_factory=PriceAlertConfig)
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -86,6 +95,9 @@ def load_config(
         concurrency_limit=_positive(monitor_raw.get("concurrency_limit", 5), "concurrency_limit", int),
         max_retries=_positive(monitor_raw.get("max_retries", 3), "max_retries", int),
         user_agent=str(monitor_raw.get("user_agent", "LoungeflyMonitor/0.1")).strip(),
+        missing_scan_threshold=_positive(
+            monitor_raw.get("missing_scan_threshold", 3), "missing_scan_threshold", int
+        ),
     )
     if not monitor.user_agent:
         raise ConfigurationError("user_agent must not be empty")
@@ -118,4 +130,21 @@ def load_config(
     # Local import avoids coupling the configuration dataclasses to matching internals.
     from app.watchlist import load_watchlist
     watchlist = load_watchlist(watchlist_path)
-    return AppConfig(monitor, database_path, logging_config, notifications, retailers, watchlist)
+    price_raw = raw.get("price_alerts", {})
+    if not isinstance(price_raw, dict):
+        raise ConfigurationError("price_alerts settings must be a mapping")
+    enabled = price_raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ConfigurationError("price_alerts.enabled must be a boolean")
+    price_alerts = PriceAlertConfig(
+        enabled=enabled,
+        minimum_drop_percent=_positive(
+            price_raw.get("minimum_drop_percent", 10), "minimum_drop_percent"
+        ),
+        minimum_drop_value=_positive(
+            price_raw.get("minimum_drop_value", 5), "minimum_drop_value"
+        ),
+    )
+    return AppConfig(
+        monitor, database_path, logging_config, notifications, retailers, watchlist, price_alerts
+    )

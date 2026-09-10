@@ -21,6 +21,20 @@ def test_load_config(tmp_path: Path) -> None:
     config = load_config(path, tmp_path / ".env")
     assert config.monitor.concurrency_limit == 2
     assert config.database_path == Path("custom.db")
+    assert config.monitor.missing_scan_threshold == 3
+    assert config.price_alerts.minimum_drop_percent == 10
+
+
+def test_price_alert_configuration(tmp_path: Path) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text(
+        "price_alerts:\n  enabled: false\n  minimum_drop_percent: 15\n  minimum_drop_value: 7\n",
+        encoding="utf-8",
+    )
+    config = load_config(path, tmp_path / ".env")
+    assert not config.price_alerts.enabled
+    assert config.price_alerts.minimum_drop_percent == 15
+    assert config.price_alerts.minimum_drop_value == 7
 
 
 def test_discord_webhooks_are_loaded_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

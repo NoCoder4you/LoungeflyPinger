@@ -28,7 +28,7 @@ class ProductService:
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
                  franchise=excluded.franchise, character=excluded.character,
                  product_type=excluded.product_type, exclusive=excluded.exclusive,
-                 last_seen=excluded.last_seen""",
+                 last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
             (product.retailer, product.retailer_product_id, product.name, product.url,
              product.image_url, product.franchise, product.character, product.product_type,
              product.exclusive, now, now),
