@@ -11,6 +11,7 @@ from urllib.parse import urlencode, urljoin, urlparse
 
 from app.http import AsyncHttpClient, HttpClientError
 from app.models import Availability, Product
+from app.release import parse_release_text
 from app.monitors.base import RetailerMonitor
 
 BASE_URL = "https://www.disneystore.co.uk"
@@ -234,10 +235,18 @@ class DisneyStoreUKMonitor(RetailerMonitor):
         character = data.get("pims_character_name")
         if not isinstance(character, str) or not character.strip():
             character = None
+        release_text = next((data.get(key) for key in (
+            "release_date_text", "preorder_message", "availability_message"
+        ) if isinstance(data.get(key), str)), None)
+        release = parse_release_text(
+            release_text, source="Disney Store UK product telemetry",
+            local_timezone="Europe/London",
+        )
         return Product(
             retailer="Disney Store UK", retailer_product_id=product_id, name=name,
             url=product_url, image_url=image_url, price=price, currency="GBP",
             availability=availability, product_type="Mini Backpack", franchise=None,
             character=character, exclusive=exclusive,
             preorder=availability == Availability.PREORDER,
+            release=release,
         )

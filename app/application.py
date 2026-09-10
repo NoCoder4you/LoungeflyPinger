@@ -40,6 +40,7 @@ class Application:
                 GeekCoreMonitor(self.http), self.database, self.notifier, retailer_name="GeekCore",
                 watchlist=self.config.watchlist,
                 price_alerts=self.config.price_alerts,
+                release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
             )
             self.scheduler.add_interval_job(
@@ -57,6 +58,7 @@ class Application:
                 retailer_name="TruffleShuffle",
                 watchlist=self.config.watchlist,
                 price_alerts=self.config.price_alerts,
+                release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
             )
             self.scheduler.add_interval_job(
@@ -74,6 +76,7 @@ class Application:
                 retailer_name="Loungefly UK",
                 watchlist=self.config.watchlist,
                 price_alerts=self.config.price_alerts,
+                release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
             )
             self.scheduler.add_interval_job(
@@ -89,6 +92,7 @@ class Application:
                 retailer_name="Disney Store UK",
                 watchlist=self.config.watchlist,
                 price_alerts=self.config.price_alerts,
+                release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
             )
             self.scheduler.add_interval_job(

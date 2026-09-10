@@ -11,6 +11,12 @@ price_alerts:
   minimum_drop_percent: 10
   minimum_drop_value: 5
 
+release_alerts:
+  enabled: true
+  reminders: [24h, 1h]
+  # Existing products are silently enriched on their first release-aware scan.
+  notify_existing_on_upgrade: false
+
 database:
   path: data/loungefly.db
 

@@ -9,6 +9,7 @@ from urllib.parse import quote, urljoin
 
 from app.http import AsyncHttpClient, HttpClientError
 from app.models import Availability, Product
+from app.release import parse_release_text
 from app.monitors.base import RetailerMonitor
 
 BASE_URL = "https://www.geekcore.co.uk"
@@ -134,6 +135,11 @@ class GeekCoreMonitor(RetailerMonitor):
         def tagged(prefix: str) -> str | None:
             return next((tag.split(":", 1)[1].strip() for tag in tags if tag.lower().startswith(prefix)), None)
 
+        release = parse_release_text(
+            " ".join([str(raw.get("body_html", "")), *tags]),
+            source="GeekCore Shopify product feed", local_timezone="Europe/London",
+        )
+
         return Product(
             retailer="GeekCore",
             retailer_product_id=product_id,
@@ -149,4 +155,5 @@ class GeekCoreMonitor(RetailerMonitor):
             exclusive="geekcore exclusives" in lowered_tags,
             preorder=preorder,
             sku=str(available_variant.get("sku")).strip() if available_variant.get("sku") else None,
+            release=release,
         )

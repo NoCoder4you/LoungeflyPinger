@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS retailers (
     last_success TEXT,
     last_failure TEXT,
     consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0)
+    ,release_sync_completed INTEGER NOT NULL DEFAULT 0 CHECK (release_sync_completed IN (0, 1))
 );
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY,
@@ -46,6 +47,16 @@ CREATE TABLE IF NOT EXISTS product_states (
     previous_price TEXT,
     lowest_price TEXT,
     highest_price TEXT,
+    release_date TEXT,
+    release_time TEXT,
+    release_timezone TEXT,
+    release_datetime TEXT,
+    release_precision TEXT,
+    release_text TEXT,
+    release_source TEXT,
+    release_timezone_inferred INTEGER NOT NULL DEFAULT 0 CHECK (release_timezone_inferred IN (0, 1)),
+    release_month INTEGER,
+    release_year INTEGER,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_product_states_checked_at ON product_states(checked_at);
@@ -61,6 +72,34 @@ CREATE TABLE IF NOT EXISTS product_state_history (
 );
 CREATE INDEX IF NOT EXISTS idx_product_state_history_product_checked
     ON product_state_history(product_id, checked_at);
+CREATE TABLE IF NOT EXISTS release_history (
+    id INTEGER PRIMARY KEY,
+    product_id INTEGER NOT NULL,
+    release_date TEXT,
+    release_time TEXT,
+    release_timezone TEXT,
+    release_datetime TEXT,
+    release_precision TEXT NOT NULL,
+    release_text TEXT,
+    release_source TEXT,
+    release_timezone_inferred INTEGER NOT NULL DEFAULT 0 CHECK (release_timezone_inferred IN (0, 1)),
+    release_month INTEGER,
+    release_year INTEGER,
+    detected_at TEXT NOT NULL,
+    UNIQUE(product_id, release_date, release_time, release_timezone, release_precision,
+           release_text, release_source),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_release_history_product_detected
+    ON release_history(product_id, detected_at);
+CREATE TABLE IF NOT EXISTS release_reminders (
+    product_id INTEGER NOT NULL,
+    release_datetime TEXT NOT NULL,
+    reminder_seconds INTEGER NOT NULL,
+    sent_at TEXT NOT NULL,
+    PRIMARY KEY(product_id, release_datetime, reminder_seconds),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY,
     product_id INTEGER NOT NULL,
@@ -106,8 +145,15 @@ class Database:
         await self._add_missing_columns("products", {
             "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT", "sku": "TEXT"
         })
+        await self._add_missing_columns("retailers", {
+            "release_sync_completed": "INTEGER NOT NULL DEFAULT 0"
+        })
         await self._add_missing_columns("product_states", {
-            "previous_price": "TEXT", "lowest_price": "TEXT", "highest_price": "TEXT"
+            "previous_price": "TEXT", "lowest_price": "TEXT", "highest_price": "TEXT",
+            "release_date": "TEXT", "release_time": "TEXT", "release_timezone": "TEXT",
+            "release_datetime": "TEXT", "release_precision": "TEXT", "release_text": "TEXT",
+            "release_source": "TEXT", "release_timezone_inferred": "INTEGER NOT NULL DEFAULT 0",
+            "release_month": "INTEGER", "release_year": "INTEGER",
         })
         await self.connection.commit()
 

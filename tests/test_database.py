@@ -14,7 +14,7 @@ async def test_database_initialization(tmp_path: Path) -> None:
     cursor = await database.connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
     tables = {row[0] for row in await cursor.fetchall()}
     assert {"retailers", "products", "product_states", "product_state_history", "alerts",
-            "notification_deliveries"} <= tables
+            "notification_deliveries", "release_history", "release_reminders"} <= tables
     product_columns = {
         row[1] for row in await (await database.connection.execute(
             "PRAGMA table_info(products)"

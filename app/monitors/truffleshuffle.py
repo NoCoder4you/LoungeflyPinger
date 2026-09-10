@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlparse
 
 from app.http import AsyncHttpClient, HttpClientError
 from app.models import Availability, Product
+from app.release import parse_release_text
 from app.monitors.base import RetailerMonitor
 
 BASE_URL = "https://www.truffleshuffle.co.uk"
@@ -186,6 +187,10 @@ class TruffleShuffleMonitor(RetailerMonitor):
         if not isinstance(image, str) or not image:
             raise TruffleShuffleParseError("Product image is missing")
         preorder = availability_map[availability_value] == Availability.PREORDER
+        release = parse_release_text(
+            raw.get("description"), source="TruffleShuffle Product JSON-LD",
+            local_timezone="Europe/London",
+        )
         return Product(
             retailer="TruffleShuffle",
             retailer_product_id=product_id,
@@ -201,4 +206,5 @@ class TruffleShuffleMonitor(RetailerMonitor):
             exclusive=exclusive,
             preorder=preorder,
             sku=product_id,
+            release=release,
         )
