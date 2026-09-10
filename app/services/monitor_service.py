@@ -2,9 +2,11 @@
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal
 
+from app.config import PriceAlertConfig
 from app.database import Database
-from app.models import Alert, AlertType, Availability
+from app.models import Alert, AlertType, Availability, Product
 from app.monitors.base import RetailerMonitor
 from app.notifications.base import NotificationProvider
 from app.services.product_service import ProductService
@@ -25,6 +27,8 @@ class MonitorService:
         *,
         retailer_name: str,
         watchlist: Watchlist | None = None,
+        price_alerts: PriceAlertConfig | None = None,
+        missing_scan_threshold: int = 3,
     ) -> None:
         self.monitor = monitor
         self.database = database
@@ -35,6 +39,42 @@ class MonitorService:
         # None keeps backwards compatibility for programmatic users; an explicitly
         # empty configured watchlist intentionally sends no product alerts.
         self.watchlist = watchlist
+        self.price_alerts = price_alerts or PriceAlertConfig()
+        if missing_scan_threshold < 1:
+            raise ValueError("missing_scan_threshold must be at least one")
+        self.missing_scan_threshold = missing_scan_threshold
+
+    @staticmethod
+    def _stock_alert(previous: Availability, product: Product) -> AlertType | None:
+        current = product.availability
+        if previous == Availability.OUT_OF_STOCK and current == Availability.IN_STOCK:
+            return AlertType.RESTOCK
+        if previous == Availability.COMING_SOON and current == Availability.IN_STOCK:
+            return AlertType.AVAILABILITY
+        if previous in {Availability.COMING_SOON, Availability.OUT_OF_STOCK} and (
+            current == Availability.PREORDER or product.preorder
+        ):
+            return AlertType.PREORDER_OPEN
+        return None
+
+    def _is_price_drop(self, previous: Decimal | None, product: Product, currency: str | None) -> bool:
+        if not self.price_alerts.enabled or previous is None or product.price is None:
+            return False
+        if currency != product.currency or previous <= product.price or previous == 0:
+            return False
+        drop = previous - product.price
+        percent = drop * Decimal("100") / previous
+        return (drop >= Decimal(str(self.price_alerts.minimum_drop_value)) and
+                percent >= Decimal(str(self.price_alerts.minimum_drop_percent)))
+
+    def _matches(self, product: Product):
+        return self.watchlist.match(product) if self.watchlist is not None else ()
+
+    async def _send(self, alert: Alert, alerts: list[Alert]) -> None:
+        if self.watchlist is not None and not alert.watch_matches:
+            return
+        alerts.append(alert)
+        await self.notifier.send(alert)
 
     async def synchronize(self) -> list[Alert]:
         connection = self.database.connection
@@ -46,30 +86,66 @@ class MonitorService:
             await connection.execute("SELECT last_success FROM retailers WHERE name = ?", (retailer,))
         ).fetchone()
         alerts: list[Alert] = []
+        seen_ids: set[int] = set()
         for product in discovered:
             product = classify_product(product)
+            known_product = await (await connection.execute(
+                "SELECT 1 FROM products WHERE retailer=? AND retailer_product_id=?",
+                (product.retailer, product.retailer_product_id),
+            )).fetchone()
             product_id = await self.products.upsert(product)
-            previous = await self.stock.current_availability(product_id)
-            alert_type: AlertType | None = None
-            if prior_sync is not None and prior_sync[0] is not None and previous is None:
-                alert_type = AlertType.NEW_PRODUCT
-            elif previous == Availability.OUT_OF_STOCK and product.availability == Availability.IN_STOCK:
-                alert_type = AlertType.RESTOCK
+            seen_ids.add(product_id)
+            prior_state = await self.stock.current(product_id)
+            previous = prior_state.availability if prior_state else None
+            alert_types: list[AlertType] = []
+            if prior_sync is not None and prior_sync[0] is not None and known_product is None:
+                alert_types.append(AlertType.NEW_PRODUCT)
+            elif previous is not None:
+                stock_alert = self._stock_alert(previous, product)
+                if stock_alert is not None:
+                    alert_types.append(stock_alert)
+                if self._is_price_drop(prior_state.price, product, prior_state.currency):
+                    alert_types.append(AlertType.PRICE_DROP)
             # A failed parse/check provides no inventory evidence. Preserve the
             # last known stock state until a successful observation replaces it.
             if product.availability != Availability.ERROR:
                 await self.stock.record(product_id, product)
-            if alert_type is not None:
-                matches = self.watchlist.match(product) if self.watchlist is not None else ()
-                if self.watchlist is not None and not matches:
-                    continue
+            for alert_type in alert_types:
                 alert = Alert(
-                    alert_type, product, product_id, previous_availability=previous,
-                    watch_matches=matches,
+                    alert_type, product, product_id,
+                    previous_price=prior_state.price if alert_type == AlertType.PRICE_DROP else None,
+                    previous_availability=previous, watch_matches=self._matches(product),
                 )
-                alerts.append(alert)
-                await self.notifier.send(alert)
+                await self._send(alert, alerts)
+        # Absence is only evidence after repeated successful, complete listing scans.
+        missing_rows = await (await connection.execute(
+            """SELECT p.id, p.retailer, p.retailer_product_id, p.name, p.url, p.image_url,
+                      p.product_type, p.franchise, p.character, p.exclusive, p.missing_scans,
+                      s.availability, s.price, s.currency, s.preorder
+                 FROM products p LEFT JOIN product_states s ON s.product_id=p.id
+                WHERE p.retailer=? AND p.removed_at IS NULL""", (retailer,)
+        )).fetchall()
         now = datetime.now(UTC).isoformat()
+        for row in missing_rows:
+            if row[0] in seen_ids:
+                continue
+            count = row[10] + 1
+            removed = count >= self.missing_scan_threshold
+            await connection.execute(
+                "UPDATE products SET missing_scans=?, removed_at=? WHERE id=?",
+                (count, now if removed else None, row[0]),
+            )
+            if removed and row[11] is not None:
+                missing_product = Product(
+                    row[1], row[2], row[3], row[4], Availability(row[11]), row[5],
+                    Decimal(row[12]) if row[12] is not None else None, row[13], row[6],
+                    row[7], row[8], bool(row[9]), bool(row[14]),
+                )
+                await self._send(Alert(
+                    AlertType.PRODUCT_REMOVED, missing_product, row[0],
+                    previous_availability=Availability(row[11]),
+                    watch_matches=self._matches(missing_product),
+                ), alerts)
         await connection.execute(
             """INSERT INTO retailers(name, last_success, consecutive_failures) VALUES (?, ?, 0)
                ON CONFLICT(name) DO UPDATE SET last_success=excluded.last_success,

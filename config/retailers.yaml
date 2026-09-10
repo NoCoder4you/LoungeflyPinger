@@ -4,6 +4,12 @@ monitor:
   concurrency_limit: 5
   max_retries: 3
   user_agent: "LoungeflyMonitor/0.1 (+self-hosted product availability monitor)"
+  missing_scan_threshold: 3
+
+price_alerts:
+  enabled: true
+  minimum_drop_percent: 10
+  minimum_drop_value: 5
 
 database:
   path: data/loungefly.db

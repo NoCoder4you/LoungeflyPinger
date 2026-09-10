@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS products (
     exclusive INTEGER NOT NULL DEFAULT 0 CHECK (exclusive IN (0, 1)),
     first_seen TEXT NOT NULL,
     last_seen TEXT NOT NULL,
+    missing_scans INTEGER NOT NULL DEFAULT 0 CHECK (missing_scans >= 0),
+    removed_at TEXT,
     UNIQUE (retailer, retailer_product_id),
     FOREIGN KEY (retailer) REFERENCES retailers(name) ON UPDATE CASCADE
 );
@@ -40,9 +42,24 @@ CREATE TABLE IF NOT EXISTS product_states (
     currency TEXT NOT NULL,
     preorder INTEGER NOT NULL DEFAULT 0 CHECK (preorder IN (0, 1)),
     checked_at TEXT NOT NULL,
+    previous_price TEXT,
+    lowest_price TEXT,
+    highest_price TEXT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_product_states_checked_at ON product_states(checked_at);
+CREATE TABLE IF NOT EXISTS product_state_history (
+    id INTEGER PRIMARY KEY,
+    product_id INTEGER NOT NULL,
+    availability TEXT NOT NULL,
+    price TEXT,
+    currency TEXT NOT NULL,
+    preorder INTEGER NOT NULL CHECK (preorder IN (0, 1)),
+    checked_at TEXT NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_product_state_history_product_checked
+    ON product_state_history(product_id, checked_at);
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY,
     product_id INTEGER NOT NULL,
@@ -84,7 +101,23 @@ class Database:
             await self.connect()
         assert self.connection is not None
         await self.connection.executescript(SCHEMA)
+        # CREATE TABLE IF NOT EXISTS does not evolve databases created by older releases.
+        await self._add_missing_columns("products", {
+            "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT"
+        })
+        await self._add_missing_columns("product_states", {
+            "previous_price": "TEXT", "lowest_price": "TEXT", "highest_price": "TEXT"
+        })
         await self.connection.commit()
+
+    async def _add_missing_columns(self, table: str, columns: dict[str, str]) -> None:
+        assert self.connection is not None
+        existing = {row[1] for row in await (await self.connection.execute(
+            f"PRAGMA table_info({table})"
+        )).fetchall()}
+        for name, definition in columns.items():
+            if name not in existing:
+                await self.connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
     async def close(self) -> None:
         if self.connection is not None:

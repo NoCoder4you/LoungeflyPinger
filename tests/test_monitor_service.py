@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.database import Database
+from app.config import PriceAlertConfig
 from app.models import AlertType, Availability, Product
 from app.services.monitor_service import MonitorService
 from app.watchlist import WatchRule, Watchlist
@@ -78,3 +79,86 @@ async def test_configured_watchlist_filters_alerts_and_attaches_matches(tmp_path
         assert alerts[0].product.retailer_product_id == "1"
         assert [match.name for match in alerts[0].watch_matches] == ["Only wanted"]
         assert notifier.alerts == alerts
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("before", "after", "preorder", "expected"), [
+    (Availability.OUT_OF_STOCK, Availability.IN_STOCK, False, AlertType.RESTOCK),
+    (Availability.COMING_SOON, Availability.IN_STOCK, False, AlertType.AVAILABILITY),
+    (Availability.COMING_SOON, Availability.PREORDER, True, AlertType.PREORDER_OPEN),
+    (Availability.OUT_OF_STOCK, Availability.PREORDER, True, AlertType.PREORDER_OPEN),
+    (Availability.ERROR, Availability.IN_STOCK, False, None),
+    (Availability.IN_STOCK, Availability.IN_STOCK, False, None),
+])
+async def test_stock_transitions(tmp_path: Path, before, after, preorder, expected):
+    async with Database(tmp_path / f"{before}-{after}.db") as database:
+        monitor = Monitor([replace(product(), availability=before, preorder=before == Availability.PREORDER)])
+        service = MonitorService(monitor, database, Notifier(), retailer_name="GeekCore")
+        await service.synchronize()
+        monitor.products = [replace(product(), availability=after, preorder=preorder)]
+        alerts = await service.synchronize()
+        assert [item.alert_type for item in alerts] == ([] if expected is None else [expected])
+
+
+@pytest.mark.asyncio
+async def test_every_successful_check_is_historic_and_tracks_price_range(tmp_path: Path):
+    async with Database(tmp_path / "history.db") as database:
+        monitor = Monitor([replace(product(), price=Decimal("79.99"))])
+        service = MonitorService(monitor, database, Notifier(), retailer_name="GeekCore")
+        await service.synchronize()
+        monitor.products = [replace(product(), price=Decimal("59.99"), preorder=True)]
+        await service.synchronize()
+        product_id = (await (await database.connection.execute("SELECT id FROM products")).fetchone())[0]
+        state = await service.stock.current(product_id)
+        assert state.price == Decimal("59.99")
+        assert state.previous_price == Decimal("79.99")
+        assert state.lowest_price == Decimal("59.99")
+        assert state.highest_price == Decimal("79.99")
+        history = await (await database.connection.execute(
+            "SELECT availability, price, currency, preorder, checked_at FROM product_state_history"
+        )).fetchall()
+        assert len(history) == 2
+        assert history[-1][1:4] == ("59.99", "GBP", 1)
+        assert history[-1][4]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("old", "new", "expected"), [
+    ("79.99", "59.99", True),
+    ("50", "45", True),
+    ("50", "46", False),
+    ("100", "94", False),
+    ("50", "55", False),
+])
+async def test_price_drop_thresholds(tmp_path: Path, old, new, expected):
+    async with Database(tmp_path / f"price-{old}-{new}.db") as database:
+        monitor = Monitor([replace(product(), price=Decimal(old))])
+        notifier = Notifier()
+        service = MonitorService(monitor, database, notifier, retailer_name="GeekCore",
+                                 price_alerts=PriceAlertConfig(True, 10, 5))
+        await service.synchronize()
+        monitor.products = [replace(product(), price=Decimal(new))]
+        alerts = await service.synchronize()
+        assert [a.alert_type for a in alerts] == ([AlertType.PRICE_DROP] if expected else [])
+        if expected:
+            assert alerts[0].previous_price == Decimal(old)
+
+
+@pytest.mark.asyncio
+async def test_missing_product_alerts_once_only_after_threshold_and_survives_restart(tmp_path: Path):
+    path = tmp_path / "missing.db"
+    async with Database(path) as database:
+        monitor = Monitor([product()])
+        notifier = Notifier()
+        service = MonitorService(monitor, database, notifier, retailer_name="GeekCore",
+                                 missing_scan_threshold=2)
+        await service.synchronize()
+        monitor.products = []
+        assert await service.synchronize() == []
+    async with Database(path) as database:
+        notifier = Notifier()
+        service = MonitorService(Monitor([]), database, notifier, retailer_name="GeekCore",
+                                 missing_scan_threshold=2)
+        alerts = await service.synchronize()
+        assert [a.alert_type for a in alerts] == [AlertType.PRODUCT_REMOVED]
+        assert await service.synchronize() == []
