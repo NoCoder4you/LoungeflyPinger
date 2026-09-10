@@ -39,7 +39,6 @@ class ProductService:
             (product.retailer, product.retailer_product_id),
         )
         row = await cursor.fetchone()
-        await connection.commit()
         assert row is not None
         return int(row[0])
 
@@ -51,4 +50,3 @@ class ProductService:
         await connection.execute(
             "UPDATE products SET missing_scans=0, removed_at=NULL WHERE id=?", (product_id,)
         )
-        await connection.commit()

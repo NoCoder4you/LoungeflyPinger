@@ -61,7 +61,6 @@ class ReleaseService:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (*values, history_key, product_id, datetime.now(UTC).isoformat()),
         )
-        await connection.commit()
 
     async def reminder_sent(self, product_id: int, instant: datetime, seconds: int) -> bool:
         connection = self.database.connection
@@ -79,4 +78,3 @@ class ReleaseService:
             "INSERT OR IGNORE INTO release_reminders VALUES (?, ?, ?, ?)",
             (product_id, instant.isoformat(), seconds, datetime.now(UTC).isoformat()),
         )
-        await connection.commit()

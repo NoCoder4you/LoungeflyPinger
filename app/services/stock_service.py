@@ -59,7 +59,6 @@ class StockService:
              str(previous_price) if previous_price is not None else None,
              str(low) if low is not None else None, str(high) if high is not None else None),
         )
-        await connection.commit()
 
     async def current(self, product_id: int) -> ProductState | None:
         connection = self.database.connection

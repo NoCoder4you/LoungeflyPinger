@@ -1,12 +1,15 @@
 """Orchestration shared by retailer adapters."""
 
 import logging
+import asyncio
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.config import PriceAlertConfig, ReleaseAlertConfig
 from app.database import Database
-from app.models import Alert, AlertType, Availability, Product
+from app.http import HttpClientError
+from app.models import Alert, AlertType, Availability, Product, RetailerHealth
 from app.monitors.base import RetailerMonitor
 from app.notifications.base import NotificationProvider
 from app.services.product_service import ProductService
@@ -31,6 +34,7 @@ class MonitorService:
         price_alerts: PriceAlertConfig | None = None,
         missing_scan_threshold: int = 3,
         release_alerts: ReleaseAlertConfig | None = None,
+        failure_alert_threshold: int = 5,
     ) -> None:
         self.monitor = monitor
         self.database = database
@@ -47,6 +51,9 @@ class MonitorService:
         if missing_scan_threshold < 1:
             raise ValueError("missing_scan_threshold must be at least one")
         self.missing_scan_threshold = missing_scan_threshold
+        if failure_alert_threshold < 1:
+            raise ValueError("failure_alert_threshold must be at least one")
+        self.failure_alert_threshold = failure_alert_threshold
 
     @staticmethod
     def _stock_alert(previous: Availability, product: Product) -> AlertType | None:
@@ -109,10 +116,90 @@ class MonitorService:
         return await self.notifier.send(alert)
 
     async def synchronize(self) -> list[Alert]:
+        """Run one isolated scan, atomically persist it, and maintain durable health."""
+        started = time.monotonic()
+        reset_metrics = getattr(getattr(self.monitor, "http", None), "reset_metrics", None)
+        if reset_metrics:
+            reset_metrics()
+        LOGGER.info("scan_started", extra={"retailer": self.retailer_name})
+        try:
+            # Slow retailer I/O happens before the short SQLite critical section,
+            # allowing every scheduled retailer to make progress independently.
+            discovered = await self.monitor.discover_products()
+            async with self.database.write_lock:
+                connection = self.database.connection
+                if connection is None:
+                    raise RuntimeError("database is not connected")
+                await connection.execute("BEGIN IMMEDIATE")
+                try:
+                    alerts = await self._synchronize_success(started, discovered)
+                except BaseException:
+                    await connection.rollback()
+                    raise
+            return alerts
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            return await self._record_failure(exc, time.monotonic() - started)
+
+    async def _record_failure(self, exc: Exception, duration: float) -> list[Alert]:
+        connection = self.database.connection
+        if connection is None:
+            LOGGER.exception("scan_failed_without_database", extra={"retailer": self.retailer_name})
+            return []
+        now = datetime.now(UTC).isoformat()
+        status = exc.status if isinstance(exc, HttpClientError) else getattr(
+            getattr(self.monitor, "http", None), "response_status", None
+        )
+        error = str(exc).strip() or type(exc).__name__
+        async with self.database.write_lock:
+            await connection.execute(
+                "INSERT INTO retailers(name) VALUES (?) ON CONFLICT(name) DO NOTHING",
+                (self.retailer_name,),
+            )
+            row = await (await connection.execute(
+                "SELECT consecutive_failures, failure_alert_sent FROM retailers WHERE name=?",
+                (self.retailer_name,),
+            )).fetchone()
+            failures = int(row[0]) + 1
+            alert_sent = bool(row[1])
+            health = (RetailerHealth.FAILED if failures >= self.failure_alert_threshold
+                      else RetailerHealth.DEGRADED)
+            await connection.execute(
+                """UPDATE retailers SET last_failure=?, consecutive_failures=?, last_error=?,
+                          response_status=?, request_duration=?, health=? WHERE name=?""",
+                (now, failures, error[:2000], status, duration, health.value, self.retailer_name),
+            )
+            await connection.commit()
+        LOGGER.error("scan_failed", extra={"retailer": self.retailer_name, "failures": failures,
+                                           "status": status, "error": error})
+        if health != RetailerHealth.FAILED or alert_sent:
+            return []
+        last_success = await (await connection.execute(
+            "SELECT last_success FROM retailers WHERE name=?", (self.retailer_name,)
+        )).fetchone()
+        display_success = "Never" if not last_success or not last_success[0] else last_success[0]
+        alert = Alert(
+            AlertType.MONITOR_ERROR,
+            message=(f"Retailer: {self.retailer_name}\nFailures: {failures}\n"
+                     f"Last Successful Scan: {display_success}\nError: {error}"),
+            new_state=health.value,
+            occurrence_id=f"retailer-failure:{self.retailer_name}:{now}",
+        )
+        # This flag represents issuance, rather than delivery. A Discord outage must
+        # not turn every scan into an alert storm; the persistent health row remains
+        # available to operators until a recovery occurs.
+        await self.notifier.send(alert)
+        await connection.execute(
+            "UPDATE retailers SET failure_alert_sent=1 WHERE name=?", (self.retailer_name,)
+        )
+        await connection.commit()
+        return [alert]
+
+    async def _synchronize_success(self, started: float, discovered: list[Product]) -> list[Alert]:
         connection = self.database.connection
         if connection is None:
             raise RuntimeError("database is not connected")
-        discovered = await self.monitor.discover_products()
         retailer = discovered[0].retailer if discovered else self.retailer_name
         prior_sync = await (
             await connection.execute(
@@ -135,7 +222,6 @@ class MonitorService:
                 await connection.execute(
                     "UPDATE products SET removed_at=? WHERE id=?", (known_product[1], product_id)
                 )
-                await connection.commit()
             seen_ids.add(product_id)
             prior_state = await self.stock.current(product_id)
             prior_release = await self.releases.current(product_id)
@@ -230,13 +316,29 @@ class MonitorService:
                     previous_availability=Availability(row[12]),
                     watch_matches=self._matches(missing_product),
                 ), alerts)
+        previous_health = await (await connection.execute(
+            "SELECT health FROM retailers WHERE name=?", (retailer,)
+        )).fetchone()
+        duration = time.monotonic() - started
+        status = getattr(getattr(self.monitor, "http", None), "response_status", None)
         await connection.execute(
             """INSERT INTO retailers(name, last_success, consecutive_failures, release_sync_completed)
                VALUES (?, ?, 0, 1)
                ON CONFLICT(name) DO UPDATE SET last_success=excluded.last_success,
-                 consecutive_failures=0, release_sync_completed=1""",
-            (retailer, now),
+                 consecutive_failures=0, release_sync_completed=1, last_error=NULL,
+                 response_status=?, request_duration=?, health='HEALTHY', failure_alert_sent=0""",
+            (retailer, now, status, duration),
         )
         await connection.commit()
-        LOGGER.info("Retailer synchronized", extra={"retailer": retailer, "products": len(discovered)})
+        if previous_health and previous_health[0] == RetailerHealth.FAILED.value:
+            recovery = Alert(
+                AlertType.MONITOR_RECOVERED,
+                message=f"Retailer: {retailer}\nThe retailer monitor is responding normally again.",
+                new_state=RetailerHealth.HEALTHY.value,
+                occurrence_id=f"retailer-recovered:{retailer}:{now}",
+            )
+            alerts.append(recovery)
+            await self.notifier.send(recovery)
+        LOGGER.info("scan_completed", extra={"retailer": retailer, "products": len(discovered),
+                                               "changes": len(alerts), "duration": duration})
         return alerts

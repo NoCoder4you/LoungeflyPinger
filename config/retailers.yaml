@@ -5,6 +5,10 @@ monitor:
   max_retries: 3
   user_agent: "LoungeflyMonitor/0.1 (+self-hosted product availability monitor)"
   missing_scan_threshold: 3
+  failure_alert_threshold: 5
+  retry_backoff_seconds: 1
+  rate_limit_requests_per_second: 5
+  retailer_job_timeout_seconds: 120
 
 price_alerts:
   enabled: true

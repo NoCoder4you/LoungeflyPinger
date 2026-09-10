@@ -1,6 +1,10 @@
 """Bounded, retrying asynchronous HTTP transport."""
 
 import asyncio
+import contextvars
+import time
+from email.utils import parsedate_to_datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 import aiohttp
@@ -24,7 +28,9 @@ class HttpClientError(RuntimeError):
 
 
 class AsyncHttpClient:
-    def __init__(self, *, timeout_seconds: float, concurrency_limit: int, user_agent: str, max_retries: int) -> None:
+    def __init__(self, *, timeout_seconds: float, concurrency_limit: int, user_agent: str,
+                 max_retries: int, backoff_seconds: float = 1,
+                 rate_limit_requests_per_second: float = 5) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self._concurrency_limit = concurrency_limit
         # Use the conventional general-purpose request accept value. Individual
@@ -32,6 +38,13 @@ class AsyncHttpClient:
         self._headers = {"User-Agent": user_agent, "Accept": "*/*"}
         self._semaphore = asyncio.Semaphore(concurrency_limit)
         self._max_retries = max_retries
+        self._backoff_seconds = backoff_seconds
+        self._minimum_request_interval = 1 / rate_limit_requests_per_second
+        self._rate_lock = asyncio.Lock()
+        self._next_request_at = 0.0
+        self._status: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+            "http_response_status", default=None
+        )
         self._connector: aiohttp.TCPConnector | None = None
         self._session: aiohttp.ClientSession | None = None
         self._lifecycle_lock = asyncio.Lock()
@@ -55,14 +68,20 @@ class AsyncHttpClient:
         assert self._session is not None
         for attempt in range(self._max_retries + 1):
             try:
+                async with self._rate_lock:
+                    delay = self._next_request_at - time.monotonic()
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    self._next_request_at = time.monotonic() + self._minimum_request_interval
                 async with self._semaphore, self._session.get(url) as response:
+                    self._status.set(response.status)
                     if response.status == 404:
                         raise HttpClientError(HttpErrorKind.NOT_FOUND, "Resource not found", 404)
                     if response.status == 403:
                         raise HttpClientError(HttpErrorKind.FORBIDDEN, "Request forbidden", 403)
                     if response.status == 429 or response.status >= 500:
                         if attempt < self._max_retries:
-                            await asyncio.sleep(min(2**attempt, 30))
+                            await asyncio.sleep(self._retry_delay(response.headers.get("Retry-After"), attempt))
                             continue
                         kind = HttpErrorKind.RATE_LIMITED if response.status == 429 else HttpErrorKind.SERVER
                         raise HttpClientError(kind, "Temporary HTTP error; retry limit reached", response.status)
@@ -71,10 +90,29 @@ class AsyncHttpClient:
                     return await response.text()
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self._max_retries:
-                    await asyncio.sleep(min(2**attempt, 30))
+                    await asyncio.sleep(min(self._backoff_seconds * 2**attempt, 30))
                     continue
                 raise HttpClientError(HttpErrorKind.NETWORK, "Network request failed") from exc
         raise AssertionError("unreachable")
+
+    @property
+    def response_status(self) -> int | None:
+        return self._status.get()
+
+    def reset_metrics(self) -> None:
+        self._status.set(None)
+
+    def _retry_delay(self, retry_after: str | None, attempt: int) -> float:
+        if retry_after:
+            try:
+                return min(max(float(retry_after), 0), 300)
+            except ValueError:
+                try:
+                    parsed = parsedate_to_datetime(retry_after)
+                    return min(max((parsed - datetime.now(UTC)).total_seconds(), 0), 300)
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        return min(self._backoff_seconds * 2**attempt, 30)
 
     async def get_json(self, url: str) -> object:
         text = await self.get_text(url)

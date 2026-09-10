@@ -26,6 +26,10 @@ class MonitorConfig:
     max_retries: int = 3
     user_agent: str = "LoungeflyMonitor/0.1"
     missing_scan_threshold: int = 3
+    failure_alert_threshold: int = 5
+    retry_backoff_seconds: float = 1
+    rate_limit_requests_per_second: float = 5
+    retailer_job_timeout_seconds: float = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +109,20 @@ def load_config(
         user_agent=str(monitor_raw.get("user_agent", "LoungeflyMonitor/0.1")).strip(),
         missing_scan_threshold=_positive(
             monitor_raw.get("missing_scan_threshold", 3), "missing_scan_threshold", int
+        ),
+        failure_alert_threshold=_positive(
+            monitor_raw.get("failure_alert_threshold", 5), "failure_alert_threshold", int
+        ),
+        retry_backoff_seconds=_positive(
+            monitor_raw.get("retry_backoff_seconds", 1), "retry_backoff_seconds"
+        ),
+        rate_limit_requests_per_second=_positive(
+            monitor_raw.get("rate_limit_requests_per_second", 5),
+            "rate_limit_requests_per_second",
+        ),
+        retailer_job_timeout_seconds=_positive(
+            monitor_raw.get("retailer_job_timeout_seconds", 120),
+            "retailer_job_timeout_seconds",
         ),
     )
     if not monitor.user_agent:
