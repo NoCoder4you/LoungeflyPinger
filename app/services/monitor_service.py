@@ -145,7 +145,7 @@ class MonitorService:
                 if prior_sync is not None and prior_sync[0] is not None and known_product is None:
                     alert_types.append(AlertType.NEW_PRODUCT)
                 elif previous is not None:
-                    if (prior_release is not None and
+                    if (self.release_alerts.enabled and prior_release is not None and
                             previous in {Availability.COMING_SOON, Availability.PREORDER} and
                             product.availability == Availability.IN_STOCK):
                         alert_types.append(AlertType.RELEASED)

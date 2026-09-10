@@ -179,3 +179,30 @@ async def test_released_requires_retailer_stock_evidence_and_known_release(tmp_p
         # Merely passing a published date is never evaluated as released; actual stock is.
         monitor.products = [bag(release, Availability.IN_STOCK)]
         assert [a.alert_type for a in await service.synchronize()] == [AlertType.RELEASED]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("initial", "expected"), [
+    (Availability.COMING_SOON, AlertType.AVAILABILITY),
+    (Availability.PREORDER, None),
+])
+async def test_disabled_release_alerts_restore_stock_transition_behavior(
+    tmp_path: Path, initial: Availability, expected: AlertType | None
+):
+    release = parse_release_text("Coming Soon", source="fixture")
+    monitor = Monitor([bag(release, initial)])
+    async with Database(tmp_path / f"release-disabled-{initial}.db") as db:
+        service = MonitorService(
+            monitor,
+            db,
+            Notifier(),
+            retailer_name="GeekCore",
+            release_alerts=ReleaseAlertConfig(enabled=False),
+        )
+        await service.synchronize()
+
+        monitor.products = [bag(release, Availability.IN_STOCK)]
+        alerts = await service.synchronize()
+
+        assert [alert.alert_type for alert in alerts] == ([] if expected is None else [expected])
+        assert all(alert.alert_type != AlertType.RELEASED for alert in alerts)
