@@ -43,20 +43,31 @@ async def test_initial_sync_is_silent_then_new_and_restock_are_alerted(tmp_path:
 
 
 @pytest.mark.asyncio
-async def test_parser_error_does_not_overwrite_known_stock_state(tmp_path: Path):
+async def test_parser_error_does_not_overwrite_state_or_emit_price_drop(tmp_path: Path):
     async with Database(tmp_path / "state.db") as database:
+        notifier = Notifier()
         monitor = Monitor([product(availability=Availability.IN_STOCK)])
-        service = MonitorService(monitor, database, Notifier(), retailer_name="GeekCore")
+        service = MonitorService(monitor, database, notifier, retailer_name="GeekCore")
         await service.synchronize()
 
-        monitor.products = [product(availability=Availability.ERROR)]
-        await service.synchronize()
+        monitor.products = [replace(
+            product(availability=Availability.ERROR), price=Decimal("1")
+        )]
+        assert await service.synchronize() == []
+        assert notifier.alerts == []
 
         row = await (await database.connection.execute(
             "SELECT id FROM products WHERE retailer=? AND retailer_product_id=?", ("GeekCore", "1")
         )).fetchone()
         assert row is not None
-        assert await service.stock.current_availability(row[0]) == Availability.IN_STOCK
+        state = await service.stock.current(row[0])
+        assert state is not None
+        assert state.availability == Availability.IN_STOCK
+        assert state.price == Decimal("10")
+        history_count = await (await database.connection.execute(
+            "SELECT COUNT(*) FROM product_state_history WHERE product_id=?", (row[0],)
+        )).fetchone()
+        assert history_count == (1,)
 
 
 @pytest.mark.asyncio
