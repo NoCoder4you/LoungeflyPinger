@@ -101,11 +101,12 @@ class MonitorService:
             return AlertType.RELEASE_TIME_CHANGED
         return None
 
-    async def _send(self, alert: Alert, alerts: list[Alert]) -> None:
+    async def _send(self, alert: Alert, alerts: list[Alert]) -> bool:
+        """Attempt an eligible alert and report whether its destination accepted it."""
         if self.watchlist is not None and not alert.watch_matches:
-            return
+            return False
         alerts.append(alert)
-        await self.notifier.send(alert)
+        return await self.notifier.send(alert)
 
     async def synchronize(self) -> list[Alert]:
         connection = self.database.connection
@@ -192,8 +193,8 @@ class MonitorService:
                             occurrence_id=f"release-reminder:{product_id}:{instant.isoformat()}:{seconds}",
                             watch_matches=self._matches(product), reminder_seconds=seconds,
                         )
-                        await self._send(reminder, alerts)
-                        await self.releases.mark_reminder(product_id, instant, seconds)
+                        if await self._send(reminder, alerts):
+                            await self.releases.mark_reminder(product_id, instant, seconds)
             # Keep a tombstone through an unsuccessful check so the next usable
             # observation still produces the reappearance notification.
             if product.availability != Availability.ERROR:

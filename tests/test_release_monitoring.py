@@ -19,8 +19,8 @@ class Monitor:
 
 
 class Notifier:
-    def __init__(self): self.alerts = []
-    async def send(self, alert): self.alerts.append(alert); return True
+    def __init__(self, success=True): self.alerts = []; self.success = success
+    async def send(self, alert): self.alerts.append(alert); return self.success
 
 
 def bag(release=None, availability=Availability.COMING_SOON):
@@ -127,6 +127,34 @@ async def test_reminders_persist_across_restart_and_date_only_has_none(tmp_path:
         notifier = Notifier()
         service = MonitorService(Monitor([bag(exact)]), db, notifier, retailer_name="GeekCore",
                                  release_alerts=config)
+        assert await service.synchronize() == []
+
+
+@pytest.mark.asyncio
+async def test_failed_reminder_delivery_remains_retryable(tmp_path: Path):
+    instant = datetime.now(UTC) + timedelta(minutes=30)
+    exact = ReleaseInfo(
+        ReleasePrecision.EXACT_DATETIME, instant.date(), instant.timetz().replace(tzinfo=None),
+        "UTC", instant, "Available soon", "fixture",
+    )
+    config = ReleaseAlertConfig(True, (3600,), False)
+    async with Database(tmp_path / "retry-reminder.db") as db:
+        notifier = Notifier(success=False)
+        service = MonitorService(
+            Monitor([bag(exact)]), db, notifier, retailer_name="GeekCore", release_alerts=config
+        )
+        await service.synchronize()  # Silent baseline.
+
+        first_attempt = await service.synchronize()
+        assert [alert.alert_type for alert in first_attempt] == [AlertType.RELEASING_SOON]
+        product_id = first_attempt[0].product_id
+        assert not await service.releases.reminder_sent(product_id, instant, 3600)
+
+        notifier.success = True
+        retry = await service.synchronize()
+        assert [alert.alert_type for alert in retry] == [AlertType.RELEASING_SOON]
+        assert await service.releases.reminder_sent(product_id, instant, 3600)
+
         assert await service.synchronize() == []
 
 
