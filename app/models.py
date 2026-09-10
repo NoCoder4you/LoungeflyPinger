@@ -30,6 +30,26 @@ class AlertType(StrEnum):
     MONITOR_RECOVERED = "MONITOR_RECOVERED"
 
 
+class Priority(StrEnum):
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+
+
+@dataclass(frozen=True, slots=True)
+class WatchMatch:
+    """Small, provider-independent description of a matched watch rule."""
+
+    name: str
+    priority: Priority = Priority.NORMAL
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("watch match name must be a non-empty string")
+        object.__setattr__(self, "name", self.name.strip())
+        object.__setattr__(self, "priority", Priority(self.priority))
+
+
 @dataclass(frozen=True, slots=True)
 class Product:
     retailer: str
@@ -45,6 +65,7 @@ class Product:
     character: str | None = None
     exclusive: bool = False
     preorder: bool = False
+    sku: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -71,6 +92,10 @@ class Product:
         if len(currency) != 3 or not currency.isalpha():
             raise ValueError("currency must be a three-letter ISO-style code")
         object.__setattr__(self, "currency", currency)
+        if self.sku is not None:
+            if not isinstance(self.sku, str) or not self.sku.strip():
+                raise ValueError("sku must be a non-empty string when provided")
+            object.__setattr__(self, "sku", self.sku.strip())
 
     @staticmethod
     def _validate_url(field: str, value: str | None, *, required: bool) -> None:
@@ -93,6 +118,7 @@ class Alert:
     message: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     occurrence_id: str = field(default_factory=lambda: uuid4().hex)
+    watch_matches: tuple[WatchMatch, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alert_type", AlertType(self.alert_type))
@@ -108,6 +134,13 @@ class Alert:
         object.__setattr__(self, "occurrence_id", self.occurrence_id.strip())
         if self.timestamp.tzinfo is None:
             raise ValueError("timestamp must be timezone-aware")
+        object.__setattr__(self, "watch_matches", tuple(self.watch_matches))
+
+    @property
+    def priority(self) -> Priority:
+        """Highest matched priority, suitable for future channel routing (for example SMS)."""
+        rank = {Priority.LOW: 0, Priority.NORMAL: 1, Priority.HIGH: 2}
+        return max((match.priority for match in self.watch_matches), key=rank.get, default=Priority.NORMAL)
 
     @property
     def is_admin(self) -> bool:

@@ -1,12 +1,17 @@
 """Validated YAML and environment configuration loading."""
 
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from app.watchlist import Watchlist
 
 
 class ConfigurationError(ValueError):
@@ -45,6 +50,7 @@ class AppConfig:
     logging: LoggingConfig
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
     retailers: dict[str, Any] = field(default_factory=dict)
+    watchlist: Watchlist | None = None
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -57,7 +63,11 @@ def _positive(value: Any, name: str, cast: type = float) -> Any:
     return converted
 
 
-def load_config(path: str | Path = "config/retailers.yaml", env_path: str | Path = ".env") -> AppConfig:
+def load_config(
+    path: str | Path = "config/retailers.yaml",
+    env_path: str | Path = ".env",
+    watchlist_path: str | Path = "config/watchlist.yaml",
+) -> AppConfig:
     load_dotenv(env_path, override=False)
     config_path = Path(path)
     try:
@@ -105,4 +115,7 @@ def load_config(path: str | Path = "config/retailers.yaml", env_path: str | Path
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
     )
-    return AppConfig(monitor, database_path, logging_config, notifications, retailers)
+    # Local import avoids coupling the configuration dataclasses to matching internals.
+    from app.watchlist import load_watchlist
+    watchlist = load_watchlist(watchlist_path)
+    return AppConfig(monitor, database_path, logging_config, notifications, retailers, watchlist)

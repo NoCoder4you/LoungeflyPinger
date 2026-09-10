@@ -200,4 +200,5 @@ class TruffleShuffleMonitor(RetailerMonitor):
             character=None,
             exclusive=exclusive,
             preorder=preorder,
+            sku=product_id,
         )

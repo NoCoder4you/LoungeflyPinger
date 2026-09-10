@@ -148,4 +148,5 @@ class GeekCoreMonitor(RetailerMonitor):
             character=tagged("character:"),
             exclusive="geekcore exclusives" in lowered_tags,
             preorder=preorder,
+            sku=str(available_variant.get("sku")).strip() if available_variant.get("sku") else None,
         )

@@ -37,7 +37,8 @@ class Application:
         if isinstance(geekcore, dict) and geekcore.get("enabled", False):
             interval = float(geekcore.get("interval_minutes", self.config.monitor.default_interval_minutes))
             service = MonitorService(
-                GeekCoreMonitor(self.http), self.database, self.notifier, retailer_name="GeekCore"
+                GeekCoreMonitor(self.http), self.database, self.notifier, retailer_name="GeekCore",
+                watchlist=self.config.watchlist,
             )
             self.scheduler.add_interval_job(
                 "geekcore", service.synchronize, interval * 60, jitter_fraction=0.05
@@ -52,6 +53,7 @@ class Application:
                 self.database,
                 self.notifier,
                 retailer_name="TruffleShuffle",
+                watchlist=self.config.watchlist,
             )
             self.scheduler.add_interval_job(
                 "truffleshuffle", service.synchronize, interval * 60, jitter_fraction=0.05
@@ -66,6 +68,7 @@ class Application:
                 self.database,
                 self.notifier,
                 retailer_name="Loungefly UK",
+                watchlist=self.config.watchlist,
             )
             self.scheduler.add_interval_job(
                 "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05
@@ -78,6 +81,7 @@ class Application:
             service = MonitorService(
                 DisneyStoreUKMonitor(self.http), self.database, self.notifier,
                 retailer_name="Disney Store UK",
+                watchlist=self.config.watchlist,
             )
             self.scheduler.add_interval_job(
                 "disney_store_uk", service.synchronize, interval * 60, jitter_fraction=0.05

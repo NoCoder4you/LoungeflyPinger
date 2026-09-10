@@ -9,6 +9,7 @@ from app.monitors.base import RetailerMonitor
 from app.notifications.base import NotificationProvider
 from app.services.product_service import ProductService
 from app.services.stock_service import StockService
+from app.watchlist import Watchlist, classify_product
 
 LOGGER = logging.getLogger("monitor.retailers")
 
@@ -23,6 +24,7 @@ class MonitorService:
         notifier: NotificationProvider,
         *,
         retailer_name: str,
+        watchlist: Watchlist | None = None,
     ) -> None:
         self.monitor = monitor
         self.database = database
@@ -30,6 +32,9 @@ class MonitorService:
         self.retailer_name = retailer_name
         self.products = ProductService(database)
         self.stock = StockService(database)
+        # None keeps backwards compatibility for programmatic users; an explicitly
+        # empty configured watchlist intentionally sends no product alerts.
+        self.watchlist = watchlist
 
     async def synchronize(self) -> list[Alert]:
         connection = self.database.connection
@@ -42,6 +47,7 @@ class MonitorService:
         ).fetchone()
         alerts: list[Alert] = []
         for product in discovered:
+            product = classify_product(product)
             product_id = await self.products.upsert(product)
             previous = await self.stock.current_availability(product_id)
             alert_type: AlertType | None = None
@@ -54,7 +60,13 @@ class MonitorService:
             if product.availability != Availability.ERROR:
                 await self.stock.record(product_id, product)
             if alert_type is not None:
-                alert = Alert(alert_type, product, product_id, previous_availability=previous)
+                matches = self.watchlist.match(product) if self.watchlist is not None else ()
+                if self.watchlist is not None and not matches:
+                    continue
+                alert = Alert(
+                    alert_type, product, product_id, previous_availability=previous,
+                    watch_matches=matches,
+                )
                 alerts.append(alert)
                 await self.notifier.send(alert)
         now = datetime.now(UTC).isoformat()

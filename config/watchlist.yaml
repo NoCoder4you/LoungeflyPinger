@@ -1,0 +1,7 @@
+# All configured properties on a watch are combined with AND. List-valued taxonomy
+# properties match any listed value; every required keyword must occur in the name.
+products:
+  - name: Any Loungefly Mini Backpack
+    priority: normal
+    product_types:
+      - mini_backpack
