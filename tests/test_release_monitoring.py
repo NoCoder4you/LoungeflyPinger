@@ -109,6 +109,26 @@ async def test_existing_upgrade_enrichment_is_silent_and_missing_is_preserved(tm
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("release_text", [
+    "Releases 18 September 2026",
+    "Launching September 2026",
+    "Coming Soon",
+])
+async def test_nullable_release_history_is_not_duplicated(tmp_path: Path, release_text: str):
+    release = parse_release_text(release_text, source="fixture", local_timezone="Europe/London")
+    async with Database(tmp_path / f"history-{release.precision}.db") as db:
+        service = MonitorService(Monitor([bag(release)]), db, Notifier(), retailer_name="GeekCore")
+        await service.synchronize()
+        await service.synchronize()
+        await service.synchronize()
+
+        count = await (await db.connection.execute(
+            "SELECT COUNT(*) FROM release_history"
+        )).fetchone()
+        assert count == (1,)
+
+
+@pytest.mark.asyncio
 async def test_reminders_persist_across_restart_and_date_only_has_none(tmp_path: Path):
     path = tmp_path / "reminders.db"
     instant = datetime.now(UTC) + timedelta(minutes=30)

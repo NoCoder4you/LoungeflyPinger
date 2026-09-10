@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from app.database import Database
+from app.database import Database, release_history_key
 from app.models import ReleaseInfo, ReleasePrecision
 
 
@@ -46,6 +46,7 @@ class ReleaseService:
         if connection is None:
             raise RuntimeError("database is not connected")
         values = self._values(info)
+        history_key = release_history_key(values)
         await connection.execute(
             """UPDATE product_states SET release_date=?, release_time=?, release_timezone=?,
                       release_datetime=?, release_precision=?, release_text=?, release_source=?,
@@ -56,9 +57,9 @@ class ReleaseService:
             """INSERT OR IGNORE INTO release_history
                (release_date, release_time, release_timezone, release_datetime, release_precision,
                 release_text, release_source, release_timezone_inferred, release_month, release_year,
-                product_id, detected_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (*values, product_id, datetime.now(UTC).isoformat()),
+                release_key, product_id, detected_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (*values, history_key, product_id, datetime.now(UTC).isoformat()),
         )
         await connection.commit()
 

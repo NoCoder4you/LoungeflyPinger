@@ -1,8 +1,17 @@
 """Async SQLite connection lifecycle and schema management."""
 
+import hashlib
+import json
+
 from pathlib import Path
 
 import aiosqlite
+
+
+def release_history_key(values: tuple[object, ...]) -> str:
+    """Return a stable, NULL-safe identity for one normalized release observation."""
+    encoded = json.dumps(values, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -85,9 +94,9 @@ CREATE TABLE IF NOT EXISTS release_history (
     release_timezone_inferred INTEGER NOT NULL DEFAULT 0 CHECK (release_timezone_inferred IN (0, 1)),
     release_month INTEGER,
     release_year INTEGER,
+    release_key TEXT NOT NULL,
     detected_at TEXT NOT NULL,
-    UNIQUE(product_id, release_date, release_time, release_timezone, release_precision,
-           release_text, release_source),
+    UNIQUE(product_id, release_key),
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_release_history_product_detected
@@ -155,7 +164,34 @@ class Database:
             "release_source": "TEXT", "release_timezone_inferred": "INTEGER NOT NULL DEFAULT 0",
             "release_month": "INTEGER", "release_year": "INTEGER",
         })
+        await self._add_missing_columns("release_history", {"release_key": "TEXT"})
+        await self._migrate_release_history_keys()
         await self.connection.commit()
+
+    async def _migrate_release_history_keys(self) -> None:
+        """Backfill keys and collapse duplicates created by SQLite NULL uniqueness semantics."""
+        assert self.connection is not None
+        rows = await (await self.connection.execute(
+            """SELECT id, release_date, release_time, release_timezone, release_datetime,
+                      release_precision, release_text, release_source, release_timezone_inferred,
+                      release_month, release_year
+                 FROM release_history"""
+        )).fetchall()
+        for row in rows:
+            await self.connection.execute(
+                "UPDATE release_history SET release_key=? WHERE id=?",
+                (release_history_key(tuple(row[1:])), row[0]),
+            )
+        await self.connection.execute(
+            """DELETE FROM release_history
+                 WHERE id NOT IN (
+                       SELECT MIN(id) FROM release_history GROUP BY product_id, release_key
+                 )"""
+        )
+        await self.connection.execute(
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_release_history_product_key
+                   ON release_history(product_id, release_key)"""
+        )
 
     async def _add_missing_columns(self, table: str, columns: dict[str, str]) -> None:
         assert self.connection is not None
