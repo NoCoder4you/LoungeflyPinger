@@ -23,6 +23,8 @@ class Application:
             concurrency_limit=config.monitor.concurrency_limit,
             user_agent=config.monitor.user_agent,
             max_retries=config.monitor.max_retries,
+            backoff_seconds=config.monitor.retry_backoff_seconds,
+            rate_limit_requests_per_second=config.monitor.rate_limit_requests_per_second,
         )
         self.scheduler = Scheduler()
         self.notifier = DiscordNotifier(config.notifications, self.database)
@@ -33,6 +35,23 @@ class Application:
         await self.database.connect()
         await self.database.initialize()
         await self.http.start()
+        retailer_names = {
+            "geekcore": "GeekCore", "truffleshuffle": "TruffleShuffle",
+            "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
+        }
+        assert self.database.connection is not None
+        for key, name in retailer_names.items():
+            settings = self.config.retailers.get(key, {})
+            enabled = isinstance(settings, dict) and bool(settings.get("enabled", False))
+            await self.database.connection.execute(
+                """INSERT INTO retailers(name, enabled, health) VALUES (?, ?, ?)
+                   ON CONFLICT(name) DO UPDATE SET enabled=excluded.enabled,
+                     health=CASE WHEN excluded.enabled=0 THEN 'DISABLED'
+                                 WHEN retailers.health='DISABLED' THEN 'HEALTHY'
+                                 ELSE retailers.health END""",
+                (name, enabled, "HEALTHY" if enabled else "DISABLED"),
+            )
+        await self.database.connection.commit()
         geekcore = self.config.retailers.get("geekcore", {})
         if isinstance(geekcore, dict) and geekcore.get("enabled", False):
             interval = float(geekcore.get("interval_minutes", self.config.monitor.default_interval_minutes))
@@ -42,9 +61,11 @@ class Application:
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
             )
             self.scheduler.add_interval_job(
-                "geekcore", service.synchronize, interval * 60, jitter_fraction=0.05
+                "geekcore", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         truffleshuffle = self.config.retailers.get("truffleshuffle", {})
         if isinstance(truffleshuffle, dict) and truffleshuffle.get("enabled", False):
@@ -60,9 +81,11 @@ class Application:
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
             )
             self.scheduler.add_interval_job(
-                "truffleshuffle", service.synchronize, interval * 60, jitter_fraction=0.05
+                "truffleshuffle", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         loungefly_uk = self.config.retailers.get("loungefly_uk", {})
         if isinstance(loungefly_uk, dict) and loungefly_uk.get("enabled", False):
@@ -78,9 +101,11 @@ class Application:
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
             )
             self.scheduler.add_interval_job(
-                "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05
+                "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         disney_store_uk = self.config.retailers.get("disney_store_uk", {})
         if isinstance(disney_store_uk, dict) and disney_store_uk.get("enabled", False):
@@ -94,9 +119,11 @@ class Application:
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
             )
             self.scheduler.add_interval_job(
-                "disney_store_uk", service.synchronize, interval * 60, jitter_fraction=0.05
+                "disney_store_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
 

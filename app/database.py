@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import asyncio
 
 from pathlib import Path
 
@@ -22,7 +23,12 @@ CREATE TABLE IF NOT EXISTS retailers (
     last_success TEXT,
     last_failure TEXT,
     consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0)
-    ,release_sync_completed INTEGER NOT NULL DEFAULT 0 CHECK (release_sync_completed IN (0, 1))
+    ,release_sync_completed INTEGER NOT NULL DEFAULT 0 CHECK (release_sync_completed IN (0, 1)),
+    last_error TEXT,
+    response_status INTEGER,
+    request_duration REAL,
+    health TEXT NOT NULL DEFAULT 'HEALTHY',
+    failure_alert_sent INTEGER NOT NULL DEFAULT 0 CHECK (failure_alert_sent IN (0, 1))
 );
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY,
@@ -135,6 +141,9 @@ class Database:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.connection: aiosqlite.Connection | None = None
+        # A single SQLite connection cannot safely host overlapping transactions.
+        # Network discovery remains concurrent; only each atomic persistence phase is serialized.
+        self.write_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         if self.connection is not None:
@@ -155,7 +164,10 @@ class Database:
             "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT", "sku": "TEXT"
         })
         await self._add_missing_columns("retailers", {
-            "release_sync_completed": "INTEGER NOT NULL DEFAULT 0"
+            "release_sync_completed": "INTEGER NOT NULL DEFAULT 0",
+            "last_error": "TEXT", "response_status": "INTEGER",
+            "request_duration": "REAL", "health": "TEXT NOT NULL DEFAULT 'HEALTHY'",
+            "failure_alert_sent": "INTEGER NOT NULL DEFAULT 0",
         })
         await self._add_missing_columns("product_states", {
             "previous_price": "TEXT", "lowest_price": "TEXT", "highest_price": "TEXT",

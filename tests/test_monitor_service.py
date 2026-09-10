@@ -16,6 +16,11 @@ class Monitor:
     async def discover_products(self): return self.products
 
 
+class BrokenMonitor:
+    def __init__(self, error): self.error = error
+    async def discover_products(self): raise self.error
+
+
 class Notifier:
     def __init__(self): self.alerts = []
     async def send(self, alert): self.alerts.append(alert); return True
@@ -68,6 +73,60 @@ async def test_parser_error_does_not_overwrite_state_or_emit_price_drop(tmp_path
             "SELECT COUNT(*) FROM product_state_history WHERE product_id=?", (row[0],)
         )).fetchone()
         assert history_count == (1,)
+
+
+@pytest.mark.asyncio
+async def test_failure_alert_is_once_and_recovery_survives_restart(tmp_path: Path):
+    path = tmp_path / "health.db"
+    async with Database(path) as database:
+        notifier = Notifier()
+        service = MonitorService(
+            BrokenMonitor(ValueError("Expected product container not found")), database,
+            notifier, retailer_name="GeekCore", failure_alert_threshold=2,
+        )
+        assert await service.synchronize() == []
+        alerts = await service.synchronize()
+        assert [alert.alert_type for alert in alerts] == [AlertType.MONITOR_ERROR]
+        assert await service.synchronize() == []
+        row = await (await database.connection.execute(
+            "SELECT consecutive_failures, last_error, health, failure_alert_sent FROM retailers"
+        )).fetchone()
+        assert row == (3, "Expected product container not found", "FAILED", 1)
+
+    async with Database(path) as database:
+        notifier = Notifier()
+        service = MonitorService(Monitor([product()]), database, notifier,
+                                 retailer_name="GeekCore", failure_alert_threshold=2)
+        alerts = await service.synchronize()
+        assert [alert.alert_type for alert in alerts] == [AlertType.MONITOR_RECOVERED]
+        row = await (await database.connection.execute(
+            "SELECT consecutive_failures, last_error, health, failure_alert_sent FROM retailers"
+        )).fetchone()
+        assert row == (0, None, "HEALTHY", 0)
+
+
+@pytest.mark.asyncio
+async def test_database_exception_rolls_back_entire_scan(tmp_path: Path, monkeypatch):
+    async with Database(tmp_path / "atomic.db") as database:
+        service = MonitorService(Monitor([product("1"), product("2")]), database, Notifier(),
+                                 retailer_name="GeekCore")
+        original = service.products.upsert
+        calls = 0
+
+        async def fail_second(item):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("database unavailable")
+            return await original(item)
+
+        monkeypatch.setattr(service.products, "upsert", fail_second)
+        assert await service.synchronize() == []
+        assert await (await database.connection.execute("SELECT COUNT(*) FROM products")).fetchone() == (0,)
+        health = await (await database.connection.execute(
+            "SELECT health, last_error FROM retailers WHERE name='GeekCore'"
+        )).fetchone()
+        assert health == ("DEGRADED", "database unavailable")
 
 
 @pytest.mark.asyncio

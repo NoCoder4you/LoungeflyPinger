@@ -38,6 +38,15 @@ class AlertType(StrEnum):
     RELEASED = "RELEASED"
 
 
+class RetailerHealth(StrEnum):
+    """Persisted operational state for a retailer adapter."""
+
+    HEALTHY = "HEALTHY"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+    DISABLED = "DISABLED"
+
+
 class ReleasePrecision(StrEnum):
     EXACT_DATETIME = "EXACT_DATETIME"
     DATE_ONLY = "DATE_ONLY"

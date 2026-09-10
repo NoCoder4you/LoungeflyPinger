@@ -96,6 +96,21 @@ collection and persistence.
 The default database is `data/loungefly.db`, and rotating logs are written to
 `logs/loungefly-monitor.log`. Both runtime artifacts are ignored by Git.
 
+## Resilience and retailer health
+
+Each retailer has an independently timed, bounded scheduler task. HTTP requests use a pooled
+session, a global concurrency cap, configurable request rate, timeout, retry limit, exponential
+backoff, and `Retry-After` handling for throttling. Tune `failure_alert_threshold`,
+`retry_backoff_seconds`, `rate_limit_requests_per_second`, and
+`retailer_job_timeout_seconds` in `config/retailers.yaml`.
+
+SQLite retains `last_success`, `last_failure`, `consecutive_failures`, `last_error`, the most
+recent HTTP response status, request duration, and a `HEALTHY`, `DEGRADED`, `FAILED`, or
+`DISABLED` state. A failure episode issues one administrator alert after the configured threshold
+and one recovery alert after the next successful scan; these episode flags survive application
+restarts. Failed parses and `ERROR` observations are not inventory evidence: successful product
+history is preserved, and a failed scan is rolled back rather than partially updating products.
+
 ## Development checks
 
 ```bash
@@ -115,8 +130,10 @@ DISCORD_ADMIN_WEBHOOK_URL=https://discord.com/api/webhooks/...
 Product alerts use the first URL; monitor error and recovery alerts use the administrator URL.
 Deliveries are persisted for deduplication only after Discord accepts them. Reuse an alert's
 `occurrence_id` when retrying or restoring that event; create a new `Alert` for a later episode,
-even when its product state and price match an earlier episode. Failed or cancelled requests remain
-eligible for retry, and delivery failures return `False` rather than crashing the monitor.
+even when its product state and price match an earlier episode. Failed product notification
+requests remain eligible for retry, and delivery failures return `False` rather than crashing the
+monitor. A retailer-health failure alert is issued only once per failure episode even if Discord
+is unavailable, preventing an unattended alert storm.
 
 To safely generate a standalone sample event (with no retailer adapter involved), configure
 `DISCORD_WEBHOOK_URL` and run:
