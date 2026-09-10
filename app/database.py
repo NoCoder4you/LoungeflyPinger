@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS products (
     name TEXT NOT NULL,
     url TEXT NOT NULL,
     image_url TEXT,
+    sku TEXT,
     franchise TEXT,
     character TEXT,
     product_type TEXT NOT NULL,
@@ -103,7 +104,7 @@ class Database:
         await self.connection.executescript(SCHEMA)
         # CREATE TABLE IF NOT EXISTS does not evolve databases created by older releases.
         await self._add_missing_columns("products", {
-            "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT"
+            "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT", "sku": "TEXT"
         })
         await self._add_missing_columns("product_states", {
             "previous_price": "TEXT", "lowest_price": "TEXT", "highest_price": "TEXT"

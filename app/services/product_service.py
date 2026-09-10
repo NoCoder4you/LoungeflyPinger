@@ -21,17 +21,18 @@ class ProductService:
         )
         await connection.execute(
             """INSERT INTO products
-               (retailer, retailer_product_id, name, url, image_url, franchise, character,
+               (retailer, retailer_product_id, name, url, image_url, sku, franchise, character,
                 product_type, exclusive, first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(retailer, retailer_product_id) DO UPDATE SET
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
+                 sku=COALESCE(excluded.sku, products.sku),
                  franchise=excluded.franchise, character=excluded.character,
                  product_type=excluded.product_type, exclusive=excluded.exclusive,
                  last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
             (product.retailer, product.retailer_product_id, product.name, product.url,
-             product.image_url, product.franchise, product.character, product.product_type,
-             product.exclusive, now, now),
+             product.image_url, product.sku, product.franchise, product.character,
+             product.product_type, product.exclusive, now, now),
         )
         cursor = await connection.execute(
             "SELECT id FROM products WHERE retailer=? AND retailer_product_id=?",
@@ -41,3 +42,13 @@ class ProductService:
         await connection.commit()
         assert row is not None
         return int(row[0])
+
+    async def mark_seen(self, product_id: int) -> None:
+        """Clear persisted absence state after a successful product observation."""
+        connection = self.database.connection
+        if connection is None:
+            raise RuntimeError("database is not connected")
+        await connection.execute(
+            "UPDATE products SET missing_scans=0, removed_at=NULL WHERE id=?", (product_id,)
+        )
+        await connection.commit()

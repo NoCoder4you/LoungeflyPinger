@@ -43,20 +43,31 @@ async def test_initial_sync_is_silent_then_new_and_restock_are_alerted(tmp_path:
 
 
 @pytest.mark.asyncio
-async def test_parser_error_does_not_overwrite_known_stock_state(tmp_path: Path):
+async def test_parser_error_does_not_overwrite_state_or_emit_price_drop(tmp_path: Path):
     async with Database(tmp_path / "state.db") as database:
+        notifier = Notifier()
         monitor = Monitor([product(availability=Availability.IN_STOCK)])
-        service = MonitorService(monitor, database, Notifier(), retailer_name="GeekCore")
+        service = MonitorService(monitor, database, notifier, retailer_name="GeekCore")
         await service.synchronize()
 
-        monitor.products = [product(availability=Availability.ERROR)]
-        await service.synchronize()
+        monitor.products = [replace(
+            product(availability=Availability.ERROR), price=Decimal("1")
+        )]
+        assert await service.synchronize() == []
+        assert notifier.alerts == []
 
         row = await (await database.connection.execute(
             "SELECT id FROM products WHERE retailer=? AND retailer_product_id=?", ("GeekCore", "1")
         )).fetchone()
         assert row is not None
-        assert await service.stock.current_availability(row[0]) == Availability.IN_STOCK
+        state = await service.stock.current(row[0])
+        assert state is not None
+        assert state.availability == Availability.IN_STOCK
+        assert state.price == Decimal("10")
+        history_count = await (await database.connection.execute(
+            "SELECT COUNT(*) FROM product_state_history WHERE product_id=?", (row[0],)
+        )).fetchone()
+        assert history_count == (1,)
 
 
 @pytest.mark.asyncio
@@ -162,3 +173,75 @@ async def test_missing_product_alerts_once_only_after_threshold_and_survives_res
         alerts = await service.synchronize()
         assert [a.alert_type for a in alerts] == [AlertType.PRODUCT_REMOVED]
         assert await service.synchronize() == []
+
+
+@pytest.mark.asyncio
+async def test_removed_product_reappearance_alerts_with_unchanged_availability(tmp_path: Path):
+    path = tmp_path / "reappears.db"
+    async with Database(path) as database:
+        monitor = Monitor([product(availability=Availability.OUT_OF_STOCK)])
+        service = MonitorService(
+            monitor, database, Notifier(), retailer_name="GeekCore", missing_scan_threshold=1
+        )
+        await service.synchronize()
+        monitor.products = []
+        assert [a.alert_type for a in await service.synchronize()] == [AlertType.PRODUCT_REMOVED]
+
+    async with Database(path) as database:
+        notifier = Notifier()
+        service = MonitorService(
+            Monitor([product(availability=Availability.OUT_OF_STOCK)]),
+            database,
+            notifier,
+            retailer_name="GeekCore",
+            missing_scan_threshold=1,
+        )
+        alerts = await service.synchronize()
+
+        assert [a.alert_type for a in alerts] == [AlertType.AVAILABILITY]
+        assert alerts[0].previous_availability == Availability.OUT_OF_STOCK
+        row = await (await database.connection.execute(
+            "SELECT missing_scans, removed_at FROM products WHERE retailer_product_id='1'"
+        )).fetchone()
+        assert row == (0, None)
+
+
+@pytest.mark.asyncio
+async def test_removed_product_error_retains_reappearance_alert(tmp_path: Path):
+    async with Database(tmp_path / "reappears-after-error.db") as database:
+        monitor = Monitor([product()])
+        service = MonitorService(
+            monitor, database, Notifier(), retailer_name="GeekCore", missing_scan_threshold=1
+        )
+        await service.synchronize()
+        monitor.products = []
+        await service.synchronize()
+        monitor.products = [product(availability=Availability.ERROR)]
+        assert await service.synchronize() == []
+        monitor.products = [product()]
+        assert [a.alert_type for a in await service.synchronize()] == [AlertType.AVAILABILITY]
+
+
+@pytest.mark.asyncio
+async def test_removed_product_preserves_sku_for_watchlist_matching(tmp_path: Path):
+    async with Database(tmp_path / "sku-removal.db") as database:
+        watched_product = replace(product(), sku="LF-SKU-123")
+        monitor = Monitor([watched_product])
+        notifier = Notifier()
+        watches = Watchlist((WatchRule("Exact SKU", sku="lf sku 123"),))
+        service = MonitorService(
+            monitor, database, notifier, retailer_name="GeekCore", watchlist=watches,
+            missing_scan_threshold=1,
+        )
+        await service.synchronize()
+        # A later adapter result may omit a previously known stable SKU.
+        monitor.products = [replace(watched_product, sku=None)]
+        await service.synchronize()
+        monitor.products = []
+
+        alerts = await service.synchronize()
+
+        assert [alert.alert_type for alert in alerts] == [AlertType.PRODUCT_REMOVED]
+        assert alerts[0].product is not None
+        assert alerts[0].product.sku == "LF-SKU-123"
+        assert [match.name for match in alerts[0].watch_matches] == ["Exact SKU"]

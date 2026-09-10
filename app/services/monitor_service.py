@@ -90,22 +90,27 @@ class MonitorService:
         for product in discovered:
             product = classify_product(product)
             known_product = await (await connection.execute(
-                "SELECT 1 FROM products WHERE retailer=? AND retailer_product_id=?",
+                "SELECT id, removed_at FROM products WHERE retailer=? AND retailer_product_id=?",
                 (product.retailer, product.retailer_product_id),
             )).fetchone()
+            was_removed = known_product is not None and known_product[1] is not None
             product_id = await self.products.upsert(product)
             seen_ids.add(product_id)
             prior_state = await self.stock.current(product_id)
             previous = prior_state.availability if prior_state else None
             alert_types: list[AlertType] = []
-            if prior_sync is not None and prior_sync[0] is not None and known_product is None:
-                alert_types.append(AlertType.NEW_PRODUCT)
-            elif previous is not None:
-                stock_alert = self._stock_alert(previous, product)
-                if stock_alert is not None:
-                    alert_types.append(stock_alert)
-                if self._is_price_drop(prior_state.price, product, prior_state.currency):
-                    alert_types.append(AlertType.PRICE_DROP)
+            if product.availability != Availability.ERROR:
+                if prior_sync is not None and prior_sync[0] is not None and known_product is None:
+                    alert_types.append(AlertType.NEW_PRODUCT)
+                elif previous is not None:
+                    if was_removed:
+                        alert_types.append(AlertType.AVAILABILITY)
+                    else:
+                        stock_alert = self._stock_alert(previous, product)
+                        if stock_alert is not None:
+                            alert_types.append(stock_alert)
+                    if self._is_price_drop(prior_state.price, product, prior_state.currency):
+                        alert_types.append(AlertType.PRICE_DROP)
             # A failed parse/check provides no inventory evidence. Preserve the
             # last known stock state until a successful observation replaces it.
             if product.availability != Availability.ERROR:
@@ -117,9 +122,13 @@ class MonitorService:
                     previous_availability=previous, watch_matches=self._matches(product),
                 )
                 await self._send(alert, alerts)
+            # Keep a tombstone through an unsuccessful check so the next usable
+            # observation still produces the reappearance notification.
+            if product.availability != Availability.ERROR:
+                await self.products.mark_seen(product_id)
         # Absence is only evidence after repeated successful, complete listing scans.
         missing_rows = await (await connection.execute(
-            """SELECT p.id, p.retailer, p.retailer_product_id, p.name, p.url, p.image_url,
+            """SELECT p.id, p.retailer, p.retailer_product_id, p.name, p.url, p.image_url, p.sku,
                       p.product_type, p.franchise, p.character, p.exclusive, p.missing_scans,
                       s.availability, s.price, s.currency, s.preorder
                  FROM products p LEFT JOIN product_states s ON s.product_id=p.id
@@ -129,21 +138,23 @@ class MonitorService:
         for row in missing_rows:
             if row[0] in seen_ids:
                 continue
-            count = row[10] + 1
+            count = row[11] + 1
             removed = count >= self.missing_scan_threshold
             await connection.execute(
                 "UPDATE products SET missing_scans=?, removed_at=? WHERE id=?",
                 (count, now if removed else None, row[0]),
             )
-            if removed and row[11] is not None:
+            if removed and row[12] is not None:
                 missing_product = Product(
-                    row[1], row[2], row[3], row[4], Availability(row[11]), row[5],
-                    Decimal(row[12]) if row[12] is not None else None, row[13], row[6],
-                    row[7], row[8], bool(row[9]), bool(row[14]),
+                    retailer=row[1], retailer_product_id=row[2], name=row[3], url=row[4],
+                    availability=Availability(row[12]), image_url=row[5],
+                    price=Decimal(row[13]) if row[13] is not None else None,
+                    currency=row[14], product_type=row[7], franchise=row[8], character=row[9],
+                    exclusive=bool(row[10]), preorder=bool(row[15]), sku=row[6],
                 )
                 await self._send(Alert(
                     AlertType.PRODUCT_REMOVED, missing_product, row[0],
-                    previous_availability=Availability(row[11]),
+                    previous_availability=Availability(row[12]),
                     watch_matches=self._matches(missing_product),
                 ), alerts)
         await connection.execute(
