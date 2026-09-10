@@ -41,3 +41,13 @@ class ProductService:
         await connection.commit()
         assert row is not None
         return int(row[0])
+
+    async def mark_seen(self, product_id: int) -> None:
+        """Clear persisted absence state after a successful product observation."""
+        connection = self.database.connection
+        if connection is None:
+            raise RuntimeError("database is not connected")
+        await connection.execute(
+            "UPDATE products SET missing_scans=0, removed_at=NULL WHERE id=?", (product_id,)
+        )
+        await connection.commit()
