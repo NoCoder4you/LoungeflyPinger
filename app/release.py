@@ -51,9 +51,14 @@ def parse_release_text(
     try:
         release_time = time(int(hour), int(minute))
         explicit_zone = match.group(11)
-        if explicit_zone == "BST":
+        abbreviation = (
+            explicit_zone.upper()
+            if explicit_zone is not None and "/" not in explicit_zone
+            else explicit_zone
+        )
+        if abbreviation == "BST":
             zone = timezone(timedelta(hours=1), "BST")
-        elif explicit_zone in {"UTC", "GMT"}:
+        elif abbreviation in {"UTC", "GMT"}:
             zone = ZoneInfo("UTC")
         else:
             zone = ZoneInfo(explicit_zone or local_timezone) if (explicit_zone or local_timezone) else None
@@ -63,7 +68,7 @@ def parse_release_text(
         # A time without a configured/explicit timezone cannot become an exact instant.
         return None
     instant = datetime.combine(release_date, release_time, zone)
-    zone_name = explicit_zone or local_timezone
+    zone_name = abbreviation or local_timezone
     return ReleaseInfo(
         ReleasePrecision.EXACT_DATETIME, release_date, release_time, zone_name, instant,
         raw, source, timezone_inferred=explicit_zone is None,

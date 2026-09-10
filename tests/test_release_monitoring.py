@@ -50,8 +50,17 @@ def test_timezone_dst_and_no_fake_midnight():
     assert winter.release_datetime.utcoffset() == timedelta(0)
     assert summer.timezone_inferred is True
     assert date_only.release_datetime is None and date_only.release_time is None
-    explicit = parse_release_text("Available 18/09/2026 at 09:00 UTC", source="x")
-    assert explicit.timezone == "UTC" and explicit.timezone_inferred is False
+    for abbreviation in ("UTC", "utc", "GMT", "gmt", "BST", "bst"):
+        explicit = parse_release_text(
+            f"Available 18/09/2026 at 09:00 {abbreviation}", source="x"
+        )
+        assert explicit is not None
+        assert explicit.timezone == abbreviation.upper()
+        assert explicit.timezone_inferred is False
+    iana = parse_release_text(
+        "Available 18/09/2026 at 09:00 Europe/London", source="x"
+    )
+    assert iana is not None and iana.timezone == "Europe/London"
 
 
 @pytest.mark.parametrize("text", ["Release eventually", "Available 32/15/2026 at 99:00", "", None])
