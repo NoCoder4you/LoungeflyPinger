@@ -190,14 +190,18 @@ def test_discord_release_change_payload_and_dedup_identity():
 
 
 @pytest.mark.asyncio
-async def test_released_requires_retailer_stock_evidence_and_known_release(tmp_path: Path):
+@pytest.mark.parametrize("initial", [Availability.COMING_SOON, Availability.PREORDER])
+@pytest.mark.parametrize("available", [Availability.IN_STOCK, Availability.LOW_STOCK])
+async def test_released_requires_retailer_stock_evidence_and_known_release(
+    tmp_path: Path, initial: Availability, available: Availability
+):
     release = parse_release_text("Coming Soon", source="fixture")
     async with Database(tmp_path / "released.db") as db:
-        monitor = Monitor([bag(release)])
+        monitor = Monitor([bag(release, initial)])
         service = MonitorService(monitor, db, Notifier(), retailer_name="GeekCore")
         await service.synchronize()
         # Merely passing a published date is never evaluated as released; actual stock is.
-        monitor.products = [bag(release, Availability.IN_STOCK)]
+        monitor.products = [bag(release, available)]
         assert [a.alert_type for a in await service.synchronize()] == [AlertType.RELEASED]
 
 

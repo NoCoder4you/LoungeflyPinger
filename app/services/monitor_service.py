@@ -235,7 +235,9 @@ class MonitorService:
                 elif previous is not None:
                     if (self.release_alerts.enabled and prior_release is not None and
                             previous in {Availability.COMING_SOON, Availability.PREORDER} and
-                            product.availability == Availability.IN_STOCK):
+                            product.availability in {
+                                Availability.IN_STOCK, Availability.LOW_STOCK,
+                            }):
                         alert_types.append(AlertType.RELEASED)
                     elif was_removed:
                         alert_types.append(AlertType.AVAILABILITY)
