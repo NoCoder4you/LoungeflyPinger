@@ -9,6 +9,7 @@ from app.http import AsyncHttpClient
 from app.monitors import (
     BoxLunchMonitor, CMPopMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor,
+    LFLoversMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor,
@@ -56,6 +57,7 @@ class Application:
             "street_707": "707 Street",
             "cordys_corner": "Cordy's Corner",
             "infinity_collectables": "Infinity Collectables",
+            "lf_lovers": "LF Lovers",
             "something_different_uk": "Something Different Gift Shop UK",
             "popcultcha": "Popcultcha",
             **{
@@ -139,6 +141,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "geek_garage_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        lf_lovers = self.config.retailers.get("lf_lovers", {})
+        if isinstance(lf_lovers, dict) and lf_lovers.get("enabled", False):
+            interval = float(lf_lovers.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                LFLoversMonitor(self.http), self.database, self.notifier,
+                retailer_name="LF Lovers", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "lf_lovers", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         truffleshuffle = self.config.retailers.get("truffleshuffle", {})
