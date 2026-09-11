@@ -25,6 +25,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Pink a la Mode US | Working | Public Shopify Mini Backpacks and New Arrivals feeds |
 | 707 Street US | Working | Public Shopify Mini Backpacks collection and product feeds |
 | Cordy's Corner US | Working | Public Shopify Loungefly Backpacks and Shop Exclusive feeds |
+| Popcultcha Australia | Working | Public Magento manufacturer catalogue and Product JSON-LD |
 | EMP Germany | Working | Shared Salesforce Commerce Cloud product microdata |
 | EMP France | Working | Shared Salesforce Commerce Cloud product microdata |
 | EMP Spain | Working | Shared Salesforce Commerce Cloud product microdata |
@@ -50,6 +51,7 @@ dedicated telemetry fields. Current capability is:
 | Pink a la Mode US | Partial (product-specific Shopify descriptions/tags; publication timestamps are not releases) |
 | 707 Street US | Partial (explicit product descriptions; wave tags and publication timestamps remain metadata) |
 | Cordy's Corner US | Partial (explicit product descriptions; publication timestamps remain listing metadata) |
+| Popcultcha Australia | Partial (explicit release wording; retailer ETA is stored separately) |
 | EMP Germany | Supported (dedicated schema.org `releaseDate`; date-only precision) |
 | EMP France | Supported (dedicated schema.org `releaseDate`; date-only precision) |
 | EMP Spain | Supported (dedicated schema.org `releaseDate`; date-only precision) |
@@ -127,6 +129,7 @@ collection and persistence.
 - `app/monitors/pink_a_la_mode.py`: Pink a la Mode US Shopify product adapter
 - `app/monitors/street_707.py`: 707 Street US Shopify product adapter
 - `app/monitors/cordys_corner.py`: Cordy's Corner US Shopify product adapter
+- `app/monitors/popcultcha.py`: Popcultcha Australia Magento catalogue adapter
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
