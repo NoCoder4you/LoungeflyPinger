@@ -91,6 +91,10 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  infinity_collectables:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   popcultcha:
     enabled: true
     interval_minutes: 10
