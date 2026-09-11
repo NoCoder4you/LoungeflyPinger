@@ -4,7 +4,7 @@ A lightweight, asynchronous foundation for continuously monitoring Loungefly Min
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
 GeekCore UK is monitored through Shopify's public structured collection feeds, and
-TruffleShuffle UK and Loungefly UK are monitored through public product JSON-LD. Disney Store UK
+TruffleShuffle UK and the Loungefly UK/US storefronts are monitored through public product JSON-LD. Disney Store UK
 uses its public Loungefly ItemList and structured storefront product telemetry.
 
 ## Retailer status
@@ -14,6 +14,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | GeekCore | Working | Public Shopify product feeds |
 | TruffleShuffle | Working | Public category and product JSON-LD |
 | Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
+| Loungefly US | Working | Public schema.org ItemList/Product JSON-LD and product flags |
 | Disney Store UK | Working | Public ItemList and product telemetry |
 
 Release metadata is parsed conservatively from retailer-published structured descriptions or
@@ -24,10 +25,12 @@ dedicated telemetry fields. Current capability is:
 | GeekCore | Partial (explicit Shopify tags/descriptions) |
 | TruffleShuffle | Partial (explicit Product JSON-LD descriptions) |
 | Loungefly UK | Partial (explicit Product JSON-LD descriptions) |
+| Loungefly US | Partial (explicit Product JSON-LD descriptions; no date is inferred from publication or shipping) |
 | Disney Store UK | Partial (dedicated product telemetry messages when published) |
 
 Missing or malformed release text never clears a previously known release. Exact times use the
-configured retailer-local IANA timezone (`Europe/London` for these UK adapters), record that the
+configured retailer-local IANA timezone (`Europe/London` for UK and `America/Los_Angeles` for
+Loungefly US), record that the
 zone was inferred, and are converted with the applicable GMT/BST offset for the release date.
 
 ## Requirements
@@ -85,7 +88,7 @@ collection and persistence.
 - `app/monitors/base.py`: contract for retailer adapters
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
-- `app/monitors/loungefly_uk.py`: official Loungefly UK JSON-LD discovery and normalization
+- `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US JSON-LD discovery and normalization
 - `app/monitors/disney_store_uk.py`: Disney Store UK structured storefront adapter
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication

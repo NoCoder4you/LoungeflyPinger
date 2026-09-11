@@ -6,7 +6,7 @@ import logging
 from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
-from app.monitors import DisneyStoreUKMonitor, GeekCoreMonitor, LoungeflyUKMonitor, TruffleShuffleMonitor
+from app.monitors import DisneyStoreUKMonitor, GeekCoreMonitor, LoungeflyUKMonitor, LoungeflyUSMonitor, TruffleShuffleMonitor
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.monitor_service import MonitorService
@@ -38,6 +38,7 @@ class Application:
         retailer_names = {
             "geekcore": "GeekCore", "truffleshuffle": "TruffleShuffle",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
+            "loungefly_us": "Loungefly US",
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -105,6 +106,20 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        loungefly_us = self.config.retailers.get("loungefly_us", {})
+        if isinstance(loungefly_us, dict) and loungefly_us.get("enabled", False):
+            interval = float(loungefly_us.get("interval_minutes", self.config.monitor.default_interval_minutes))
+            service = MonitorService(
+                LoungeflyUSMonitor(self.http), self.database, self.notifier,
+                retailer_name="Loungefly US", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "loungefly_us", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         disney_store_uk = self.config.retailers.get("disney_store_uk", {})

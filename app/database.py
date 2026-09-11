@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS products (
     character TEXT,
     product_type TEXT NOT NULL,
     exclusive INTEGER NOT NULL DEFAULT 0 CHECK (exclusive IN (0, 1)),
+    new_release INTEGER NOT NULL DEFAULT 0 CHECK (new_release IN (0, 1)),
     first_seen TEXT NOT NULL,
     last_seen TEXT NOT NULL,
     missing_scans INTEGER NOT NULL DEFAULT 0 CHECK (missing_scans >= 0),
@@ -161,7 +162,8 @@ class Database:
         await self.connection.executescript(SCHEMA)
         # CREATE TABLE IF NOT EXISTS does not evolve databases created by older releases.
         await self._add_missing_columns("products", {
-            "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT", "sku": "TEXT"
+            "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT", "sku": "TEXT",
+            "new_release": "INTEGER NOT NULL DEFAULT 0",
         })
         await self._add_missing_columns("retailers", {
             "release_sync_completed": "INTEGER NOT NULL DEFAULT 0",

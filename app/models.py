@@ -11,6 +11,7 @@ from uuid import uuid4
 class Availability(StrEnum):
     UNKNOWN = "UNKNOWN"
     IN_STOCK = "IN_STOCK"
+    LOW_STOCK = "LOW_STOCK"
     OUT_OF_STOCK = "OUT_OF_STOCK"
     PREORDER = "PREORDER"
     COMING_SOON = "COMING_SOON"
@@ -123,6 +124,7 @@ class Product:
     franchise: str | None = None
     character: str | None = None
     exclusive: bool = False
+    new_release: bool = False
     preorder: bool = False
     sku: str | None = None
     release: ReleaseInfo | None = None

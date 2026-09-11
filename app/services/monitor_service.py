@@ -60,6 +60,8 @@ class MonitorService:
         current = product.availability
         if previous == Availability.OUT_OF_STOCK and current == Availability.IN_STOCK:
             return AlertType.RESTOCK
+        if current == Availability.LOW_STOCK and previous != Availability.LOW_STOCK:
+            return AlertType.LOW_STOCK
         if previous == Availability.COMING_SOON and current == Availability.IN_STOCK:
             return AlertType.AVAILABILITY
         if previous in {Availability.COMING_SOON, Availability.OUT_OF_STOCK} and (
@@ -288,7 +290,7 @@ class MonitorService:
         # Absence is only evidence after repeated successful, complete listing scans.
         missing_rows = await (await connection.execute(
             """SELECT p.id, p.retailer, p.retailer_product_id, p.name, p.url, p.image_url, p.sku,
-                      p.product_type, p.franchise, p.character, p.exclusive, p.missing_scans,
+                      p.product_type, p.franchise, p.character, p.exclusive, p.new_release, p.missing_scans,
                       s.availability, s.price, s.currency, s.preorder
                  FROM products p LEFT JOIN product_states s ON s.product_id=p.id
                 WHERE p.retailer=? AND p.removed_at IS NULL""", (retailer,)
@@ -297,23 +299,23 @@ class MonitorService:
         for row in missing_rows:
             if row[0] in seen_ids:
                 continue
-            count = row[11] + 1
+            count = row[12] + 1
             removed = count >= self.missing_scan_threshold
             await connection.execute(
                 "UPDATE products SET missing_scans=?, removed_at=? WHERE id=?",
                 (count, now if removed else None, row[0]),
             )
-            if removed and row[12] is not None:
+            if removed and row[13] is not None:
                 missing_product = Product(
                     retailer=row[1], retailer_product_id=row[2], name=row[3], url=row[4],
-                    availability=Availability(row[12]), image_url=row[5],
-                    price=Decimal(row[13]) if row[13] is not None else None,
-                    currency=row[14], product_type=row[7], franchise=row[8], character=row[9],
-                    exclusive=bool(row[10]), preorder=bool(row[15]), sku=row[6],
+                    availability=Availability(row[13]), image_url=row[5],
+                    price=Decimal(row[14]) if row[14] is not None else None,
+                    currency=row[15], product_type=row[7], franchise=row[8], character=row[9],
+                    exclusive=bool(row[10]), new_release=bool(row[11]), preorder=bool(row[16]), sku=row[6],
                 )
                 await self._send(Alert(
                     AlertType.PRODUCT_REMOVED, missing_product, row[0],
-                    previous_availability=Availability(row[12]),
+                    previous_availability=Availability(row[13]),
                     watch_matches=self._matches(missing_product),
                 ), alerts)
         previous_health = await (await connection.execute(
