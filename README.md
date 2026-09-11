@@ -25,6 +25,10 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Pink a la Mode US | Working | Public Shopify Mini Backpacks and New Arrivals feeds |
 | 707 Street US | Working | Public Shopify Mini Backpacks collection and product feeds |
 | Cordy's Corner US | Working | Public Shopify Loungefly Backpacks and Shop Exclusive feeds |
+| EMP Germany | Working | Shared Salesforce Commerce Cloud product microdata |
+| EMP France | Working | Shared Salesforce Commerce Cloud product microdata |
+| EMP Spain | Working | Shared Salesforce Commerce Cloud product microdata |
+| EMP Italy | Working | Shared Salesforce Commerce Cloud product microdata |
 
 Release metadata is parsed conservatively from retailer-published structured descriptions or
 dedicated telemetry fields. Current capability is:
@@ -45,6 +49,10 @@ dedicated telemetry fields. Current capability is:
 | Pink a la Mode US | Partial (product-specific Shopify descriptions/tags; publication timestamps are not releases) |
 | 707 Street US | Partial (explicit product descriptions; wave tags and publication timestamps remain metadata) |
 | Cordy's Corner US | Partial (explicit product descriptions; publication timestamps remain listing metadata) |
+| EMP Germany | Supported (dedicated schema.org `releaseDate`; date-only precision) |
+| EMP France | Supported (dedicated schema.org `releaseDate`; date-only precision) |
+| EMP Spain | Supported (dedicated schema.org `releaseDate`; date-only precision) |
+| EMP Italy | Supported when published (dedicated schema.org `releaseDate`; date-only precision) |
 
 Missing or malformed release text never clears a previously known release. Exact times use the
 configured retailer-local IANA timezone (`Europe/London` for UK and `America/Los_Angeles` for
@@ -112,6 +120,7 @@ collection and persistence.
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
 - `app/monitors/boxlunch.py`: shared BoxLunch/Hot Topic US structured collection adapter
 - `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
+- `app/monitors/emp.py`: shared, configured EMP Germany/France/Spain/Italy Commerce Cloud adapter
 - `app/monitors/modern_pinup.py`: Modern PinUp US Shopify product adapter
 - `app/monitors/pink_a_la_mode.py`: Pink a la Mode US Shopify product adapter
 - `app/monitors/street_707.py`: 707 Street US Shopify product adapter

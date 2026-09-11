@@ -8,7 +8,7 @@ from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
     BoxLunchMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
-    GeekCoreMonitor,
+    EMPMonitor, EMP_REGIONS, GeekCoreMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, Street707Monitor,
     TruffleShuffleMonitor,
@@ -54,6 +54,7 @@ class Application:
             "pink_a_la_mode": "Pink a la Mode",
             "street_707": "707 Street",
             "cordys_corner": "Cordy's Corner",
+            **{f"emp_{code}": region.name for code, region in EMP_REGIONS.items()},
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -68,6 +69,24 @@ class Application:
                 (name, enabled, "HEALTHY" if enabled else "DISABLED"),
             )
         await self.database.connection.commit()
+        # Each storefront is an independent scheduler/service so a regional outage
+        # cannot affect the health or synchronization of another EMP country.
+        for code, region in EMP_REGIONS.items():
+            key = f"emp_{code}"
+            settings = self.config.retailers.get(key, {})
+            if isinstance(settings, dict) and settings.get("enabled", False):
+                interval = float(settings.get("interval_minutes", self.config.monitor.default_interval_minutes))
+                service = MonitorService(
+                    EMPMonitor(self.http, region), self.database, self.notifier,
+                    retailer_name=region.name, watchlist=self.config.watchlist,
+                    price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                    missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                    failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+                )
+                self.scheduler.add_interval_job(
+                    key, service.synchronize, interval * 60, jitter_fraction=0.05,
+                    timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+                )
         geekcore = self.config.retailers.get("geekcore", {})
         if isinstance(geekcore, dict) and geekcore.get("enabled", False):
             interval = float(geekcore.get("interval_minutes", self.config.monitor.default_interval_minutes))
