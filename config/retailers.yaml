@@ -37,6 +37,10 @@ notifications:
     enabled: false
 
 retailers:
+  koolaz_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   cool_merch_uk:
     enabled: true
     interval_minutes: 10
