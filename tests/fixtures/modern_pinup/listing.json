@@ -1,0 +1,8 @@
+{"products":[
+ {"id":101,"title":"Modern PinUp Exclusive Loungefly Disney Moon Mini Backpack","handle":"moon-mini-backpack","body_html":"Preorder releases September 20, 2026 at 09:00 America/Los_Angeles","published_at":"2026-08-01T12:00:00-07:00","product_type":"Backpacks","vendor":"Modern Pinup","tags":["Loungefly","Exclusives","Preorder","New Arrivals"],"images":[{"src":"//cdn.shopify.com/moon.jpg"}],"variants":[{"id":1001,"sku":"LF-MOON-01","available":true,"price":"72.00","compare_at_price":"90.00"}]},
+ {"id":102,"title":"Loungefly Disney Stars Mini Backpack","handle":"stars-mini-backpack","body_html":"","published_at":"2026-09-10T12:00:00-07:00","product_type":"Backpacks","vendor":"Loungefly","tags":["Loungefly"],"images":[],"variants":[{"id":1002,"sku":"LF-STARS","available":false,"price":"85.00","compare_at_price":null}]},
+ {"id":103,"title":"Loungefly Mini Backpack Wallet","handle":"wallet","product_type":"Backpacks","tags":["Loungefly"],"variants":[{"id":1003,"sku":"WALLET","available":true,"price":"35.00"}]},
+ {"id":104,"title":"Loungefly Moon Crossbody Mini Backpack Charm","handle":"charm","product_type":"Backpacks","tags":["Loungefly"],"variants":[{"id":1004,"sku":"CHARM","available":true,"price":"15.00"}]},
+ {"id":105,"title":"Loungefly Full Size Backpack","handle":"full","product_type":"Backpacks","tags":["Loungefly"],"variants":[{"id":1005,"sku":"FULL","available":true,"price":"95.00"}]},
+ {"id":106,"title":"Loungefly Coin Mini Backpack","handle":"coin","product_type":"Accessories","tags":["Loungefly"],"variants":[{"id":1006,"sku":"ACC","available":true,"price":"20.00"}]}
+]}
