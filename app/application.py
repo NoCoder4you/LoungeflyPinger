@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
-    BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
+    BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
@@ -43,6 +43,7 @@ class Application:
         await self.database.initialize()
         await self.http.start()
         retailer_names = {
+            "damaged_society_uk": "Damaged Society UK",
             "cool_merch_uk": "Cool-Merch UK",
             "koolaz_uk": "Koolaz UK",
             "cm_pop_uk": "CM POP UK",
@@ -82,6 +83,22 @@ class Application:
         await self.database.connection.commit()
         # Each storefront is an independent scheduler/service so a regional outage
         # cannot affect the health or synchronization of another storefront.
+        damaged_society = self.config.retailers.get("damaged_society_uk", {})
+        if isinstance(damaged_society, dict) and damaged_society.get("enabled", False):
+            interval = float(damaged_society.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                DamagedSocietyMonitor(self.http), self.database, self.notifier,
+                retailer_name="Damaged Society UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "damaged_society_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         koolaz = self.config.retailers.get("koolaz_uk", {})
         if isinstance(koolaz, dict) and koolaz.get("enabled", False):
             interval = float(koolaz.get(
