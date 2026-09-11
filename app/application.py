@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
-    BoxLunchMonitor, CMPopMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
+    BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor,
     LFLoversMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
@@ -43,6 +43,7 @@ class Application:
         await self.database.initialize()
         await self.http.start()
         retailer_names = {
+            "cool_merch_uk": "Cool-Merch UK",
             "cm_pop_uk": "CM POP UK",
             "geekcore": "GeekCore", "geek_garage_uk": "Geek Garage", "truffleshuffle": "TruffleShuffle",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
@@ -80,6 +81,22 @@ class Application:
         await self.database.connection.commit()
         # Each storefront is an independent scheduler/service so a regional outage
         # cannot affect the health or synchronization of another storefront.
+        cool_merch = self.config.retailers.get("cool_merch_uk", {})
+        if isinstance(cool_merch, dict) and cool_merch.get("enabled", False):
+            interval = float(cool_merch.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                CoolMerchMonitor(self.http), self.database, self.notifier,
+                retailer_name="Cool-Merch UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "cool_merch_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         for code, region in EMP_REGIONS.items():
             key = "large_nl" if code == "nl" else f"emp_{code}"
             settings = self.config.retailers.get(key, {})
