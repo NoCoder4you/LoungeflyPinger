@@ -109,6 +109,11 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Structured search is restricted to the Loungefly brand and Mini Backpack query.
+  magic_madhouse_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   pink_a_la_mode:
     enabled: true
     interval_minutes: 10
