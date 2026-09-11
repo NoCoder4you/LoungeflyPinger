@@ -22,6 +22,10 @@ class EMPRegion:
     language: str
     currency: str = "EUR"
     mini_backpack_terms: tuple[str, ...] = ()
+    # Some storefronts publish a stable product-type attribute on the PDP.  In
+    # those markets, confirm the type there rather than trusting a translated
+    # listing title as the sole classification signal.
+    verify_product_type: bool = False
 
 
 EMP_REGIONS = {
@@ -29,6 +33,10 @@ EMP_REGIONS = {
     "fr": EMPRegion("fr", "EMP France", "https://www.emp-online.fr", "fr-FR", mini_backpack_terms=("mini sac a dos",)),
     "es": EMPRegion("es", "EMP Spain", "https://www.emp-online.es", "es-ES", mini_backpack_terms=("mini mochila",)),
     "it": EMPRegion("it", "EMP Italy", "https://www.emp-online.it", "it-IT", mini_backpack_terms=("mini zaino",)),
+    "nl": EMPRegion(
+        "nl", "Large Netherlands", "https://www.large.nl", "nl-NL",
+        mini_backpack_terms=("mini rugzak",), verify_product_type=True,
+    ),
 }
 PAGE_SIZE, MAX_PAGES = 120, 20
 
@@ -98,7 +106,16 @@ class EMPMonitor(RetailerMonitor):
             raws = self.parse_listing(await self.http.get_text(url))
             for raw in raws:
                 if self._is_mini_backpack(raw):
-                    product = self.parse_product(raw, source_url=url)
+                    product_raw = raw
+                    if self.region.verify_product_type:
+                        product_url = urljoin(
+                            self.region.base_url + "/",
+                            self._first(raw, "url") or str(raw.get("tile_url") or ""),
+                        )
+                        product_raw = self.parse_product_page(await self.http.get_text(product_url))
+                        if not self._has_structured_mini_backpack_type(product_raw):
+                            continue
+                    product = self.parse_product(product_raw, source_url=url)
                     found[product.retailer_product_id] = product
             if len(raws) < PAGE_SIZE:
                 return list(found.values())
@@ -158,9 +175,17 @@ class EMPMonitor(RetailerMonitor):
         name = self._fold(self._first(raw, "name") or "")
         return "loungefly" in name and any(term in name for term in self.region.mini_backpack_terms)
 
+    def _has_structured_mini_backpack_type(self, raw: object) -> bool:
+        if not isinstance(raw, dict):
+            return False
+        product_type = self._fold(str(raw.get("product_type") or ""))
+        return any(product_type == term for term in self.region.mini_backpack_terms)
+
     def parse_product(self, raw: object, *, source_url: str) -> Product:
         if not isinstance(raw, dict):
             raise EMPParseError("EMP product is not an object")
+        if self.region.verify_product_type and not self._has_structured_mini_backpack_type(raw):
+            raise EMPParseError("Storefront product type is not Mini Backpack")
         name = (self._first(raw, "name") or "").strip()
         article_id = (self._first(raw, "productid") or str(raw.get("item_id") or "")).removeprefix("sku:").strip()
         url = urljoin(self.region.base_url + "/", self._first(raw, "url") or str(raw.get("tile_url") or source_url))
@@ -179,8 +204,8 @@ class EMPMonitor(RetailerMonitor):
         status = (self._first(raw, "availability") or "").rsplit("/", 1)[-1].casefold()
         text = " ".join(raw.get("text", [])) if isinstance(raw.get("text"), list) else ""
         folded = self._fold(text)
-        preorder = status == "preorder" or bool(re.search(r"\b(vorbestell|precommande|preventa|preordine)", folded))
-        low = bool(re.search(r"\b(nur noch\s+\d+|plus que\s+\d+|quedan\s+\d+|rimast[ioe]\s+\d+)\b", folded))
+        preorder = status == "preorder" or bool(re.search(r"\b(vorbestell|precommande|preventa|preordine|voorbestel)", folded))
+        low = bool(re.search(r"\b(nur noch\s+\d+|plus que\s+\d+|quedan\s+\d+|rimast[ioe]\s+\d+|nog slechts\s+\d+)\b", folded))
         if status in {"outofstock", "soldout", "discontinued"}: availability = Availability.OUT_OF_STOCK
         elif preorder: availability = Availability.PREORDER
         elif status == "instock": availability = Availability.LOW_STOCK if low else Availability.IN_STOCK

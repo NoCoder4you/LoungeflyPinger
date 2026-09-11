@@ -91,7 +91,7 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
-  # EMP storefronts share one configurable Salesforce Commerce Cloud adapter,
+  # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
   # but run as independent jobs and retain independent health state.
   emp_de:
     enabled: true
@@ -106,6 +106,10 @@ retailers:
     interval_minutes: 10
     status: WORKING
   emp_it:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
+  large_nl:
     enabled: true
     interval_minutes: 10
     status: WORKING
