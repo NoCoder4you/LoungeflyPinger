@@ -54,7 +54,10 @@ class Application:
             "pink_a_la_mode": "Pink a la Mode",
             "street_707": "707 Street",
             "cordys_corner": "Cordy's Corner",
-            **{f"emp_{code}": region.name for code, region in EMP_REGIONS.items()},
+            **{
+                ("large_nl" if code == "nl" else f"emp_{code}"): region.name
+                for code, region in EMP_REGIONS.items()
+            },
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -70,9 +73,9 @@ class Application:
             )
         await self.database.connection.commit()
         # Each storefront is an independent scheduler/service so a regional outage
-        # cannot affect the health or synchronization of another EMP country.
+        # cannot affect the health or synchronization of another storefront.
         for code, region in EMP_REGIONS.items():
-            key = f"emp_{code}"
+            key = "large_nl" if code == "nl" else f"emp_{code}"
             settings = self.config.retailers.get(key, {})
             if isinstance(settings, dict) and settings.get("enabled", False):
                 interval = float(settings.get("interval_minutes", self.config.monitor.default_interval_minutes))
