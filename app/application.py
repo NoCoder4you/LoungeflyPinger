@@ -11,7 +11,7 @@ from app.monitors import (
     EMPMonitor, EMP_REGIONS, GeekCoreMonitor, InfinityCollectablesMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
-    TruffleShuffleMonitor,
+    SomethingDifferentMonitor, TruffleShuffleMonitor,
 )
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
@@ -55,6 +55,7 @@ class Application:
             "street_707": "707 Street",
             "cordys_corner": "Cordy's Corner",
             "infinity_collectables": "Infinity Collectables",
+            "something_different_uk": "Something Different Gift Shop UK",
             "popcultcha": "Popcultcha",
             **{
                 ("large_nl" if code == "nl" else f"emp_{code}"): region.name
@@ -337,6 +338,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "infinity_collectables", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        something_different = self.config.retailers.get("something_different_uk", {})
+        if isinstance(something_different, dict) and something_different.get("enabled", False):
+            interval = float(something_different.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                SomethingDifferentMonitor(self.http), self.database, self.notifier,
+                retailer_name="Something Different Gift Shop UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "something_different_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         popcultcha = self.config.retailers.get("popcultcha", {})
