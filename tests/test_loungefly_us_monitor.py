@@ -17,6 +17,8 @@ async def test_us_discovery_filters_deduplicates_and_uses_us_category(monkeypatc
     http=FakeHttp([fixture("listing.html"), fixture("page2.html")])
     products=await LoungeflyUSMonitor(http).discover_products()
     assert [p.retailer_product_id for p in products] == ["USNEW1", "USEX2", "USPRE3"]
+    assert products[0].new_release is True
+    assert products[0].release.precision == ReleasePrecision.EXACT_DATETIME
     assert "/shop/backpacks/mini-backpacks/?start=0&sz=4" in http.urls[0]
 
 def test_us_structured_fields_flags_stock_price_sku_and_release():

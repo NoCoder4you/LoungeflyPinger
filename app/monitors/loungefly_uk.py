@@ -118,6 +118,22 @@ class LoungeflyMonitor(RetailerMonitor):
             for raw in raw_products:
                 if self._is_mini_backpack(raw):
                     product = self.parse_product(raw, source_url=url, flags=flags.get(str(raw.get("sku")), set()))
+                    previous = found.get(product.retailer_product_id)
+                    if previous is not None:
+                        # Inventory and price come from the latest occurrence, while
+                        # page-local labels and release evidence are cumulative within
+                        # one complete discovery scan.
+                        product = replace(
+                            product,
+                            exclusive=product.exclusive or previous.exclusive,
+                            exclusive_retailer=(
+                                product.exclusive_retailer or previous.exclusive_retailer
+                            ),
+                            new_release=product.new_release or previous.new_release,
+                            release=product.release or previous.release,
+                            franchise=product.franchise or previous.franchise,
+                            character=product.character or previous.character,
+                        )
                     found[product.retailer_product_id] = product
             if len(raw_products) < PAGE_SIZE:
                 return list(found.values())
