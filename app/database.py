@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS product_states (
     release_timezone_inferred INTEGER NOT NULL DEFAULT 0 CHECK (release_timezone_inferred IN (0, 1)),
     release_month INTEGER,
     release_year INTEGER,
+    estimated_ship_date TEXT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_product_states_checked_at ON product_states(checked_at);
@@ -179,6 +180,7 @@ class Database:
             "release_datetime": "TEXT", "release_precision": "TEXT", "release_text": "TEXT",
             "release_source": "TEXT", "release_timezone_inferred": "INTEGER NOT NULL DEFAULT 0",
             "release_month": "INTEGER", "release_year": "INTEGER",
+            "estimated_ship_date": "TEXT",
         })
         await self._add_missing_columns("release_history", {"release_key": "TEXT"})
         await self._migrate_release_history_keys()

@@ -1,7 +1,7 @@
 """Persistence operations for current and historical product state."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from app.database import Database
@@ -17,6 +17,7 @@ class ProductState:
     previous_price: Decimal | None
     lowest_price: Decimal | None
     highest_price: Decimal | None
+    estimated_ship_date: date | None
 
 
 class StockService:
@@ -48,16 +49,20 @@ class StockService:
         await connection.execute(
             """INSERT INTO product_states
                (product_id, availability, price, currency, preorder, checked_at,
-                previous_price, lowest_price, highest_price)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                previous_price, lowest_price, highest_price, estimated_ship_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(product_id) DO UPDATE SET availability=excluded.availability,
                  price=excluded.price, currency=excluded.currency, preorder=excluded.preorder,
                  checked_at=excluded.checked_at, previous_price=excluded.previous_price,
-                 lowest_price=excluded.lowest_price, highest_price=excluded.highest_price""",
+                 lowest_price=excluded.lowest_price, highest_price=excluded.highest_price,
+                 estimated_ship_date=COALESCE(
+                     excluded.estimated_ship_date, product_states.estimated_ship_date
+                 )""",
             (product_id, product.availability.value, str(product.price) if product.price is not None else None,
              product.currency, product.preorder, now,
              str(previous_price) if previous_price is not None else None,
-             str(low) if low is not None else None, str(high) if high is not None else None),
+             str(low) if low is not None else None, str(high) if high is not None else None,
+             product.estimated_ship_date.isoformat() if product.estimated_ship_date else None),
         )
 
     async def current(self, product_id: int) -> ProductState | None:
@@ -66,14 +71,16 @@ class StockService:
             raise RuntimeError("database is not connected")
         row = await (await connection.execute(
             """SELECT availability, price, currency, preorder, previous_price,
-                      lowest_price, highest_price FROM product_states WHERE product_id=?""",
+                      lowest_price, highest_price, estimated_ship_date
+                 FROM product_states WHERE product_id=?""",
             (product_id,),
         )).fetchone()
         if row is None:
             return None
         money = lambda value: Decimal(value) if value is not None else None
         return ProductState(Availability(row[0]), money(row[1]), row[2], bool(row[3]),
-                            money(row[4]), money(row[5]), money(row[6]))
+                            money(row[4]), money(row[5]), money(row[6]),
+                            date.fromisoformat(row[7]) if row[7] else None)
 
     async def current_availability(self, product_id: int) -> Availability | None:
         """Return the persisted state, or ``None`` for a never-synchronized product."""
