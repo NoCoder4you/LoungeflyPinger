@@ -83,3 +83,7 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  street_707:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING

@@ -23,6 +23,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Entertainment Earth US | Working | Public schema.org ItemList and Product JSON-LD |
 | Modern PinUp US | Working | Public Shopify collection and product feeds |
 | Pink a la Mode US | Working | Public Shopify Mini Backpacks and New Arrivals feeds |
+| 707 Street US | Working | Public Shopify Mini Backpacks collection and product feeds |
 
 Release metadata is parsed conservatively from retailer-published structured descriptions or
 dedicated telemetry fields. Current capability is:
@@ -41,6 +42,7 @@ dedicated telemetry fields. Current capability is:
 | Entertainment Earth US | Partial (explicit release wording only; estimated ship dates are stored separately) |
 | Modern PinUp US | Partial (explicit Shopify tags/descriptions; publication timestamps are not releases) |
 | Pink a la Mode US | Partial (product-specific Shopify descriptions/tags; publication timestamps are not releases) |
+| 707 Street US | Partial (explicit product descriptions; wave tags and publication timestamps remain metadata) |
 
 Missing or malformed release text never clears a previously known release. Exact times use the
 configured retailer-local IANA timezone (`Europe/London` for UK and `America/Los_Angeles` for
@@ -110,6 +112,7 @@ collection and persistence.
 - `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
 - `app/monitors/modern_pinup.py`: Modern PinUp US Shopify product adapter
 - `app/monitors/pink_a_la_mode.py`: Pink a la Mode US Shopify product adapter
+- `app/monitors/street_707.py`: 707 Street US Shopify product adapter
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
