@@ -103,6 +103,12 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Dedicated mini-backpack catalogue pages provide frequent, low-cost state checks;
+  # individual detail pages are reserved for targeted checks.
+  merchoid_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   pink_a_la_mode:
     enabled: true
     interval_minutes: 10
