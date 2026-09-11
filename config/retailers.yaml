@@ -37,6 +37,10 @@ notifications:
     enabled: false
 
 retailers:
+  cool_merch_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   lf_lovers:
     enabled: true
     interval_minutes: 10
