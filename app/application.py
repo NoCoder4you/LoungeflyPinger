@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
-    BoxLunchMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
+    BoxLunchMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     GeekCoreMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, Street707Monitor,
@@ -53,6 +53,7 @@ class Application:
             "modern_pinup": "Modern PinUp",
             "pink_a_la_mode": "Pink a la Mode",
             "street_707": "707 Street",
+            "cordys_corner": "Cordy's Corner",
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -280,6 +281,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "street_707", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        cordys_corner = self.config.retailers.get("cordys_corner", {})
+        if isinstance(cordys_corner, dict) and cordys_corner.get("enabled", False):
+            interval = float(cordys_corner.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                CordysCornerMonitor(self.http), self.database, self.notifier,
+                retailer_name="Cordy's Corner", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "cordys_corner", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
