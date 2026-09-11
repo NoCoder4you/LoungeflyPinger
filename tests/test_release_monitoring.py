@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -66,6 +66,30 @@ def test_timezone_dst_and_no_fake_midnight():
 @pytest.mark.parametrize("text", ["Release eventually", "Available 32/15/2026 at 99:00", "", None])
 def test_malformed_release_text_is_not_evidence(text):
     assert parse_release_text(text, source="fixture", local_timezone="Europe/London") is None
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Releases 09/18/2026", date(2026, 9, 18)),
+    ("Releases 10/12/2026", date(2026, 10, 12)),
+    ("Releases September 18, 2026", date(2026, 9, 18)),
+])
+def test_us_release_parser_uses_month_day_order(text, expected):
+    parsed = parse_release_text(
+        text, source="US retailer", local_timezone="America/Los_Angeles", date_order="MDY"
+    )
+    assert parsed is not None
+    assert parsed.release_date == expected
+
+
+def test_default_release_date_order_remains_day_month():
+    parsed = parse_release_text("Releases 10/12/2026", source="UK retailer")
+    assert parsed is not None
+    assert parsed.release_date == date(2026, 12, 10)
+
+
+def test_release_parser_rejects_unknown_date_order():
+    with pytest.raises(ValueError, match="date_order"):
+        parse_release_text("Releases 09/18/2026", source="fixture", date_order="YMD")
 
 
 @pytest.mark.asyncio

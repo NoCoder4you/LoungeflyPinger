@@ -73,3 +73,12 @@ def test_us_low_stock_and_coming_soon_normalization():
     limited={**raw, "offers": {**raw["offers"], "availability": "https://schema.org/LimitedAvailability"}}
     assert monitor.parse_product(limited, source_url="https://loungefly.com/").availability == Availability.LOW_STOCK
     assert monitor.parse_product(raw, source_url="https://loungefly.com/", flags={"coming soon"}).availability == Availability.COMING_SOON
+
+
+def test_us_monitor_passes_month_day_date_order_to_release_parser():
+    raw = LoungeflyUSMonitor.parse_listing(fixture("listing.html"))[0]
+    raw["description"] = "Releases 10/12/2026"
+    product = LoungeflyUSMonitor(FakeHttp([])).parse_product(
+        raw, source_url="https://loungefly.com/"
+    )
+    assert product.release.release_date.isoformat() == "2026-10-12"

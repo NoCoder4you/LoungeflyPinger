@@ -91,7 +91,7 @@ class DisneyStoreMonitor(RetailerMonitor):
     def __init__(self, http: AsyncHttpClient, *, base_url: str = BASE_URL,
                  category_path: str = CATEGORY_PATH, retailer: str = "Disney Store UK",
                  currency: str = "GBP", timezone: str = "Europe/London",
-                 require_variant_id: bool = True) -> None:
+                 require_variant_id: bool = True, date_order: str = "DMY") -> None:
         self.http = http
         self.base_url = base_url.rstrip("/")
         self.category_path = category_path
@@ -99,6 +99,7 @@ class DisneyStoreMonitor(RetailerMonitor):
         self.currency = currency
         self.timezone = timezone
         self.require_variant_id = require_variant_id
+        self.date_order = date_order
 
     async def discover_products(self) -> list[Product]:
         found: dict[str, Product] = {}
@@ -282,7 +283,7 @@ class DisneyStoreMonitor(RetailerMonitor):
         ) if isinstance(data.get(key), str)), None)
         release = parse_release_text(
             release_text, source=f"{self.retailer} product telemetry",
-            local_timezone=self.timezone,
+            local_timezone=self.timezone, date_order=self.date_order,
         )
         return Product(
             retailer=self.retailer, retailer_product_id=product_id, name=name,
@@ -310,7 +311,7 @@ class DisneyStoreUSMonitor(DisneyStoreMonitor):
         super().__init__(
             http, base_url=base_url, category_path="/brands/loungefly/",
             retailer="Disney Store US", currency="USD", timezone="America/Los_Angeles",
-            require_variant_id=False,
+            require_variant_id=False, date_order="MDY",
         )
 
 

@@ -210,7 +210,7 @@ class HotTopicStorefrontMonitor(RetailerMonitor):
             preorder=availability == Availability.PREORDER, sku=sku,
             release=parse_release_text(
                 description, source=f"{self.retailer} Product JSON-LD",
-                local_timezone="America/Los_Angeles",
+                local_timezone="America/Los_Angeles", date_order="MDY",
             ),
         )
 

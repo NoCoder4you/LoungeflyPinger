@@ -97,7 +97,7 @@ class LoungeflyMonitor(RetailerMonitor):
     def __init__(self, http: AsyncHttpClient, *, base_url: str = BASE_URL,
                  category_path: str = CATEGORY_PATH, retailer: str = "Loungefly UK",
                  currency: str = "GBP", path_prefix: str = "/gb/",
-                 timezone: str | None = "Europe/London") -> None:
+                 timezone: str | None = "Europe/London", date_order: str = "DMY") -> None:
         self.http = http
         self.base_url = base_url.rstrip("/")
         self.category_path = category_path
@@ -105,6 +105,7 @@ class LoungeflyMonitor(RetailerMonitor):
         self.currency = currency
         self.path_prefix = path_prefix
         self.timezone = timezone
+        self.date_order = date_order
 
     async def discover_products(self) -> list[Product]:
         found: dict[str, Product] = {}
@@ -253,7 +254,8 @@ class LoungeflyMonitor(RetailerMonitor):
             raise LoungeflyParseError("Product image is missing")
         description = raw.get("description") if isinstance(raw.get("description"), str) else ""
         release = parse_release_text(
-            description, source=f"{self.retailer} Product JSON-LD", local_timezone=self.timezone
+            description, source=f"{self.retailer} Product JSON-LD",
+            local_timezone=self.timezone, date_order=self.date_order,
         )
         availability = availability_map[availability_name]
         flags = flags or set()
@@ -292,7 +294,7 @@ class LoungeflyUSMonitor(LoungeflyMonitor):
     def __init__(self, http: AsyncHttpClient, *, base_url: str = BASE_URL) -> None:
         super().__init__(http, base_url=base_url, category_path="/shop/backpacks/mini-backpacks/",
                          retailer="Loungefly US", currency="USD", path_prefix="/",
-                         timezone="America/Los_Angeles")
+                         timezone="America/Los_Angeles", date_order="MDY")
 
 
 class LoungeflyCanadaMonitor(LoungeflyMonitor):
