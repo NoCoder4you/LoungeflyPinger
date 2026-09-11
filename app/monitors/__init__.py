@@ -12,6 +12,7 @@ from .forbidden_planet import ForbiddenPlanetMonitor
 from .emp import EMPMonitor, EMPRegion, EMP_REGIONS
 from .geekcore import GeekCoreMonitor
 from .geek_garage import GeekGarageMonitor
+from .get_ready_comics import GetReadyComicsMonitor
 from .infinity_collectables import InfinityCollectablesMonitor
 from .koolaz import KoolazMonitor
 from .lf_lovers import LFLoversMonitor
@@ -27,7 +28,7 @@ from .truffleshuffle import TruffleShuffleMonitor
 
 __all__ = [
     "BoxLunchMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
-    "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "HotTopicUSMonitor",
+    "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "GetReadyComicsMonitor", "HotTopicUSMonitor",
     "InfinityCollectablesMonitor", "KoolazMonitor", "LFLoversMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
     "LoungeflyUSMonitor", "MagicMadhouseMonitor", "MerchoidUKMonitor", "ModernPinUpMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",

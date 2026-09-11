@@ -5,7 +5,8 @@ availability. It provides lifecycle management, normalized models, SQLite persis
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
 CM POP UK, Geek Garage UK, and GeekCore UK are monitored through Shopify's public structured collection feeds, and
 TruffleShuffle UK and the Loungefly UK/US/Canada storefronts are monitored through public product JSON-LD. Disney Store UK
-uses its public Loungefly ItemList and structured storefront product telemetry.
+uses its public Loungefly ItemList and structured storefront product telemetry. Get Ready Comics UK uses the public
+WooCommerce Store API exposed by its Loungefly backpack category.
 
 ## Retailer status
 
@@ -14,6 +15,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | CM POP UK | Working | Public Shopify Loungefly collection and product feeds |
 | GeekCore | Working | Public Shopify product feeds |
 | Geek Garage UK | Working | Public Shopify product feeds |
+| Get Ready Comics UK | Working | Public WooCommerce Store API |
 | TruffleShuffle | Working | Public category and product JSON-LD |
 | Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
 | Loungefly US | Working | Public schema.org ItemList/Product JSON-LD and product flags |
@@ -43,6 +45,7 @@ dedicated telemetry fields. Current capability is:
 | --- | --- |
 | CM POP UK | Partial (explicit product descriptions/tags; publication timestamps remain listing metadata) |
 | GeekCore | Partial (explicit Shopify tags/descriptions) |
+| Get Ready Comics UK | Partial (explicit descriptions and Coming Soon category) |
 | TruffleShuffle | Partial (explicit Product JSON-LD descriptions) |
 | Loungefly UK | Partial (explicit Product JSON-LD descriptions) |
 | Loungefly US | Partial (explicit Product JSON-LD descriptions; no date is inferred from publication or shipping) |
@@ -128,6 +131,7 @@ collection and persistence.
 - `app/monitors/cm_pop.py`: CM POP UK Shopify discovery, stock, pricing, and exclusivity normalization
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/monitors/geek_garage.py`: Geek Garage UK discovery, stock, pricing, and exclusivity normalization
+- `app/monitors/get_ready_comics.py`: Get Ready Comics UK WooCommerce discovery and product-state normalization
 - `app/monitors/lf_lovers.py`: LF Lovers Shopify backpack discovery, preorder, monthly release, and ETA metadata normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
