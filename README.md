@@ -21,6 +21,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | BoxLunch US | Working | Public schema.org CollectionPage and Product JSON-LD |
 | Hot Topic US | Working | Public schema.org CollectionPage and Product JSON-LD |
 | Entertainment Earth US | Working | Public schema.org ItemList and Product JSON-LD |
+| Modern PinUp US | Working | Public Shopify collection and product feeds |
 
 Release metadata is parsed conservatively from retailer-published structured descriptions or
 dedicated telemetry fields. Current capability is:
@@ -37,6 +38,7 @@ dedicated telemetry fields. Current capability is:
 | BoxLunch US | Partial (explicit Product JSON-LD descriptions only) |
 | Hot Topic US | Partial (explicit Product JSON-LD descriptions only) |
 | Entertainment Earth US | Partial (explicit release wording only; estimated ship dates are stored separately) |
+| Modern PinUp US | Partial (explicit Shopify tags/descriptions; publication timestamps are not releases) |
 
 Missing or malformed release text never clears a previously known release. Exact times use the
 configured retailer-local IANA timezone (`Europe/London` for UK and `America/Los_Angeles` for
@@ -104,6 +106,7 @@ collection and persistence.
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
 - `app/monitors/boxlunch.py`: shared BoxLunch/Hot Topic US structured collection adapter
 - `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
+- `app/monitors/modern_pinup.py`: Modern PinUp US Shopify product adapter
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits

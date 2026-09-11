@@ -130,6 +130,7 @@ class Product:
     release: ReleaseInfo | None = None
     exclusive_retailer: str | None = None
     estimated_ship_date: date | None = None
+    original_price: Decimal | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -152,6 +153,14 @@ class Product:
             if not price.is_finite() or price < 0:
                 raise ValueError("price must be a finite, non-negative value")
             object.__setattr__(self, "price", price)
+        if self.original_price is not None:
+            try:
+                original_price = Decimal(str(self.original_price))
+            except InvalidOperation as exc:
+                raise ValueError("original_price must be a decimal number") from exc
+            if not original_price.is_finite() or original_price < 0:
+                raise ValueError("original_price must be a finite, non-negative value")
+            object.__setattr__(self, "original_price", original_price)
         currency = self.currency.strip().upper()
         if len(currency) != 3 or not currency.isalpha():
             raise ValueError("currency must be a three-letter ISO-style code")

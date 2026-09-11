@@ -86,6 +86,8 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
         add("Retailer", product.retailer)
         if product.price is not None:
             add("Price", _money(product.price, product.currency))
+        if product.original_price is not None and product.original_price != product.price:
+            add("Original Price", _money(product.original_price, product.currency))
         if alert.previous_price is not None:
             add("Previous Price", _money(alert.previous_price, product.currency))
         add("Status", _display(product.availability.value))

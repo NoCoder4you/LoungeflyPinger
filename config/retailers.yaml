@@ -75,3 +75,7 @@ retailers:
     enabled: true
     interval_minutes: 15
     status: WORKING
+  modern_pinup:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
