@@ -9,7 +9,7 @@ from app.http import AsyncHttpClient
 from app.monitors import (
     BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor, KoolazMonitor,
-    LFLoversMonitor,
+    LFLoversMonitor, MerchoidUKMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor,
@@ -56,6 +56,7 @@ class Application:
             "hot_topic_us": "Hot Topic US",
             "entertainment_earth": "Entertainment Earth",
             "modern_pinup": "Modern PinUp",
+            "merchoid_uk": "Merchoid UK",
             "pink_a_la_mode": "Pink a la Mode",
             "street_707": "707 Street",
             "cordys_corner": "Cordy's Corner",
@@ -364,6 +365,22 @@ class Application:
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         modern_pinup = self.config.retailers.get("modern_pinup", {})
+        merchoid = self.config.retailers.get("merchoid_uk", {})
+        if isinstance(merchoid, dict) and merchoid.get("enabled", False):
+            interval = float(merchoid.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                MerchoidUKMonitor(self.http), self.database, self.notifier,
+                retailer_name="Merchoid UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "merchoid_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         if isinstance(modern_pinup, dict) and modern_pinup.get("enabled", False):
             interval = float(modern_pinup.get(
                 "interval_minutes", self.config.monitor.default_interval_minutes
