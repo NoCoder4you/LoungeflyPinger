@@ -129,6 +129,7 @@ class Product:
     sku: str | None = None
     release: ReleaseInfo | None = None
     exclusive_retailer: str | None = None
+    estimated_ship_date: date | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -163,6 +164,8 @@ class Product:
             if not isinstance(self.exclusive_retailer, str) or not self.exclusive_retailer.strip():
                 raise ValueError("exclusive_retailer must be non-empty when provided")
             object.__setattr__(self, "exclusive_retailer", self.exclusive_retailer.strip())
+        if self.estimated_ship_date is not None and not isinstance(self.estimated_ship_date, date):
+            raise ValueError("estimated_ship_date must be a date when provided")
 
     @staticmethod
     def _validate_url(field: str, value: str | None, *, required: bool) -> None:
