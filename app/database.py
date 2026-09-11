@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS products (
     product_type TEXT NOT NULL,
     exclusive INTEGER NOT NULL DEFAULT 0 CHECK (exclusive IN (0, 1)),
     exclusive_retailer TEXT,
+    exclusive_region TEXT,
     new_release INTEGER NOT NULL DEFAULT 0 CHECK (new_release IN (0, 1)),
     first_seen TEXT NOT NULL,
     last_seen TEXT NOT NULL,
@@ -174,6 +175,7 @@ class Database:
             "listing_published_at": "TEXT",
             "new_release": "INTEGER NOT NULL DEFAULT 0",
             "exclusive_retailer": "TEXT",
+            "exclusive_region": "TEXT",
         })
         await self._add_missing_columns("retailers", {
             "release_sync_completed": "INTEGER NOT NULL DEFAULT 0",

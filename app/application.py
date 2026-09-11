@@ -8,7 +8,7 @@ from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
     BoxLunchMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
-    EMPMonitor, EMP_REGIONS, GeekCoreMonitor, InfinityCollectablesMonitor,
+    EMPMonitor, EMP_REGIONS, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor,
@@ -42,7 +42,7 @@ class Application:
         await self.database.initialize()
         await self.http.start()
         retailer_names = {
-            "geekcore": "GeekCore", "truffleshuffle": "TruffleShuffle",
+            "geekcore": "GeekCore", "geek_garage_uk": "Geek Garage", "truffleshuffle": "TruffleShuffle",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
             "loungefly_us": "Loungefly US",
             "loungefly_canada": "Loungefly Canada",
@@ -106,6 +106,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "geekcore", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        geek_garage = self.config.retailers.get("geek_garage_uk", {})
+        if isinstance(geek_garage, dict) and geek_garage.get("enabled", False):
+            interval = float(geek_garage.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                GeekGarageMonitor(self.http), self.database, self.notifier,
+                retailer_name="Geek Garage", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "geek_garage_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         truffleshuffle = self.config.retailers.get("truffleshuffle", {})

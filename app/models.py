@@ -134,6 +134,7 @@ class Product:
     listing_published_at: datetime | None = None
     release: ReleaseInfo | None = None
     exclusive_retailer: str | None = None
+    exclusive_region: str | None = None
     estimated_ship_date: date | None = None
     original_price: Decimal | None = None
 
@@ -185,10 +186,12 @@ class Product:
         object.__setattr__(self, "tags", tuple(tag.strip() for tag in self.tags))
         if self.listing_published_at is not None and self.listing_published_at.tzinfo is None:
             raise ValueError("listing_published_at must be timezone-aware")
-        if self.exclusive_retailer is not None:
-            if not isinstance(self.exclusive_retailer, str) or not self.exclusive_retailer.strip():
-                raise ValueError("exclusive_retailer must be non-empty when provided")
-            object.__setattr__(self, "exclusive_retailer", self.exclusive_retailer.strip())
+        for field_name in ("exclusive_retailer", "exclusive_region"):
+            value = getattr(self, field_name)
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"{field_name} must be non-empty when provided")
+                object.__setattr__(self, field_name, value.strip())
         if self.estimated_ship_date is not None and not isinstance(self.estimated_ship_date, date):
             raise ValueError("estimated_ship_date must be a date when provided")
 
