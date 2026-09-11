@@ -22,18 +22,20 @@ class ProductService:
         await connection.execute(
             """INSERT INTO products
                (retailer, retailer_product_id, name, url, image_url, sku, franchise, character,
-                product_type, exclusive, new_release, first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                product_type, exclusive, exclusive_retailer, new_release, first_seen, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(retailer, retailer_product_id) DO UPDATE SET
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
                  sku=COALESCE(excluded.sku, products.sku),
                  franchise=excluded.franchise, character=excluded.character,
                  product_type=excluded.product_type, exclusive=excluded.exclusive,
+                 exclusive_retailer=excluded.exclusive_retailer,
                  new_release=excluded.new_release,
                  last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
             (product.retailer, product.retailer_product_id, product.name, product.url,
              product.image_url, product.sku, product.franchise, product.character,
-             product.product_type, product.exclusive, product.new_release, now, now),
+             product.product_type, product.exclusive, product.exclusive_retailer,
+             product.new_release, now, now),
         )
         cursor = await connection.execute(
             "SELECT id FROM products WHERE retailer=? AND retailer_product_id=?",

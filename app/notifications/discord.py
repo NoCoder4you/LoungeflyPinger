@@ -96,6 +96,8 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
         if product.character:
             add("Character", product.character)
         add("Exclusive", "Yes" if product.exclusive else "No")
+        if product.exclusive_retailer:
+            add("Exclusive Retailer", product.exclusive_retailer)
         if product.new_release:
             add("New Release", "Yes")
         add("Preorder", "Yes" if product.preorder else "No")
