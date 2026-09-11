@@ -7,11 +7,13 @@ from .entertainment_earth import EntertainmentEarthMonitor
 from .geekcore import GeekCoreMonitor
 from .loungefly_uk import LoungeflyCanadaMonitor, LoungeflyUKMonitor, LoungeflyUSMonitor
 from .modern_pinup import ModernPinUpMonitor
+from .pink_a_la_mode import PinkALaModeMonitor
 from .truffleshuffle import TruffleShuffleMonitor
 
 __all__ = [
     "BoxLunchMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
     "EntertainmentEarthMonitor", "GeekCoreMonitor", "HotTopicUSMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
-    "LoungeflyUSMonitor", "ModernPinUpMonitor", "RetailerMonitor", "TruffleShuffleMonitor",
+    "LoungeflyUSMonitor", "ModernPinUpMonitor", "PinkALaModeMonitor", "RetailerMonitor",
+    "TruffleShuffleMonitor",
 ]
