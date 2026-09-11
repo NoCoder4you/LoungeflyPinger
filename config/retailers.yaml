@@ -87,3 +87,7 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  cordys_corner:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
