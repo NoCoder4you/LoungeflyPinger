@@ -12,6 +12,7 @@ from .loungefly_uk import LoungeflyCanadaMonitor, LoungeflyUKMonitor, LoungeflyU
 from .modern_pinup import ModernPinUpMonitor
 from .pink_a_la_mode import PinkALaModeMonitor
 from .popcultcha import PopcultchaMonitor
+from .something_different import SomethingDifferentMonitor
 from .street_707 import Street707Monitor
 from .truffleshuffle import TruffleShuffleMonitor
 
@@ -21,5 +22,5 @@ __all__ = [
     "InfinityCollectablesMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
     "LoungeflyUSMonitor", "ModernPinUpMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",
-    "Street707Monitor", "TruffleShuffleMonitor",
+    "SomethingDifferentMonitor", "Street707Monitor", "TruffleShuffleMonitor",
 ]
