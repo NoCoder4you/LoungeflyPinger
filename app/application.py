@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
-    BoxLunchMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
+    BoxLunchMonitor, CMPopMonitor, CordysCornerMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
@@ -42,6 +42,7 @@ class Application:
         await self.database.initialize()
         await self.http.start()
         retailer_names = {
+            "cm_pop_uk": "CM POP UK",
             "geekcore": "GeekCore", "geek_garage_uk": "Geek Garage", "truffleshuffle": "TruffleShuffle",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
             "loungefly_us": "Loungefly US",
@@ -93,6 +94,22 @@ class Application:
                     key, service.synchronize, interval * 60, jitter_fraction=0.05,
                     timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
                 )
+        cm_pop = self.config.retailers.get("cm_pop_uk", {})
+        if isinstance(cm_pop, dict) and cm_pop.get("enabled", False):
+            interval = float(cm_pop.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                CMPopMonitor(self.http), self.database, self.notifier,
+                retailer_name="CM POP UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "cm_pop_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         geekcore = self.config.retailers.get("geekcore", {})
         if isinstance(geekcore, dict) and geekcore.get("enabled", False):
             interval = float(geekcore.get("interval_minutes", self.config.monitor.default_interval_minutes))
