@@ -3,7 +3,7 @@
 A lightweight, asynchronous foundation for continuously monitoring Loungefly Mini Backpack
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
-Geek Garage UK and GeekCore UK are monitored through Shopify's public structured collection feeds, and
+CM POP UK, Geek Garage UK, and GeekCore UK are monitored through Shopify's public structured collection feeds, and
 TruffleShuffle UK and the Loungefly UK/US/Canada storefronts are monitored through public product JSON-LD. Disney Store UK
 uses its public Loungefly ItemList and structured storefront product telemetry.
 
@@ -11,6 +11,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 
 | Retailer | Status | Data source |
 | --- | --- | --- |
+| CM POP UK | Working | Public Shopify Loungefly collection and product feeds |
 | GeekCore | Working | Public Shopify product feeds |
 | Geek Garage UK | Working | Public Shopify product feeds |
 | TruffleShuffle | Working | Public category and product JSON-LD |
@@ -39,6 +40,7 @@ dedicated telemetry fields. Current capability is:
 
 | Retailer | Release metadata |
 | --- | --- |
+| CM POP UK | Partial (explicit product descriptions/tags; publication timestamps remain listing metadata) |
 | GeekCore | Partial (explicit Shopify tags/descriptions) |
 | TruffleShuffle | Partial (explicit Product JSON-LD descriptions) |
 | Loungefly UK | Partial (explicit Product JSON-LD descriptions) |
@@ -121,6 +123,7 @@ collection and persistence.
 - `app/http.py`: pooled HTTP client with bounded concurrency and finite retries
 - `app/scheduler.py`: independent asynchronous interval jobs
 - `app/monitors/base.py`: contract for retailer adapters
+- `app/monitors/cm_pop.py`: CM POP UK Shopify discovery, stock, pricing, and exclusivity normalization
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/monitors/geek_garage.py`: Geek Garage UK discovery, stock, pricing, and exclusivity normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization

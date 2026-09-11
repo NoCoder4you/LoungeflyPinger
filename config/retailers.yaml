@@ -37,6 +37,10 @@ notifications:
     enabled: false
 
 retailers:
+  cm_pop_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   geek_garage_uk:
     enabled: true
     interval_minutes: 10

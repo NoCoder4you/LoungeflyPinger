@@ -2,6 +2,7 @@
 
 from .base import RetailerMonitor
 from .boxlunch import BoxLunchMonitor, HotTopicUSMonitor
+from .cm_pop import CMPopMonitor
 from .cordys_corner import CordysCornerMonitor
 from .disney_store_uk import DisneyStoreUKMonitor, DisneyStoreUSMonitor
 from .entertainment_earth import EntertainmentEarthMonitor
@@ -18,7 +19,7 @@ from .street_707 import Street707Monitor
 from .truffleshuffle import TruffleShuffleMonitor
 
 __all__ = [
-    "BoxLunchMonitor", "CordysCornerMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
+    "BoxLunchMonitor", "CMPopMonitor", "CordysCornerMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
     "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "GeekCoreMonitor", "GeekGarageMonitor", "HotTopicUSMonitor",
     "InfinityCollectablesMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
