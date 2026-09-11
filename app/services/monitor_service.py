@@ -58,7 +58,7 @@ class MonitorService:
     @staticmethod
     def _stock_alert(previous: Availability, product: Product) -> AlertType | None:
         current = product.availability
-        if previous == Availability.OUT_OF_STOCK and current == Availability.IN_STOCK:
+        if previous in {Availability.OUT_OF_STOCK, Availability.BACKORDER} and current == Availability.IN_STOCK:
             return AlertType.RESTOCK
         if current == Availability.LOW_STOCK and previous != Availability.LOW_STOCK:
             return AlertType.LOW_STOCK
