@@ -8,7 +8,7 @@ from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
     BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
-    EMPMonitor, EMP_REGIONS, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor, KoolazMonitor,
+    EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
@@ -62,6 +62,7 @@ class Application:
             "infinity_collectables": "Infinity Collectables",
             "lf_lovers": "LF Lovers",
             "something_different_uk": "Something Different Gift Shop UK",
+            "forbidden_planet_uk": "Forbidden Planet International UK",
             "popcultcha": "Popcultcha",
             **{
                 ("large_nl" if code == "nl" else f"emp_{code}"): region.name
@@ -456,6 +457,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "something_different_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        forbidden_planet = self.config.retailers.get("forbidden_planet_uk", {})
+        if isinstance(forbidden_planet, dict) and forbidden_planet.get("enabled", False):
+            interval = float(forbidden_planet.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                ForbiddenPlanetMonitor(self.http), self.database, self.notifier,
+                retailer_name="Forbidden Planet International UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "forbidden_planet_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         popcultcha = self.config.retailers.get("popcultcha", {})

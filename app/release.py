@@ -11,7 +11,7 @@ MONTHS = {name.casefold(): number for number, name in enumerate(
      "September", "October", "November", "December"), 1
 )}
 MONTH_PATTERN = "|".join(MONTHS)
-PREFIX = r"(?:release(?:s|d)?|launch(?:es|ing)?|available(?:\s+from)?|pre-?order[^.]{0,20}?release(?:s|d)?)"
+PREFIX = r"(?:release(?:\s+date|s|d)?|launch(?:es|ing)?|available(?:\s+from)?|pre-?order[^.]{0,20}?release(?:s|d)?)"
 
 
 def parse_release_text(
