@@ -37,6 +37,10 @@ notifications:
     enabled: false
 
 retailers:
+  damaged_society_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   koolaz_uk:
     enabled: true
     interval_minutes: 10
