@@ -10,6 +10,7 @@ from .geekcore import GeekCoreMonitor
 from .loungefly_uk import LoungeflyCanadaMonitor, LoungeflyUKMonitor, LoungeflyUSMonitor
 from .modern_pinup import ModernPinUpMonitor
 from .pink_a_la_mode import PinkALaModeMonitor
+from .popcultcha import PopcultchaMonitor
 from .street_707 import Street707Monitor
 from .truffleshuffle import TruffleShuffleMonitor
 
@@ -17,6 +18,6 @@ __all__ = [
     "BoxLunchMonitor", "CordysCornerMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
     "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "GeekCoreMonitor", "HotTopicUSMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
-    "LoungeflyUSMonitor", "ModernPinUpMonitor", "PinkALaModeMonitor", "RetailerMonitor",
+    "LoungeflyUSMonitor", "ModernPinUpMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",
     "Street707Monitor", "TruffleShuffleMonitor",
 ]
