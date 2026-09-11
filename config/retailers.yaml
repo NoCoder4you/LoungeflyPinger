@@ -51,6 +51,10 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  loungefly_canada:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   disney_store_uk:
     enabled: true
     interval_minutes: 10

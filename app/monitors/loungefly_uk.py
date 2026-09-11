@@ -97,7 +97,7 @@ class LoungeflyMonitor(RetailerMonitor):
     def __init__(self, http: AsyncHttpClient, *, base_url: str = BASE_URL,
                  category_path: str = CATEGORY_PATH, retailer: str = "Loungefly UK",
                  currency: str = "GBP", path_prefix: str = "/gb/",
-                 timezone: str = "Europe/London") -> None:
+                 timezone: str | None = "Europe/London") -> None:
         self.http = http
         self.base_url = base_url.rstrip("/")
         self.category_path = category_path
@@ -275,7 +275,7 @@ class LoungeflyMonitor(RetailerMonitor):
             product_type="Mini Backpack",
             franchise=None,
             character=None,
-            exclusive=("web exclusive" in flags or "exclusive" in name.lower()
+            exclusive=(any(flag.endswith("exclusive") for flag in flags) or "exclusive" in name.lower()
                        or "a loungefly exclusive" in description.lower()),
             new_release=bool(flags & {"new", "new release"}),
             preorder=availability == Availability.PREORDER,
@@ -293,6 +293,22 @@ class LoungeflyUSMonitor(LoungeflyMonitor):
         super().__init__(http, base_url=base_url, category_path="/shop/backpacks/mini-backpacks/",
                          retailer="Loungefly US", currency="USD", path_prefix="/",
                          timezone="America/Los_Angeles")
+
+
+class LoungeflyCanadaMonitor(LoungeflyMonitor):
+    """Official Canada storefront; it currently displays and charges in USD."""
+
+    def __init__(self, http: AsyncHttpClient, *, base_url: str = BASE_URL) -> None:
+        super().__init__(
+            http,
+            base_url=base_url,
+            category_path="/ca/ca-shop/ca-backpacks/ca-mini-backpacks/",
+            retailer="Loungefly Canada",
+            currency="USD",
+            path_prefix="/ca/",
+            # Canada has multiple timezones. Do not infer one for an unzoned time.
+            timezone=None,
+        )
 
 
 # Backwards-compatible public exception name.

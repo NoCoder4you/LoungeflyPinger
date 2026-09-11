@@ -6,7 +6,10 @@ import logging
 from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
-from app.monitors import DisneyStoreUKMonitor, GeekCoreMonitor, LoungeflyUKMonitor, LoungeflyUSMonitor, TruffleShuffleMonitor
+from app.monitors import (
+    DisneyStoreUKMonitor, GeekCoreMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
+    LoungeflyUSMonitor, TruffleShuffleMonitor,
+)
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.monitor_service import MonitorService
@@ -39,6 +42,7 @@ class Application:
             "geekcore": "GeekCore", "truffleshuffle": "TruffleShuffle",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
             "loungefly_us": "Loungefly US",
+            "loungefly_canada": "Loungefly Canada",
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -120,6 +124,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "loungefly_us", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        loungefly_canada = self.config.retailers.get("loungefly_canada", {})
+        if isinstance(loungefly_canada, dict) and loungefly_canada.get("enabled", False):
+            interval = float(loungefly_canada.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                LoungeflyCanadaMonitor(self.http), self.database, self.notifier,
+                retailer_name="Loungefly Canada", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "loungefly_canada", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         disney_store_uk = self.config.retailers.get("disney_store_uk", {})
