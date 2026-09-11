@@ -20,7 +20,6 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Disney Store US | Working | Public schema.org ListItem microdata and product telemetry |
 | BoxLunch US | Working | Public schema.org CollectionPage and Product JSON-LD |
 | Hot Topic US | Working | Public schema.org CollectionPage and Product JSON-LD |
-| Books-A-Million US | Blocked | Cloudflare browser challenge; disabled by default |
 
 Release metadata is parsed conservatively from retailer-published structured descriptions or
 dedicated telemetry fields. Current capability is:
@@ -102,7 +101,6 @@ collection and persistence.
 - `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
 - `app/monitors/boxlunch.py`: shared BoxLunch/Hot Topic US structured collection adapter
-- `app/monitors/books_a_million.py`: fail-closed BAM boundary and anti-bot classification
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
