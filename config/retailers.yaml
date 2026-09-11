@@ -37,6 +37,10 @@ notifications:
     enabled: false
 
 retailers:
+  lf_lovers:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   cm_pop_uk:
     enabled: true
     interval_minutes: 10

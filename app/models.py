@@ -136,6 +136,8 @@ class Product:
     exclusive_retailer: str | None = None
     exclusive_region: str | None = None
     estimated_ship_date: date | None = None
+    estimated_arrival_date: date | None = None
+    estimated_dispatch_date: date | None = None
     original_price: Decimal | None = None
 
     def __post_init__(self) -> None:
@@ -194,6 +196,10 @@ class Product:
                 object.__setattr__(self, field_name, value.strip())
         if self.estimated_ship_date is not None and not isinstance(self.estimated_ship_date, date):
             raise ValueError("estimated_ship_date must be a date when provided")
+        for field_name in ("estimated_arrival_date", "estimated_dispatch_date"):
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, date):
+                raise ValueError(f"{field_name} must be a date when provided")
 
     @staticmethod
     def _validate_url(field: str, value: str | None, *, required: bool) -> None:

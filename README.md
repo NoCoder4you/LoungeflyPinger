@@ -126,6 +126,7 @@ collection and persistence.
 - `app/monitors/cm_pop.py`: CM POP UK Shopify discovery, stock, pricing, and exclusivity normalization
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
 - `app/monitors/geek_garage.py`: Geek Garage UK discovery, stock, pricing, and exclusivity normalization
+- `app/monitors/lf_lovers.py`: LF Lovers Shopify backpack discovery, preorder, monthly release, and ETA metadata normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
