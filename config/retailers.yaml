@@ -47,7 +47,27 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  loungefly_us:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
+  loungefly_canada:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   disney_store_uk:
     enabled: true
     interval_minutes: 10
+    status: WORKING
+  disney_store_us:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
+  boxlunch:
+    enabled: true
+    interval_minutes: 15
+    status: WORKING
+  hot_topic_us:
+    enabled: true
+    interval_minutes: 15
     status: WORKING

@@ -7,7 +7,7 @@ from app.models import AlertType, Availability, Product
 
 def test_normalized_enums() -> None:
     assert Availability.IN_STOCK.value == "IN_STOCK"
-    assert len(Availability) == 8
+    assert len(Availability) == 9
     assert AlertType.MONITOR_RECOVERED.value == "MONITOR_RECOVERED"
     assert len(AlertType) == 16
 

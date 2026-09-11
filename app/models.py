@@ -11,6 +11,7 @@ from uuid import uuid4
 class Availability(StrEnum):
     UNKNOWN = "UNKNOWN"
     IN_STOCK = "IN_STOCK"
+    LOW_STOCK = "LOW_STOCK"
     OUT_OF_STOCK = "OUT_OF_STOCK"
     PREORDER = "PREORDER"
     COMING_SOON = "COMING_SOON"
@@ -123,9 +124,11 @@ class Product:
     franchise: str | None = None
     character: str | None = None
     exclusive: bool = False
+    new_release: bool = False
     preorder: bool = False
     sku: str | None = None
     release: ReleaseInfo | None = None
+    exclusive_retailer: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -156,6 +159,10 @@ class Product:
             if not isinstance(self.sku, str) or not self.sku.strip():
                 raise ValueError("sku must be a non-empty string when provided")
             object.__setattr__(self, "sku", self.sku.strip())
+        if self.exclusive_retailer is not None:
+            if not isinstance(self.exclusive_retailer, str) or not self.exclusive_retailer.strip():
+                raise ValueError("exclusive_retailer must be non-empty when provided")
+            object.__setattr__(self, "exclusive_retailer", self.exclusive_retailer.strip())
 
     @staticmethod
     def _validate_url(field: str, value: str | None, *, required: bool) -> None:

@@ -6,7 +6,11 @@ import logging
 from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
-from app.monitors import DisneyStoreUKMonitor, GeekCoreMonitor, LoungeflyUKMonitor, TruffleShuffleMonitor
+from app.monitors import (
+    BoxLunchMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, GeekCoreMonitor,
+    HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
+    LoungeflyUSMonitor, TruffleShuffleMonitor,
+)
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.monitor_service import MonitorService
@@ -38,6 +42,11 @@ class Application:
         retailer_names = {
             "geekcore": "GeekCore", "truffleshuffle": "TruffleShuffle",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
+            "loungefly_us": "Loungefly US",
+            "loungefly_canada": "Loungefly Canada",
+            "disney_store_us": "Disney Store US",
+            "boxlunch": "BoxLunch",
+            "hot_topic_us": "Hot Topic US",
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -107,6 +116,36 @@ class Application:
                 "loungefly_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
+        loungefly_us = self.config.retailers.get("loungefly_us", {})
+        if isinstance(loungefly_us, dict) and loungefly_us.get("enabled", False):
+            interval = float(loungefly_us.get("interval_minutes", self.config.monitor.default_interval_minutes))
+            service = MonitorService(
+                LoungeflyUSMonitor(self.http), self.database, self.notifier,
+                retailer_name="Loungefly US", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "loungefly_us", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        loungefly_canada = self.config.retailers.get("loungefly_canada", {})
+        if isinstance(loungefly_canada, dict) and loungefly_canada.get("enabled", False):
+            interval = float(loungefly_canada.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                LoungeflyCanadaMonitor(self.http), self.database, self.notifier,
+                retailer_name="Loungefly Canada", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "loungefly_canada", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         disney_store_uk = self.config.retailers.get("disney_store_uk", {})
         if isinstance(disney_store_uk, dict) and disney_store_uk.get("enabled", False):
             interval = float(
@@ -123,6 +162,54 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "disney_store_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        disney_store_us = self.config.retailers.get("disney_store_us", {})
+        if isinstance(disney_store_us, dict) and disney_store_us.get("enabled", False):
+            interval = float(disney_store_us.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                DisneyStoreUSMonitor(self.http), self.database, self.notifier,
+                retailer_name="Disney Store US", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "disney_store_us", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        boxlunch = self.config.retailers.get("boxlunch", {})
+        if isinstance(boxlunch, dict) and boxlunch.get("enabled", False):
+            interval = float(boxlunch.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                BoxLunchMonitor(self.http), self.database, self.notifier,
+                retailer_name="BoxLunch", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "boxlunch", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        hot_topic_us = self.config.retailers.get("hot_topic_us", {})
+        if isinstance(hot_topic_us, dict) and hot_topic_us.get("enabled", False):
+            interval = float(hot_topic_us.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                HotTopicUSMonitor(self.http), self.database, self.notifier,
+                retailer_name="Hot Topic US", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "hot_topic_us", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})

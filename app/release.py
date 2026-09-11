@@ -15,9 +15,13 @@ PREFIX = r"(?:release(?:s|d)?|launch(?:es|ing)?|available(?:\s+from)?|pre-?order
 
 
 def parse_release_text(
-    text: object, *, source: str, local_timezone: str | None = None
+    text: object, *, source: str, local_timezone: str | None = None,
+    date_order: str = "DMY",
 ) -> ReleaseInfo | None:
     """Parse only explicit release phrases; unrelated/malformed text yields no evidence."""
+    normalized_order = date_order.strip().upper()
+    if normalized_order not in {"DMY", "MDY"}:
+        raise ValueError("date_order must be DMY or MDY")
     if not isinstance(text, str):
         return None
     raw = " ".join(text.split())
@@ -26,31 +30,40 @@ def parse_release_text(
     if re.search(r"\bcoming\s+soon\b", raw, re.I):
         return ReleaseInfo(ReleasePrecision.COMING_SOON, text=raw, source=source)
     match = re.search(
-        rf"\b{PREFIX}\s*:?[\s-]*(?:(\d{{1,2}})[/-](\d{{1,2}})[/-](\d{{4}})|(\d{{1,2}})(?:st|nd|rd|th)?\s+({MONTH_PATTERN})\s+(\d{{4}})|({MONTH_PATTERN})\s+(\d{{4}}))(?:\s+(?:at\s+)?(\d{{1,2}}):(\d{{2}})(?:\s+(UTC|GMT|BST|[A-Za-z_]+/[A-Za-z_]+))?)?",
+        rf"\b{PREFIX}\s*:?[\s-]*(?:(?P<number_a>\d{{1,2}})[/-](?P<number_b>\d{{1,2}})[/-](?P<number_year>\d{{4}})|(?P<day_first>\d{{1,2}})(?:st|nd|rd|th)?\s+(?P<day_month>{MONTH_PATTERN})\s+(?P<day_year>\d{{4}})|(?P<month_first>{MONTH_PATTERN})\s+(?P<month_day>\d{{1,2}})(?:st|nd|rd|th)?(?:,)?\s+(?P<month_day_year>\d{{4}})|(?P<month_only>{MONTH_PATTERN})\s+(?P<month_year>\d{{4}}))(?:\s+(?:at\s+)?(?P<hour>\d{{1,2}}):(?P<minute>\d{{2}})(?:\s+(?P<zone>UTC|GMT|BST|[A-Za-z_]+/[A-Za-z_]+))?)?",
         raw, re.I,
     )
     if not match:
         return None
-    if match.group(1):
-        day, month, year = map(int, match.group(1, 2, 3))
-    elif match.group(4):
-        day, month, year = int(match.group(4)), MONTHS[match.group(5).casefold()], int(match.group(6))
+    if match.group("number_a"):
+        first, second = int(match.group("number_a")), int(match.group("number_b"))
+        day, month = (first, second) if normalized_order == "DMY" else (second, first)
+        year = int(match.group("number_year"))
+    elif match.group("day_first"):
+        day = int(match.group("day_first"))
+        month = MONTHS[match.group("day_month").casefold()]
+        year = int(match.group("day_year"))
+    elif match.group("month_day"):
+        day = int(match.group("month_day"))
+        month = MONTHS[match.group("month_first").casefold()]
+        year = int(match.group("month_day_year"))
     else:
         # Month precision deliberately has no synthetic day/date.
         return ReleaseInfo(
             ReleasePrecision.MONTH_ONLY, text=raw, source=source,
-            release_month=MONTHS[match.group(7).casefold()], release_year=int(match.group(8)),
+            release_month=MONTHS[match.group("month_only").casefold()],
+            release_year=int(match.group("month_year")),
         )
     try:
         release_date = date(year, month, day)
     except ValueError:
         return None
-    hour, minute = match.group(9), match.group(10)
+    hour, minute = match.group("hour"), match.group("minute")
     if hour is None:
         return ReleaseInfo(ReleasePrecision.DATE_ONLY, release_date=release_date, text=raw, source=source)
     try:
         release_time = time(int(hour), int(minute))
-        explicit_zone = match.group(11)
+        explicit_zone = match.group("zone")
         abbreviation = (
             explicit_zone.upper()
             if explicit_zone is not None and "/" not in explicit_zone
