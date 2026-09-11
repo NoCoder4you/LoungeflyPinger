@@ -127,6 +127,11 @@ class Product:
     new_release: bool = False
     preorder: bool = False
     sku: str | None = None
+    variant_id: str | None = None
+    barcode: str | None = None
+    vendor: str | None = None
+    tags: tuple[str, ...] = ()
+    listing_published_at: datetime | None = None
     release: ReleaseInfo | None = None
     exclusive_retailer: str | None = None
     estimated_ship_date: date | None = None
@@ -169,6 +174,17 @@ class Product:
             if not isinstance(self.sku, str) or not self.sku.strip():
                 raise ValueError("sku must be a non-empty string when provided")
             object.__setattr__(self, "sku", self.sku.strip())
+        for field_name in ("variant_id", "barcode", "vendor"):
+            value = getattr(self, field_name)
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"{field_name} must be a non-empty string when provided")
+                object.__setattr__(self, field_name, value.strip())
+        if not all(isinstance(tag, str) and tag.strip() for tag in self.tags):
+            raise ValueError("tags must contain only non-empty strings")
+        object.__setattr__(self, "tags", tuple(tag.strip() for tag in self.tags))
+        if self.listing_published_at is not None and self.listing_published_at.tzinfo is None:
+            raise ValueError("listing_published_at must be timezone-aware")
         if self.exclusive_retailer is not None:
             if not isinstance(self.exclusive_retailer, str) or not self.exclusive_retailer.strip():
                 raise ValueError("exclusive_retailer must be non-empty when provided")

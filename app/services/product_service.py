@@ -1,5 +1,6 @@
 """Persistence operations for normalized products."""
 
+import json
 from datetime import UTC, datetime
 
 from app.database import Database
@@ -22,11 +23,15 @@ class ProductService:
         await connection.execute(
             """INSERT INTO products
                (retailer, retailer_product_id, name, url, image_url, sku, franchise, character,
-                product_type, exclusive, exclusive_retailer, new_release, first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                variant_id, barcode, vendor, tags, listing_published_at, product_type, exclusive,
+                exclusive_retailer, new_release, first_seen, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(retailer, retailer_product_id) DO UPDATE SET
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
                  sku=COALESCE(excluded.sku, products.sku),
+                 variant_id=COALESCE(excluded.variant_id, products.variant_id),
+                 barcode=COALESCE(excluded.barcode, products.barcode), vendor=excluded.vendor,
+                 tags=excluded.tags, listing_published_at=excluded.listing_published_at,
                  franchise=excluded.franchise, character=excluded.character,
                  product_type=excluded.product_type, exclusive=excluded.exclusive,
                  exclusive_retailer=excluded.exclusive_retailer,
@@ -34,6 +39,9 @@ class ProductService:
                  last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
             (product.retailer, product.retailer_product_id, product.name, product.url,
              product.image_url, product.sku, product.franchise, product.character,
+             product.variant_id, product.barcode, product.vendor,
+             json.dumps(product.tags),
+             product.listing_published_at.isoformat() if product.listing_published_at else None,
              product.product_type, product.exclusive, product.exclusive_retailer,
              product.new_release, now, now),
         )

@@ -10,7 +10,8 @@ from app.monitors import (
     BoxLunchMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     GeekCoreMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
-    LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, TruffleShuffleMonitor,
+    LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, Street707Monitor,
+    TruffleShuffleMonitor,
 )
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
@@ -51,6 +52,7 @@ class Application:
             "entertainment_earth": "Entertainment Earth",
             "modern_pinup": "Modern PinUp",
             "pink_a_la_mode": "Pink a la Mode",
+            "street_707": "707 Street",
         }
         assert self.database.connection is not None
         for key, name in retailer_names.items():
@@ -262,6 +264,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "pink_a_la_mode", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        street_707 = self.config.retailers.get("street_707", {})
+        if isinstance(street_707, dict) and street_707.get("enabled", False):
+            interval = float(street_707.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                Street707Monitor(self.http), self.database, self.notifier,
+                retailer_name="707 Street", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "street_707", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})

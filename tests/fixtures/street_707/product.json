@@ -1,0 +1,15 @@
+{
+  "id": 9001,
+  "title": "Loungefly Disney Moonlight Mini Backpack - 707 Street Exclusive",
+  "handle": "loungefly-disney-moonlight-mini-backpack",
+  "body_html": "<p>Pre-order now. Releases September 20, 2026 at 9:00 AM PT.</p>",
+  "published_at": "2026-08-01T12:30:00-07:00",
+  "vendor": "Loungefly",
+  "product_type": "Backpack",
+  "tags": ["Backpack", "Loungefly", "Exclusive", "LFSEPT26"],
+  "variants": [
+    {"id": 9101, "available": false, "price": "90.00", "sku": "OLD-SKU"},
+    {"id": 9102, "available": true, "price": "82.00", "compare_at_price": "90.00", "sku": "671803000001", "barcode": "671803000001"}
+  ],
+  "images": [{"src": "//cdn.shopify.com/moonlight.jpg"}]
+}

@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS products (
     url TEXT NOT NULL,
     image_url TEXT,
     sku TEXT,
+    variant_id TEXT,
+    barcode TEXT,
+    vendor TEXT,
+    tags TEXT,
+    listing_published_at TEXT,
     franchise TEXT,
     character TEXT,
     product_type TEXT NOT NULL,
@@ -165,6 +170,8 @@ class Database:
         # CREATE TABLE IF NOT EXISTS does not evolve databases created by older releases.
         await self._add_missing_columns("products", {
             "missing_scans": "INTEGER NOT NULL DEFAULT 0", "removed_at": "TEXT", "sku": "TEXT",
+            "variant_id": "TEXT", "barcode": "TEXT", "vendor": "TEXT", "tags": "TEXT",
+            "listing_published_at": "TEXT",
             "new_release": "INTEGER NOT NULL DEFAULT 0",
             "exclusive_retailer": "TEXT",
         })
