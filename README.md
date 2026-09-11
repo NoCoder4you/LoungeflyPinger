@@ -3,7 +3,7 @@
 A lightweight, asynchronous foundation for continuously monitoring Loungefly Mini Backpack
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
-GeekCore UK is monitored through Shopify's public structured collection feeds, and
+Geek Garage UK and GeekCore UK are monitored through Shopify's public structured collection feeds, and
 TruffleShuffle UK and the Loungefly UK/US/Canada storefronts are monitored through public product JSON-LD. Disney Store UK
 uses its public Loungefly ItemList and structured storefront product telemetry.
 
@@ -12,6 +12,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Retailer | Status | Data source |
 | --- | --- | --- |
 | GeekCore | Working | Public Shopify product feeds |
+| Geek Garage UK | Working | Public Shopify product feeds |
 | TruffleShuffle | Working | Public category and product JSON-LD |
 | Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
 | Loungefly US | Working | Public schema.org ItemList/Product JSON-LD and product flags |
@@ -121,6 +122,7 @@ collection and persistence.
 - `app/scheduler.py`: independent asynchronous interval jobs
 - `app/monitors/base.py`: contract for retailer adapters
 - `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
+- `app/monitors/geek_garage.py`: Geek Garage UK discovery, stock, pricing, and exclusivity normalization
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter

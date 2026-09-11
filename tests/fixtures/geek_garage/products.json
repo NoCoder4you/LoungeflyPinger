@@ -1,0 +1,186 @@
+{
+  "products": [
+    {
+      "id": 101,
+      "title": "Loungefly Stitch Mini Backpack",
+      "handle": "product-101",
+      "body_html": "<p></p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "loungefly",
+      "product_type": "loungefly",
+      "tags": [
+        "Loungefly Stitch Mini Backpack"
+      ],
+      "variants": [
+        {
+          "id": 1010,
+          "available": true,
+          "price": "79.99",
+          "compare_at_price": null,
+          "sku": "LF-STITCH"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/101.jpg"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "title": "EMEA EXCLUSIVE Finding Nemo Loungefly Mini Backpack",
+      "handle": "product-102",
+      "body_html": "<p>EMEA EXCLUSIVE</p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "loungefly",
+      "product_type": "loungefly",
+      "tags": [
+        "EMEA EXCLUSIVE Finding Nemo Loungefly Mini Backpack"
+      ],
+      "variants": [
+        {
+          "id": 1020,
+          "available": false,
+          "price": "79.99",
+          "compare_at_price": null,
+          "sku": null
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/102.jpg"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "title": "Finding Nemo Loungefly Mini Backpack",
+      "handle": "product-103",
+      "body_html": "<p>Only available at Geek Garage</p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "loungefly",
+      "product_type": "loungefly",
+      "tags": [
+        "Finding Nemo Loungefly Mini Backpack"
+      ],
+      "variants": [
+        {
+          "id": 1030,
+          "available": true,
+          "price": "79.99",
+          "compare_at_price": null,
+          "sku": null
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/103.jpg"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "title": "Lady and the Tramp Loungefly Mini Backpack in stock",
+      "handle": "product-104",
+      "body_html": "<p>In stock</p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "loungefly",
+      "product_type": "loungefly",
+      "tags": [
+        "Lady and the Tramp Loungefly Mini Backpack in stock"
+      ],
+      "variants": [
+        {
+          "id": 1040,
+          "available": true,
+          "price": "59.99",
+          "compare_at_price": "74.99",
+          "sku": null
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/104.jpg"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "title": "SpongeBob Loungefly Mini Backpack",
+      "handle": "product-105",
+      "body_html": "<p>Pre-order. Stock due 20 September 2026 at 09:30</p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "loungefly",
+      "product_type": "loungefly",
+      "tags": [
+        "SpongeBob Loungefly Mini Backpack"
+      ],
+      "variants": [
+        {
+          "id": 1050,
+          "available": true,
+          "price": "79.99",
+          "compare_at_price": null,
+          "sku": "LF-SPONGE"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/105.jpg"
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "title": "Loungefly Mystery Mini Backpack Keychain Charm",
+      "handle": "product-106",
+      "body_html": "<p></p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "loungefly",
+      "product_type": "loungefly",
+      "tags": [
+        "Loungefly Mystery Mini Backpack Keychain Charm"
+      ],
+      "variants": [
+        {
+          "id": 1060,
+          "available": true,
+          "price": "79.99",
+          "compare_at_price": null,
+          "sku": null
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/106.jpg"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "title": "Generic Mini Backpack",
+      "handle": "product-107",
+      "body_html": "<p></p>",
+      "published_at": "2026-09-01T10:00:00+00:00",
+      "vendor": "Other Brand",
+      "product_type": "backpack",
+      "tags": [
+        "Generic Mini Backpack"
+      ],
+      "variants": [
+        {
+          "id": 1070,
+          "available": true,
+          "price": "79.99",
+          "compare_at_price": null,
+          "sku": null
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/107.jpg"
+        }
+      ]
+    }
+  ]
+}
