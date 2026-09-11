@@ -19,6 +19,7 @@ uses its public Loungefly ItemList and structured storefront product telemetry.
 | Disney Store UK | Working | Public ItemList and product telemetry |
 | Disney Store US | Working | Public schema.org ListItem microdata and product telemetry |
 | BoxLunch US | Working | Public schema.org CollectionPage and Product JSON-LD |
+| Hot Topic US | Working | Public schema.org CollectionPage and Product JSON-LD |
 
 Release metadata is parsed conservatively from retailer-published structured descriptions or
 dedicated telemetry fields. Current capability is:
@@ -33,6 +34,7 @@ dedicated telemetry fields. Current capability is:
 | Disney Store UK | Partial (dedicated product telemetry messages when published) |
 | Disney Store US | Partial (dedicated product telemetry messages when explicitly published) |
 | BoxLunch US | Partial (explicit Product JSON-LD descriptions only) |
+| Hot Topic US | Partial (explicit Product JSON-LD descriptions only) |
 
 Missing or malformed release text never clears a previously known release. Exact times use the
 configured retailer-local IANA timezone (`Europe/London` for UK and `America/Los_Angeles` for
@@ -98,7 +100,7 @@ collection and persistence.
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
-- `app/monitors/boxlunch.py`: BoxLunch US structured collection adapter
+- `app/monitors/boxlunch.py`: shared BoxLunch/Hot Topic US structured collection adapter
 - `app/notifications/base.py`: contract for notification destinations
 - `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
 - `app/services/`: persistence operations for products, stock, and alert audits
