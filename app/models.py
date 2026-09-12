@@ -145,6 +145,9 @@ class Product:
     collections: tuple[str, ...] = ()
     sale: bool = False
     clearance: bool = False
+    last_chance: bool = False
+    limited_edition: bool = False
+    limited_release: bool = False
     collection_type: str | None = None
     vaulted: bool = False
     exclusivity_text: str | None = None

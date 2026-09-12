@@ -176,6 +176,12 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Full public bag collections are reconciled; the large newest-first shop-all
+  # collection is sampled as a lightweight discovery lane and deduplicated by ID.
+  gwens_mermaid_cove:
+    enabled: true
+    interval_minutes: 15
+    status: WORKING
   # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
   # but run as independent jobs and retain independent health state.
   emp_de:

@@ -10,6 +10,7 @@ from app.monitors import (
     BoxLunchMonitor, CircleOfHopeMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
+    GwensMermaidCoveMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, OzzieCollectablesMonitor, PinkALaModeMonitor, PopcultchaMonitor, PopPelicanMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor, World11GamesMonitor,
@@ -72,6 +73,7 @@ class Application:
             "pop_pelican": "Pop Pelican",
             "ozzie_collectables": "Ozzie Collectables",
             "world_1_1_games": "WORLD 1-1 GAMES",
+            "gwens_mermaid_cove": "Gwen's Mermaid Cove",
             **{
                 ("large_nl" if code == "nl" else f"emp_{code}"): region.name
                 for code, region in EMP_REGIONS.items()
@@ -600,6 +602,7 @@ class Application:
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         world = self.config.retailers.get("world_1_1_games", {})
+        gwen = self.config.retailers.get("gwens_mermaid_cove", {})
         pop_pelican = self.config.retailers.get("pop_pelican", {})
         if isinstance(pop_pelican, dict) and pop_pelican.get("enabled", False):
             interval = float(pop_pelican.get(
@@ -630,6 +633,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "world_1_1_games", service.synchronize, interval * 60,
+                jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        if isinstance(gwen, dict) and gwen.get("enabled", False):
+            interval = float(gwen.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                GwensMermaidCoveMonitor(self.http), self.database, self.notifier,
+                retailer_name="Gwen's Mermaid Cove", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "gwens_mermaid_cove", service.synchronize, interval * 60,
                 jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
