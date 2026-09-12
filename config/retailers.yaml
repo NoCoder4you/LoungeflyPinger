@@ -164,6 +164,12 @@ retailers:
     interval_minutes: 15
     detail_batch_size: 20
     status: WORKING
+  # Public Shopify feeds provide a complete, deduplicated Loungefly bag scan in
+  # three requests; individual product.js is reserved for targeted checks.
+  pop_pelican:
+    enabled: true
+    interval_minutes: 15
+    status: WORKING
   # Large public Shopify Loungefly catalogue. Overlapping collection feeds are
   # merged by Shopify product ID and ordinary HTTP retry/backoff handles rate limits.
   world_1_1_games:

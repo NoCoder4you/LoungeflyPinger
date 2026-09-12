@@ -181,13 +181,19 @@ class ShopifyRetailerMonitor(RetailerMonitor):
 
     @staticmethod
     def _eta(text: str) -> tuple[date | None, date | None, str | None]:
-        pattern = (r"\b(?P<label>ETA|expected arrival|estimated arrival|estimated ship(?:ping)? date)"
-                   r"\s*:?\s*(?P<value>(?:January|February|March|April|May|June|July|August|"
-                   r"September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})")
+        pattern = (r"\b(?P<label>ETA|expected arrival|estimated arrival|expected delivery|"
+                   r"estimated delivery|estimated ship(?:ping)? date)\s*:?\s*"
+                   r"(?P<value>(?:January|February|March|April|May|June|July|August|"
+                   r"September|October|November|December)(?:\s+\d{1,2}(?:st|nd|rd|th)?,?)?"
+                   r"\s+\d{4})")
         ship_date = arrival_date = None
         matches = list(re.finditer(pattern, text, re.I))
         for match in matches:
             clean = re.sub(r"(\d)(?:st|nd|rd|th)", r"\1", match.group("value"), flags=re.I)
+            # Preserve month-only estimates as text; inventing the first day would
+            # incorrectly turn imprecise retailer guidance into an exact date.
+            if not re.search(r"\b\d{1,2}(?:st|nd|rd|th)?\b", match.group("value"), re.I):
+                continue
             try:
                 parsed = datetime.strptime(clean.replace(",", ""), "%B %d %Y").date()
             except ValueError:
@@ -271,13 +277,19 @@ class ShopifyRetailerMonitor(RetailerMonitor):
         retailer_exclusive = bool(self.retailer_exclusive_pattern and re.search(
             self.retailer_exclusive_pattern, evidence, re.I
         ))
-        region = re.search(r"\b(US|USA|United States|UK|EU|Canada)\s+exclusive\b", evidence, re.I)
+        region = re.search(
+            r"\b(US|USA|United States|UK|EU|Canada|AU|Australia|Australian)\s+exclusive\b",
+            evidence, re.I,
+        )
         exclusive_region = None
         if region:
-            exclusive_region = {"usa": "US", "united states": "US"}.get(
+            exclusive_region = {"usa": "US", "united states": "US", "australia": "AU",
+                                "australian": "AU"}.get(
                 region.group(1).casefold(), region.group(1).upper())
-        explicit_exclusive = retailer_exclusive or exclusive_region is not None or bool(
-            re.search(r"\b(?:shared|retailer) exclusive\b", evidence, re.I))
+        explicit_exclusive = retailer_exclusive or exclusive_region is not None or bool(re.search(
+            r"\b(?:(?:shared|retailer|convention|Disney Parks|Hot Topic|BoxLunch) exclusive|"
+            r"exclusive\s+(?:to\s+)?(?:Disney Parks|Hot Topic|BoxLunch))\b", evidence, re.I
+        ))
         barcode, sku, vendor = selected.get("barcode"), selected.get("sku"), raw.get("vendor")
         ordered_collections = tuple(sorted(collections))
         rare = "rare" in signals
