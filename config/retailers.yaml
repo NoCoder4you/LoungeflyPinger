@@ -61,6 +61,11 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Public Shopify Loungefly collection; the feed is directly accessible without a browser.
+  razmatazz_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   # Public WooCommerce Store API, scoped to the retailer's Loungefly backpack category.
   get_ready_comics_uk:
     enabled: true

@@ -9,7 +9,7 @@ from app.http import AsyncHttpClient
 from app.monitors import (
     BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor, InfinityCollectablesMonitor, KoolazMonitor,
-    LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor,
+    LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor,
@@ -47,6 +47,7 @@ class Application:
             "cool_merch_uk": "Cool-Merch UK",
             "koolaz_uk": "Koolaz UK",
             "cm_pop_uk": "CM POP UK",
+            "razmatazz_uk": "Razmatazz UK",
             "geekcore": "GeekCore", "geek_garage_uk": "Geek Garage", "truffleshuffle": "TruffleShuffle",
             "get_ready_comics_uk": "Get Ready Comics UK",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
@@ -196,6 +197,22 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "geek_garage_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        razmatazz = self.config.retailers.get("razmatazz_uk", {})
+        if isinstance(razmatazz, dict) and razmatazz.get("enabled", False):
+            interval = float(razmatazz.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                RazmatazzMonitor(self.http), self.database, self.notifier,
+                retailer_name="Razmatazz UK", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "razmatazz_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         get_ready_comics = self.config.retailers.get("get_ready_comics_uk", {})
