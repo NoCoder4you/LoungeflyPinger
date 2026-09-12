@@ -1,0 +1,535 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "title": "Loungefly New Disney Hero Mini Backpack",
+      "handle": "item-1",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "Official release date: September 20, 2026",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/1.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 10,
+          "available": true,
+          "price": "75.00",
+          "compare_at_price": "90.00",
+          "sku": "LF-1",
+          "barcode": "012345678901"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Loungefly Classic Standard Backpack",
+      "handle": "item-2",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/2.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 20,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-2",
+          "barcode": "012345678902"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Loungefly Hero Crossbody Bag",
+      "handle": "item-3",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/3.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 30,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-3",
+          "barcode": "012345678903"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Loungefly Hero Tote Bag",
+      "handle": "item-4",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/4.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 40,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-4",
+          "barcode": "012345678904"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Loungefly Hero Sling Crossbody Bag",
+      "handle": "item-5",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/5.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 50,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-5",
+          "barcode": "012345678905"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Loungefly Convertible Backpack & Tote Crossbody Bag",
+      "handle": "item-6",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/6.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 60,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-6",
+          "barcode": "012345678906"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Loungefly Drawstring Mini Backpack",
+      "handle": "item-7",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/7.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 70,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-7",
+          "barcode": "012345678907"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Loungefly Wallet",
+      "handle": "item-8",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/8.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 80,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-8",
+          "barcode": "012345678908"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Loungefly Card Holder",
+      "handle": "item-9",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/9.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 90,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-9",
+          "barcode": "012345678909"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Loungefly Bag Charm",
+      "handle": "item-10",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/10.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 100,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-10",
+          "barcode": "012345678910"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Rock Rebel Damask Bat Handbag",
+      "handle": "item-11",
+      "vendor": "Rock Rebel Shop",
+      "product_type": "",
+      "tags": [
+        "Rock Rebel"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/11.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 110,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-11",
+          "barcode": "012345678911"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Disney Parks Tote by Dooney & Bourke",
+      "handle": "item-12",
+      "vendor": "Dooney & Bourke",
+      "product_type": "",
+      "tags": [
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/12.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 120,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-12",
+          "barcode": "012345678912"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Loungefly Sold Out Mini Backpack",
+      "handle": "item-13",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/13.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 130,
+          "available": false,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-13",
+          "barcode": "012345678913"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Loungefly Low Stock Mini Backpack",
+      "handle": "item-14",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/14.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 140,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-14",
+          "barcode": "012345678914",
+          "inventory_quantity": 2
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Loungefly Pre-Order Mini Backpack",
+      "handle": "item-15",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "Preorder. ETA: October 2026",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/15.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 150,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-15",
+          "barcode": "012345678915"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Loungefly Coming Soon Mini Backpack",
+      "handle": "item-16",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "Coming Soon",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/16.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 160,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-16",
+          "barcode": "012345678916"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Loungefly Vault Universal Exclusive Rare Mini Backpack",
+      "handle": "item-17",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "Universal Exclusive. Limited edition.",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/17.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 170,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-17",
+          "barcode": "012345678917"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Loungefly US Exclusive Crossbody Bag",
+      "handle": "item-18",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/18.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 180,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-18",
+          "barcode": "012345678918"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "Loungefly The Bag Dude Exclusive Tote Bag",
+      "handle": "item-19",
+      "vendor": "Loungefly",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-04:00",
+      "images": [
+        {
+          "src": "//cdn.example/19.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 190,
+          "available": true,
+          "price": "90.00",
+          "compare_at_price": null,
+          "sku": "LF-19",
+          "barcode": "012345678919"
+        }
+      ]
+    }
+  ]
+}
