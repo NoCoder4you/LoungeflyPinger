@@ -113,6 +113,11 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Public Shopify collections provide overlapping merchandising and availability signals.
+  circle_of_hope:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   # Dedicated mini-backpack catalogue pages provide frequent, low-cost state checks;
   # individual detail pages are reserved for targeted checks.
   merchoid_uk:
