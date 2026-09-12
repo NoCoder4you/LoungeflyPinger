@@ -37,6 +37,7 @@ class AlertType(StrEnum):
     RELEASE_DATETIME_CHANGED = "RELEASE_DATETIME_CHANGED"
     RELEASING_SOON = "RELEASING_SOON"
     RELEASED = "RELEASED"
+    ETA_CHANGED = "ETA_CHANGED"
 
 
 class RetailerHealth(StrEnum):
@@ -137,6 +138,7 @@ class Product:
     exclusive_region: str | None = None
     estimated_ship_date: date | None = None
     estimated_arrival_date: date | None = None
+    estimated_arrival_text: str | None = None
     estimated_dispatch_date: date | None = None
     original_price: Decimal | None = None
 
@@ -200,6 +202,10 @@ class Product:
             value = getattr(self, field_name)
             if value is not None and not isinstance(value, date):
                 raise ValueError(f"{field_name} must be a date when provided")
+        if self.estimated_arrival_text is not None:
+            if not isinstance(self.estimated_arrival_text, str) or not self.estimated_arrival_text.strip():
+                raise ValueError("estimated_arrival_text must be non-empty when provided")
+            object.__setattr__(self, "estimated_arrival_text", self.estimated_arrival_text.strip())
 
     @staticmethod
     def _validate_url(field: str, value: str | None, *, required: bool) -> None:

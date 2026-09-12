@@ -19,6 +19,7 @@ class ProductState:
     highest_price: Decimal | None
     estimated_ship_date: date | None
     estimated_arrival_date: date | None
+    estimated_arrival_text: str | None
     estimated_dispatch_date: date | None
 
 
@@ -52,8 +53,8 @@ class StockService:
             """INSERT INTO product_states
                (product_id, availability, price, currency, preorder, checked_at,
                 previous_price, lowest_price, highest_price, estimated_ship_date,
-                estimated_arrival_date, estimated_dispatch_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                estimated_arrival_date, estimated_arrival_text, estimated_dispatch_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(product_id) DO UPDATE SET availability=excluded.availability,
                  price=excluded.price, currency=excluded.currency, preorder=excluded.preorder,
                  checked_at=excluded.checked_at, previous_price=excluded.previous_price,
@@ -62,6 +63,8 @@ class StockService:
                      excluded.estimated_ship_date, product_states.estimated_ship_date
                  ), estimated_arrival_date=COALESCE(
                      excluded.estimated_arrival_date, product_states.estimated_arrival_date
+                 ), estimated_arrival_text=COALESCE(
+                     excluded.estimated_arrival_text, product_states.estimated_arrival_text
                  ), estimated_dispatch_date=COALESCE(
                      excluded.estimated_dispatch_date, product_states.estimated_dispatch_date
                  )""",
@@ -71,6 +74,7 @@ class StockService:
              str(low) if low is not None else None, str(high) if high is not None else None,
              product.estimated_ship_date.isoformat() if product.estimated_ship_date else None,
              product.estimated_arrival_date.isoformat() if product.estimated_arrival_date else None,
+             product.estimated_arrival_text,
              product.estimated_dispatch_date.isoformat() if product.estimated_dispatch_date else None),
         )
 
@@ -82,6 +86,7 @@ class StockService:
             """SELECT availability, price, currency, preorder, previous_price,
                       lowest_price, highest_price, estimated_ship_date,
                       estimated_arrival_date, estimated_dispatch_date
+                      , estimated_arrival_text
                  FROM product_states WHERE product_id=?""",
             (product_id,),
         )).fetchone()
@@ -92,7 +97,7 @@ class StockService:
                             money(row[4]), money(row[5]), money(row[6]),
                             date.fromisoformat(row[7]) if row[7] else None,
                             date.fromisoformat(row[8]) if row[8] else None,
-                            date.fromisoformat(row[9]) if row[9] else None)
+                            row[10], date.fromisoformat(row[9]) if row[9] else None)
 
     async def current_availability(self, product_id: int) -> Availability | None:
         """Return the persisted state, or ``None`` for a never-synchronized product."""

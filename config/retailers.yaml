@@ -157,6 +157,13 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Public Shopify collection provides complete catalogue scans; a small rotating
+  # detail batch enriches changed products with barcode and exact inventory data.
+  ozzie_collectables:
+    enabled: true
+    interval_minutes: 15
+    detail_batch_size: 20
+    status: WORKING
   # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
   # but run as independent jobs and retain independent health state.
   emp_de:
