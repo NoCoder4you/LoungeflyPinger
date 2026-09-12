@@ -247,30 +247,87 @@ class Database:
         await self._migrate_release_history_keys()
         await self.connection.commit()
 
-    async def _migrate_release_history_keys(self) -> None:
-        """Backfill keys and collapse duplicates created by SQLite NULL uniqueness semantics."""
-        assert self.connection is not None
-        rows = await (await self.connection.execute(
-            """SELECT id, release_date, release_time, release_timezone, release_datetime,
-                      release_precision, release_text, release_source, release_timezone_inferred,
-                      release_month, release_year
-                 FROM release_history"""
-        )).fetchall()
-        for row in rows:
-            await self.connection.execute(
-                "UPDATE release_history SET release_key=? WHERE id=?",
-                (release_history_key(tuple(row[1:])), row[0]),
-            )
+async def _migrate_release_history_keys(self) -> None:
+    """Backfill release keys safely and collapse duplicate historical rows."""
+    assert self.connection is not None
+
+    rows = await (
         await self.connection.execute(
-            """DELETE FROM release_history
-                 WHERE id NOT IN (
-                       SELECT MIN(id) FROM release_history GROUP BY product_id, release_key
-                 )"""
+            """
+            SELECT
+                id,
+                product_id,
+                release_date,
+                release_time,
+                release_timezone,
+                release_datetime,
+                release_precision,
+                release_text,
+                release_source,
+                release_timezone_inferred,
+                release_month,
+                release_year
+            FROM release_history
+            ORDER BY id
+            """
         )
+    ).fetchall()
+
+    # Work out the desired key for every historical row first.
+    calculated: list[tuple[int, int, str]] = []
+
+    for row in rows:
+        row_id = int(row[0])
+        product_id = int(row[1])
+        key = release_history_key(tuple(row[2:]))
+
+        calculated.append((row_id, product_id, key))
+
+    # Determine which duplicate rows should be retained.
+    seen: set[tuple[int, str]] = set()
+    duplicate_ids: list[int] = []
+    keepers: list[tuple[int, str]] = []
+
+    for row_id, product_id, key in calculated:
+        identity = (product_id, key)
+
+        if identity in seen:
+            duplicate_ids.append(row_id)
+            continue
+
+        seen.add(identity)
+        keepers.append((row_id, key))
+
+    # Delete duplicate rows BEFORE assigning keys.
+    #
+    # This is important because an older database may already have the
+    # unique (product_id, release_key) index installed.
+    for row_id in duplicate_ids:
         await self.connection.execute(
-            """CREATE UNIQUE INDEX IF NOT EXISTS idx_release_history_product_key
-                   ON release_history(product_id, release_key)"""
+            "DELETE FROM release_history WHERE id = ?",
+            (row_id,),
         )
+
+    # Clear existing keys first. SQLite allows multiple NULL values in a
+    # UNIQUE constraint. This also makes the migration safe if existing
+    # rows contain stale keys that would otherwise collide while updating.
+    await self.connection.execute(
+        "UPDATE release_history SET release_key = NULL"
+    )
+
+    # Now safely assign the calculated keys to the surviving rows.
+    for row_id, key in keepers:
+        await self.connection.execute(
+            "UPDATE release_history SET release_key = ? WHERE id = ?",
+            (key, row_id),
+        )
+
+    await self.connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_release_history_product_key
+        ON release_history(product_id, release_key)
+        """
+    )
 
     async def _add_missing_columns(self, table: str, columns: dict[str, str]) -> None:
         assert self.connection is not None
