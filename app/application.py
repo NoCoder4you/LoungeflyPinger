@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
-    BoxLunchMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
+    BoxLunchMonitor, CircleOfHopeMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
@@ -58,6 +58,7 @@ class Application:
             "hot_topic_us": "Hot Topic US",
             "entertainment_earth": "Entertainment Earth",
             "modern_pinup": "Modern PinUp",
+            "circle_of_hope": "Circle Of Hope Boutique",
             "merchoid_uk": "Merchoid UK",
             "magic_madhouse_uk": "Magic Madhouse UK",
             "pink_a_la_mode": "Pink a la Mode",
@@ -401,6 +402,7 @@ class Application:
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         modern_pinup = self.config.retailers.get("modern_pinup", {})
+        circle_of_hope = self.config.retailers.get("circle_of_hope", {})
         merchoid = self.config.retailers.get("merchoid_uk", {})
         if isinstance(merchoid, dict) and merchoid.get("enabled", False):
             interval = float(merchoid.get(
@@ -446,6 +448,21 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "modern_pinup", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        if isinstance(circle_of_hope, dict) and circle_of_hope.get("enabled", False):
+            interval = float(circle_of_hope.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                CircleOfHopeMonitor(self.http), self.database, self.notifier,
+                retailer_name="Circle Of Hope Boutique", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "circle_of_hope", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         pink_a_la_mode = self.config.retailers.get("pink_a_la_mode", {})

@@ -143,6 +143,7 @@ collection and persistence.
 - `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
 - `app/monitors/emp.py`: shared, configured EMP Germany/France/Spain/Italy and Large Netherlands Commerce Cloud adapter
 - `app/monitors/modern_pinup.py`: Modern PinUp US Shopify product adapter
+- `app/monitors/circle_of_hope.py`: Circle Of Hope Boutique US Shopify multi-collection adapter
 - `app/monitors/magic_madhouse.py`: Magic Madhouse UK structured Loungefly Mini Backpack search adapter
 - `app/monitors/pink_a_la_mode.py`: Pink a la Mode US Shopify product adapter
 - `app/monitors/street_707.py`: 707 Street US Shopify product adapter
