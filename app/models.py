@@ -151,6 +151,16 @@ class Product:
     collection_type: str | None = None
     vaulted: bool = False
     exclusivity_text: str | None = None
+    license: str | None = None
+    property: str | None = None
+    characters: tuple[str, ...] = ()
+    edition: str | None = None
+    style: str | None = None
+    incoming_status: str | None = None
+    event_exclusive: bool = False
+    event_name: str | None = None
+    event_year: int | None = None
+    discovery_sources: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -217,6 +227,22 @@ class Product:
                 if not isinstance(value, str) or not value.strip():
                     raise ValueError(f"{field_name} must be non-empty when provided")
                 object.__setattr__(self, field_name, value.strip())
+        for field_name in ("license", "property", "edition", "style", "incoming_status",
+                           "event_name"):
+            value = getattr(self, field_name)
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"{field_name} must be non-empty when provided")
+                object.__setattr__(self, field_name, value.strip())
+        for field_name in ("characters", "discovery_sources"):
+            values = getattr(self, field_name)
+            if not all(isinstance(value, str) and value.strip() for value in values):
+                raise ValueError(f"{field_name} must contain only non-empty strings")
+            object.__setattr__(self, field_name, tuple(dict.fromkeys(
+                value.strip() for value in values
+            )))
+        if self.event_year is not None and not 1900 <= self.event_year <= 2200:
+            raise ValueError("event_year is invalid")
         if self.listing_published_at is not None and self.listing_published_at.tzinfo is None:
             raise ValueError("listing_published_at must be timezone-aware")
         for field_name in ("exclusive_retailer", "exclusive_region"):
