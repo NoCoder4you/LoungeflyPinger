@@ -182,6 +182,12 @@ retailers:
     enabled: true
     interval_minutes: 15
     status: WORKING
+  # Public Shopify feeds reconcile all bag and Vault collections. The homepage's
+  # small curated New Arrivals lane is checked each pass and deduplicated by product ID.
+  bag_dude:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
   # but run as independent jobs and retain independent health state.
   emp_de:
