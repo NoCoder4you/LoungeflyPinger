@@ -147,7 +147,7 @@ class ShopifyRetailerMonitor(RetailerMonitor):
                               " ".join((structured, title)), re.I)
         bag_with_accessory = re.search(
             r"\b(?:backpack|crossbody|tote|shoulder|handbag|satchel|bucket|sling|messenger|duffle)"
-            r"\b[^.]{0,80}\bwith\b[^.]{0,50}\b(?:charm|coin bag|pins?|wallet)\b", title, re.I
+            r"\b[^.]{0,80}\b(?:with|and|&)\b[^.]{0,50}\b(?:charm|coin (?:bag|purse)|pins?|wallet)\b", title, re.I
         )
         if accessory and not bag_with_accessory:
             return None

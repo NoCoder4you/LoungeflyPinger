@@ -10,6 +10,7 @@ from .cordys_corner import CordysCornerMonitor
 from .cool_merch import CoolMerchMonitor
 from .damaged_society import DamagedSocietyMonitor
 from .disney_store_uk import DisneyStoreUKMonitor, DisneyStoreUSMonitor
+from .disney_mad import DisneyMadMonitor
 from .entertainment_earth import EntertainmentEarthMonitor
 from .forbidden_planet import ForbiddenPlanetMonitor
 from .emp import EMPMonitor, EMPRegion, EMP_REGIONS
@@ -36,7 +37,7 @@ from .truffleshuffle import TruffleShuffleMonitor
 from .world_1_1_games import World11GamesMonitor
 
 __all__ = [
-    "AmyDavidMagicMonitor", "BagDudeMonitor", "BoxLunchMonitor", "CircleOfHopeMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
+    "AmyDavidMagicMonitor", "BagDudeMonitor", "BoxLunchMonitor", "CircleOfHopeMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyMadMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
     "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "GetReadyComicsMonitor", "HotTopicUSMonitor",
     "InfinityCollectablesMonitor", "KoolazMonitor", "LFLoversMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",

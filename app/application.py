@@ -7,7 +7,7 @@ from app.config import AppConfig
 from app.database import Database
 from app.http import AsyncHttpClient
 from app.monitors import (
-    AmyDavidMagicMonitor, BagDudeMonitor, BoxLunchMonitor, CircleOfHopeMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
+    AmyDavidMagicMonitor, BagDudeMonitor, BoxLunchMonitor, CircleOfHopeMonitor, CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor, DisneyMadMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EntertainmentEarthMonitor,
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
     GwensMermaidCoveMonitor,
@@ -52,6 +52,7 @@ class Application:
             "geekcore": "GeekCore", "geek_garage_uk": "Geek Garage", "truffleshuffle": "TruffleShuffle",
             "get_ready_comics_uk": "Get Ready Comics UK",
             "loungefly_uk": "Loungefly UK", "disney_store_uk": "Disney Store UK",
+            "disney_mad_uk": "Disney Mad",
             "loungefly_us": "Loungefly US",
             "loungefly_canada": "Loungefly Canada",
             "disney_store_us": "Disney Store US",
@@ -97,6 +98,22 @@ class Application:
         # Each storefront is an independent scheduler/service so a regional outage
         # cannot affect the health or synchronization of another storefront.
         damaged_society = self.config.retailers.get("damaged_society_uk", {})
+        disney_mad = self.config.retailers.get("disney_mad_uk", {})
+        if isinstance(disney_mad, dict) and disney_mad.get("enabled", False):
+            interval = float(disney_mad.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                DisneyMadMonitor(self.http), self.database, self.notifier,
+                retailer_name="Disney Mad", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "disney_mad_uk", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         if isinstance(damaged_society, dict) and damaged_society.get("enabled", False):
             interval = float(damaged_society.get(
                 "interval_minutes", self.config.monitor.default_interval_minutes
