@@ -161,6 +161,14 @@ class Product:
     event_name: str | None = None
     event_year: int | None = None
     discovery_sources: tuple[str, ...] = ()
+    bundle: bool = False
+    included_items: tuple[str, ...] = ()
+    disney_parks: bool = False
+    parks_origin: str | None = None
+    exclusive_type: str | None = None
+    series: str | None = None
+    event_collection: str | None = None
+    loungefly_product_code: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -228,13 +236,14 @@ class Product:
                     raise ValueError(f"{field_name} must be non-empty when provided")
                 object.__setattr__(self, field_name, value.strip())
         for field_name in ("license", "property", "edition", "style", "incoming_status",
-                           "event_name"):
+                           "event_name", "parks_origin", "exclusive_type", "series",
+                           "event_collection", "loungefly_product_code"):
             value = getattr(self, field_name)
             if value is not None:
                 if not isinstance(value, str) or not value.strip():
                     raise ValueError(f"{field_name} must be non-empty when provided")
                 object.__setattr__(self, field_name, value.strip())
-        for field_name in ("characters", "discovery_sources"):
+        for field_name in ("characters", "discovery_sources", "included_items"):
             values = getattr(self, field_name)
             if not all(isinstance(value, str) and value.strip() for value in values):
                 raise ValueError(f"{field_name} must contain only non-empty strings")

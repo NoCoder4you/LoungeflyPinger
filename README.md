@@ -4,6 +4,7 @@ A lightweight, asynchronous foundation for continuously monitoring Loungefly Min
 availability. It provides lifecycle management, normalized models, SQLite persistence,
 configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
 CM POP UK, Geek Garage UK, Razmatazz UK, and GeekCore UK are monitored through Shopify's public structured collection feeds, and
+Disney Mad UK is monitored through complete, deduplicated Shopify Backpacks and Disney Parks feeds, and
 TruffleShuffle UK and the Loungefly UK/US/Canada storefronts are monitored through public product JSON-LD. Disney Store UK
 uses its public Loungefly ItemList and structured storefront product telemetry. Get Ready Comics UK uses the public
 WooCommerce Store API exposed by its Loungefly backpack category.
@@ -13,6 +14,7 @@ WooCommerce Store API exposed by its Loungefly backpack category.
 | Retailer | Status | Data source |
 | --- | --- | --- |
 | CM POP UK | Working | Public Shopify Loungefly collection and product feeds |
+| Disney Mad UK | Working | Public Shopify Backpacks/Disney Parks collection and product feeds |
 | GeekCore | Working | Public Shopify product feeds |
 | Geek Garage UK | Working | Public Shopify product feeds |
 | Razmatazz UK | Working | Public Shopify Loungefly collection and product feeds |
@@ -47,6 +49,7 @@ dedicated telemetry fields. Current capability is:
 | Retailer | Release metadata |
 | --- | --- |
 | CM POP UK | Partial (explicit product descriptions/tags; publication timestamps remain listing metadata) |
+| Disney Mad UK | Partial (explicit product descriptions only; publication and anniversary dates remain metadata) |
 | GeekCore | Partial (explicit Shopify tags/descriptions) |
 | Razmatazz UK | Partial (explicit Shopify descriptions/tags; publication timestamps remain listing metadata) |
 | Get Ready Comics UK | Partial (explicit descriptions and Coming Soon category) |
@@ -143,6 +146,7 @@ collection and persistence.
 - `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
 - `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
 - `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
+- `app/monitors/disney_mad.py`: Disney Mad UK shared-Shopify bag and Disney Parks adapter
 - `app/monitors/boxlunch.py`: shared BoxLunch/Hot Topic US structured collection adapter
 - `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
 - `app/monitors/emp.py`: shared, configured EMP Germany/France/Spain/Italy and Large Netherlands Commerce Cloud adapter

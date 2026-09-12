@@ -15,6 +15,16 @@ def test_disney_store_uk_is_enabled_with_conservative_interval() -> None:
     }
 
 
+def test_disney_mad_is_enabled_with_high_priority_interval() -> None:
+    config = load_config()
+
+    assert config.retailers["disney_mad_uk"] == {
+        "enabled": True,
+        "interval_minutes": 10,
+        "status": "WORKING",
+    }
+
+
 def test_load_config(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 2\ndatabase:\n  path: custom.db\nretailers: {}\n", encoding="utf-8")

@@ -63,6 +63,15 @@ CREATE TABLE IF NOT EXISTS products (
     event_name TEXT,
     event_year INTEGER,
     discovery_sources TEXT,
+    bundle INTEGER NOT NULL DEFAULT 0 CHECK (bundle IN (0, 1)),
+    included_items TEXT,
+    disney_parks INTEGER NOT NULL DEFAULT 0 CHECK (disney_parks IN (0, 1)),
+    parks_origin TEXT,
+    exclusive_type TEXT,
+    series TEXT,
+    event_collection TEXT,
+    loungefly_product_code TEXT,
+    canonical_key TEXT,
     franchise TEXT,
     character TEXT,
     product_type TEXT NOT NULL,
@@ -204,6 +213,10 @@ class Database:
             "edition": "TEXT", "style": "TEXT", "incoming_status": "TEXT",
             "event_exclusive": "INTEGER NOT NULL DEFAULT 0", "event_name": "TEXT",
             "event_year": "INTEGER", "discovery_sources": "TEXT",
+            "bundle": "INTEGER NOT NULL DEFAULT 0", "included_items": "TEXT",
+            "disney_parks": "INTEGER NOT NULL DEFAULT 0", "parks_origin": "TEXT",
+            "exclusive_type": "TEXT", "series": "TEXT", "event_collection": "TEXT",
+            "loungefly_product_code": "TEXT", "canonical_key": "TEXT",
             "sale": "INTEGER NOT NULL DEFAULT 0", "clearance": "INTEGER NOT NULL DEFAULT 0",
             "last_chance": "INTEGER NOT NULL DEFAULT 0",
             "limited_edition": "INTEGER NOT NULL DEFAULT 0",
@@ -211,6 +224,9 @@ class Database:
             "collection_type": "TEXT", "vaulted": "INTEGER NOT NULL DEFAULT 0",
             "exclusivity_text": "TEXT",
         })
+        await self.connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_products_canonical_key ON products(canonical_key)"
+        )
         await self._add_missing_columns("retailers", {
             "release_sync_completed": "INTEGER NOT NULL DEFAULT 0",
             "last_error": "TEXT", "response_status": "INTEGER",

@@ -94,8 +94,9 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
         if alert.previous_price is not None:
             add("Previous Price", _money(alert.previous_price, product.currency))
         add("Status", _display(product.availability.value))
-        if product.retailer == "Ozzie Collectables":
+        if product.retailer in {"Disney Mad", "Ozzie Collectables"}:
             add("Product Type", _display(product.product_type))
+        if product.retailer == "Ozzie Collectables":
             if product.sku:
                 add("SKU", product.sku)
             if product.barcode:
@@ -111,6 +112,12 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
             add("Exclusive Retailer", product.exclusive_retailer)
         if product.exclusive_region:
             add("Exclusive Region", product.exclusive_region)
+        if product.parks_origin:
+            add("Parks Origin", product.parks_origin)
+        if product.exclusive_type:
+            add("Exclusive Type", _display(product.exclusive_type))
+        if product.bundle and product.included_items:
+            add("Includes", ", ".join(_display(item) for item in product.included_items))
         if product.new_release:
             add("New Release", "Yes")
         add("Preorder", "Yes" if product.preorder else "No")

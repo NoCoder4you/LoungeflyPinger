@@ -37,6 +37,12 @@ notifications:
     enabled: false
 
 retailers:
+  # High-priority UK discovery source. Complete Shopify Backpacks and Disney Parks
+  # feeds are deduplicated by product ID; detail pages remain targeted checks.
+  disney_mad_uk:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   damaged_society_uk:
     enabled: true
     interval_minutes: 10

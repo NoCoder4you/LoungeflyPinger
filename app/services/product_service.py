@@ -1,6 +1,7 @@
 """Persistence operations for normalized products."""
 
 import json
+import re
 from datetime import UTC, datetime
 
 from app.database import Database
@@ -10,6 +11,22 @@ from app.models import Product
 class ProductService:
     def __init__(self, database: Database) -> None:
         self.database = database
+
+    @staticmethod
+    def canonical_key(product: Product) -> str:
+        """Best available cross-retailer identity, without coupling offer stock."""
+        if product.barcode:
+            return f"barcode:{re.sub(r'\D', '', product.barcode)}"
+        if product.loungefly_product_code:
+            return f"loungefly:{product.loungefly_product_code.casefold()}"
+        # Retailer warehouse/bin SKUs are not manufacturer identities.
+        if product.sku and not re.fullmatch(r"(?:dm[ .-]*)?box\s*[\w.-]+|pallet\s+box\s*[\w.-]+", product.sku, re.I):
+            return f"sku:{re.sub(r'[^a-z0-9]', '', product.sku.casefold())}"
+        title = re.sub(r"\b(?:loungefly|boxlunch|hot topic|disney parks|exclusive)\b", " ", product.name, flags=re.I)
+        title = re.sub(r"[^a-z0-9]+", "", title.casefold())
+        franchise = re.sub(r"[^a-z0-9]+", "", (product.franchise or "").casefold())
+        kind = re.sub(r"[^a-z0-9]+", "", product.product_type.casefold())
+        return f"title:{title}:{franchise}:{kind}"
 
     async def upsert(self, product: Product) -> int:
         connection = self.database.connection
@@ -28,8 +45,10 @@ class ProductService:
                 sale, clearance, last_chance, limited_edition, limited_release,
                 collection_type, vaulted, exclusivity_text, license, property, characters,
                 edition, style, incoming_status, event_exclusive, event_name, event_year,
-                discovery_sources, first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                discovery_sources, bundle, included_items, disney_parks, parks_origin,
+                exclusive_type, series, event_collection, loungefly_product_code, canonical_key,
+                first_seen, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(retailer, retailer_product_id) DO UPDATE SET
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
                  sku=COALESCE(excluded.sku, products.sku),
@@ -53,6 +72,12 @@ class ProductService:
                  incoming_status=excluded.incoming_status,
                  event_exclusive=excluded.event_exclusive, event_name=excluded.event_name,
                  event_year=excluded.event_year, discovery_sources=excluded.discovery_sources,
+                 bundle=excluded.bundle, included_items=excluded.included_items,
+                 disney_parks=excluded.disney_parks, parks_origin=excluded.parks_origin,
+                 exclusive_type=excluded.exclusive_type, series=excluded.series,
+                 event_collection=excluded.event_collection,
+                 loungefly_product_code=COALESCE(excluded.loungefly_product_code, products.loungefly_product_code),
+                 canonical_key=excluded.canonical_key,
                  last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
             (product.retailer, product.retailer_product_id, product.name, product.url,
              product.image_url, product.sku, product.franchise, product.character,
@@ -68,7 +93,11 @@ class ProductService:
              product.collection_type, product.vaulted, product.exclusivity_text,
              product.license, product.property, json.dumps(product.characters), product.edition,
              product.style, product.incoming_status, product.event_exclusive,
-             product.event_name, product.event_year, json.dumps(product.discovery_sources), now, now),
+             product.event_name, product.event_year, json.dumps(product.discovery_sources),
+             product.bundle, json.dumps(product.included_items), product.disney_parks,
+             product.parks_origin, product.exclusive_type, product.series,
+             product.event_collection, product.loungefly_product_code,
+             self.canonical_key(product), now, now),
         )
         cursor = await connection.execute(
             "SELECT id FROM products WHERE retailer=? AND retailer_product_id=?",
