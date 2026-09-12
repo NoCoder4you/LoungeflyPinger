@@ -27,6 +27,7 @@ WooCommerce Store API exposed by its Loungefly backpack category.
 | Hot Topic US | Working | Public schema.org CollectionPage and Product JSON-LD |
 | Entertainment Earth US | Working | Public schema.org ItemList and Product JSON-LD |
 | Modern PinUp US | Working | Public Shopify collection and product feeds |
+| Gwen's Mermaid Cove US | Working | Public Shopify multi-collection product feeds |
 | Pink a la Mode US | Working | Public Shopify Mini Backpacks and New Arrivals feeds |
 | Magic Madhouse UK | Working | Public BigCommerce Loungefly Mini Backpack search data |
 | 707 Street US | Working | Public Shopify Mini Backpacks collection and product feeds |
@@ -58,6 +59,7 @@ dedicated telemetry fields. Current capability is:
 | Hot Topic US | Partial (explicit Product JSON-LD descriptions only) |
 | Entertainment Earth US | Partial (explicit release wording only; estimated ship dates are stored separately) |
 | Modern PinUp US | Partial (explicit Shopify tags/descriptions; publication timestamps are not releases) |
+| Gwen's Mermaid Cove US | Partial (explicit product descriptions only; publication timestamps remain listing metadata) |
 | Pink a la Mode US | Partial (product-specific Shopify descriptions/tags; publication timestamps are not releases) |
 | Magic Madhouse UK | Partial (dedicated custom release fields only; arrival estimates remain separate) |
 | 707 Street US | Partial (explicit product descriptions; wave tags and publication timestamps remain metadata) |
@@ -143,6 +145,7 @@ collection and persistence.
 - `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
 - `app/monitors/emp.py`: shared, configured EMP Germany/France/Spain/Italy and Large Netherlands Commerce Cloud adapter
 - `app/monitors/modern_pinup.py`: Modern PinUp US Shopify product adapter
+- `app/monitors/gwens_mermaid_cove.py`: Gwen's Mermaid Cove US shared-Shopify configuration
 - `app/monitors/circle_of_hope.py`: Circle Of Hope Boutique US Shopify multi-collection adapter
 - `app/monitors/magic_madhouse.py`: Magic Madhouse UK structured Loungefly Mini Backpack search adapter
 - `app/monitors/pink_a_la_mode.py`: Pink a la Mode US Shopify product adapter

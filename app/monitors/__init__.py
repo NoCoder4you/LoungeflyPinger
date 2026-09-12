@@ -14,6 +14,7 @@ from .emp import EMPMonitor, EMPRegion, EMP_REGIONS
 from .geekcore import GeekCoreMonitor
 from .geek_garage import GeekGarageMonitor
 from .get_ready_comics import GetReadyComicsMonitor
+from .gwens_mermaid_cove import GwensMermaidCoveMonitor
 from .infinity_collectables import InfinityCollectablesMonitor
 from .koolaz import KoolazMonitor
 from .lf_lovers import LFLoversMonitor
@@ -39,5 +40,5 @@ __all__ = [
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
     "LoungeflyUSMonitor", "MagicMadhouseMonitor", "MerchoidUKMonitor", "ModernPinUpMonitor", "OzzieCollectablesMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",
     "PopPelicanMonitor", "RazmatazzMonitor", "ShopifyRetailerMonitor", "SomethingDifferentMonitor", "Street707Monitor", "TruffleShuffleMonitor",
-    "World11GamesMonitor",
+    "World11GamesMonitor", "GwensMermaidCoveMonitor",
 ]

@@ -29,6 +29,7 @@ class ShopifyRetailerMonitor(RetailerMonitor):
     collections: dict[str, str | None] = {}
     page_size = 250
     max_pages = 10
+    collection_page_limits: dict[str, int] = {}
     low_stock_threshold = 3
     retailer_exclusive_pattern: str | None = None
     loungefly_collection_handles: frozenset[str] = frozenset()
@@ -39,7 +40,8 @@ class ShopifyRetailerMonitor(RetailerMonitor):
 
     async def _collection_products(self, handle: str) -> list[dict[str, Any]]:
         result = []
-        for page in range(1, self.max_pages + 1):
+        max_pages = self.collection_page_limits.get(handle, self.max_pages)
+        for page in range(1, max_pages + 1):
             payload = await self.http.get_json(
                 f"{self.base_url}/collections/{quote(handle)}/products.json"
                 f"?limit={self.page_size}&page={page}"
@@ -48,6 +50,8 @@ class ShopifyRetailerMonitor(RetailerMonitor):
             result.extend(batch)
             if len(batch) < self.page_size:
                 return result
+        if handle in self.collection_page_limits:
+            return result
         raise ShopifyParseError(f"Collection {handle} exceeded pagination safety limit")
 
     async def discover_products(self) -> list[Product]:
@@ -137,8 +141,9 @@ class ShopifyRetailerMonitor(RetailerMonitor):
         description = cls._plain(raw.get("body_html") or raw.get("description") or "")
         evidence = " ".join((structured, title, description))
         # Specific accessory nouns override decorative bag words.
-        accessory = re.search(r"\b(?:wallets?|card[ -]?holders?|pins?|enamel pins?|"
-                              r"key[ -]?chains?|bag charms?|apparel|shirts?|hats?)\b",
+        accessory = re.search(r"\b(?:wallets?|card[ -]?holders?|coin[ -]?purses?|"
+                              r"cosmetic[ -]?bags?|pins?|enamel pins?|key[ -]?chains?|"
+                              r"bag[ -]?(?:clips?|charms?)|apparel|shirts?|hats?)\b",
                               " ".join((structured, title)), re.I)
         bag_with_accessory = re.search(
             r"\b(?:backpack|crossbody|tote|shoulder|handbag|satchel|bucket|sling|messenger|duffle)"
@@ -150,7 +155,8 @@ class ShopifyRetailerMonitor(RetailerMonitor):
             (r"\bmini[ -]+backpacks?\b", "Mini Backpack"),
             (r"\bmid[ -]?size(?:d)?\s+backpacks?\b", "Mid Size Backpack"),
             (r"\bfull[ -]?size(?:d)?\s+backpacks?\b", "Full Size Backpack"),
-            (r"\bconvertible\s+(?:tote\s+)?bags?\b", "Convertible Bag"),
+            (r"\bconvertible\s+(?:(?:tote|backpack)\s+)?bags?\b|"
+             r"\bconvertible\s+backpacks?\b", "Convertible Bag"),
             (r"\bcross[ -]?bod(?:y|ies)(?:\s+bags?)?\b", "Crossbody"),
             (r"\bshoulder\s+bags?\b", "Shoulder Bag"), (r"\bhandbags?\b", "Handbag"),
             (r"\bsatchels?\b", "Satchel"), (r"\bbucket\s+bags?\b", "Bucket Bag"),
@@ -158,6 +164,7 @@ class ShopifyRetailerMonitor(RetailerMonitor):
             (r"\bsling\s+bags?\b", "Sling Bag"),
             (r"\bmessenger\s+bags?\b", "Messenger Bag"),
             (r"\bduff(?:le|el)\s+bags?\b", "Duffle Bag"),
+            (r"\bbelt\s+bags?\b|\b(?:waist|hip)\s+packs?\b", "Belt Bag"),
             (r"\btotes?(?:\s+bags?)?\b", "Tote"), (r"\bbackpacks?\b", "Backpack"),
         )
         # Structured taxonomy wins except where the title offers a more specific bag type.
@@ -286,14 +293,15 @@ class ShopifyRetailerMonitor(RetailerMonitor):
             exclusive_region = {"usa": "US", "united states": "US", "australia": "AU",
                                 "australian": "AU"}.get(
                 region.group(1).casefold(), region.group(1).upper())
-        explicit_exclusive = retailer_exclusive or exclusive_region is not None or bool(re.search(
-            r"\b(?:(?:shared|retailer|convention|Disney Parks|Hot Topic|BoxLunch) exclusive|"
-            r"exclusive\s+(?:to\s+)?(?:Disney Parks|Hot Topic|BoxLunch))\b", evidence, re.I
-        ))
+        explicit_exclusive = retailer_exclusive or exclusive_region is not None or bool(
+            re.search(r"\bexclusive\b", evidence, re.I)
+        )
         barcode, sku, vendor = selected.get("barcode"), selected.get("sku"), raw.get("vendor")
         ordered_collections = tuple(sorted(collections))
         rare = "rare" in signals
         vaulted = bool(re.search(r"\b(?:vaulted|retired)\b", evidence, re.I))
+        limited_edition = bool(re.search(r"\blimited edition\b", evidence, re.I))
+        limited_release = bool(re.search(r"\blimited release\b", evidence, re.I))
         return Product(
             retailer=self.retailer_name, retailer_product_id=product_id, name=title,
             url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,
@@ -312,5 +320,7 @@ class ShopifyRetailerMonitor(RetailerMonitor):
             estimated_arrival_text=eta_text, collections=ordered_collections,
             sale="sale" in signals or bool(compare and compare > price),
             clearance="clearance" in signals, collection_type="RARE" if rare else None,
-            vaulted=vaulted, exclusivity_text=(evidence if explicit_exclusive else None),
+            last_chance="last_chance" in signals, limited_edition=limited_edition,
+            limited_release=limited_release, vaulted=vaulted,
+            exclusivity_text=(evidence if explicit_exclusive else None),
         )

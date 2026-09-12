@@ -25,8 +25,9 @@ class ProductService:
                (retailer, retailer_product_id, name, url, image_url, sku, franchise, character,
                 variant_id, barcode, vendor, tags, listing_published_at, product_type, exclusive,
                 exclusive_retailer, exclusive_region, new_release, compare_at_price, collections,
-                sale, clearance, collection_type, vaulted, exclusivity_text, first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sale, clearance, last_chance, limited_edition, limited_release,
+                collection_type, vaulted, exclusivity_text, first_seen, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(retailer, retailer_product_id) DO UPDATE SET
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
                  sku=COALESCE(excluded.sku, products.sku),
@@ -40,6 +41,9 @@ class ProductService:
                  new_release=excluded.new_release,
                  compare_at_price=excluded.compare_at_price, collections=excluded.collections,
                  sale=excluded.sale, clearance=excluded.clearance,
+                 last_chance=excluded.last_chance,
+                 limited_edition=excluded.limited_edition,
+                 limited_release=excluded.limited_release,
                  collection_type=excluded.collection_type, vaulted=excluded.vaulted,
                  exclusivity_text=excluded.exclusivity_text,
                  last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
@@ -53,6 +57,7 @@ class ProductService:
              product.new_release,
              str(product.compare_at_price) if product.compare_at_price is not None else None,
              json.dumps(product.collections), product.sale, product.clearance,
+             product.last_chance, product.limited_edition, product.limited_release,
              product.collection_type, product.vaulted, product.exclusivity_text, now, now),
         )
         cursor = await connection.execute(

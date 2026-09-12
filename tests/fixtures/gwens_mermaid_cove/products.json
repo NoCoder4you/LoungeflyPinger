@@ -1,0 +1,551 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "title": "Loungefly Disney Alice White Rabbit Mini-Backpack",
+      "handle": "product-1",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "variants": [
+        {
+          "id": 10,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-1",
+          "barcode": "0671803000001"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/1.jpg"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Loungefly Pok\u00e9mon Full Size Backpack",
+      "handle": "product-2",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "Backpacks",
+      "tags": [
+        "Loungefly",
+        "Pok\u00e9mon"
+      ],
+      "variants": [
+        {
+          "id": 20,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-2",
+          "barcode": "0671803000002"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/2.jpg"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Loungefly Disney Stripe Convertible Backpack",
+      "handle": "product-3",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "variants": [
+        {
+          "id": 30,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-3",
+          "barcode": "0671803000003"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/3.jpg"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Loungefly Sanrio Hello Kitty Crossbody",
+      "handle": "product-4",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Sanrio"
+      ],
+      "variants": [
+        {
+          "id": 40,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-4",
+          "barcode": "0671803000004"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/4.jpg"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Loungefly Marvel Tote Bag",
+      "handle": "product-5",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Marvel"
+      ],
+      "variants": [
+        {
+          "id": 50,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-5",
+          "barcode": "0671803000005"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/5.jpg"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Loungefly Disney Halloween Handbag",
+      "handle": "product-6",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "variants": [
+        {
+          "id": 60,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-6",
+          "barcode": "0671803000006"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/6.jpg"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Loungefly Disney Wallet",
+      "handle": "product-7",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "Wallets",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 70,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-7",
+          "barcode": "0671803000007"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/7.jpg"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Loungefly Card Holder",
+      "handle": "product-8",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "Card Holders",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 80,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-8",
+          "barcode": "0671803000008"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/8.jpg"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Loungefly Coin Purse",
+      "handle": "product-9",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "Accessories",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 90,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-9",
+          "barcode": "0671803000009"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/9.jpg"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Loungefly Mini Backpack Bag Clip",
+      "handle": "product-10",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "Bag Clips",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 100,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-10",
+          "barcode": "0671803000010"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/10.jpg"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Disney Princess Mini Backpack",
+      "handle": "product-11",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Disney"
+      ],
+      "variants": [
+        {
+          "id": 110,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-11",
+          "barcode": "0671803000011"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/11.jpg"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Loungefly Stitch Backpack",
+      "handle": "product-12",
+      "body_html": "This faux leather mini-backpack is Sold Out. <button>Add to Cart</button>",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 120,
+          "available": false,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-12",
+          "barcode": "0671803000012"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/12.jpg"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Gwen's Mermaid Cove Exclusive Loungefly Backpack",
+      "handle": "product-13",
+      "body_html": "Gwen's Mermaid Cove Exclusive Limited Edition",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 130,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-13",
+          "barcode": "0671803000013"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/13.jpg"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Loungefly Pokemon Cafe Dessert Exclusive Backpack",
+      "handle": "product-14",
+      "body_html": "Pok\u00e9mon Center Exclusive Limited Release",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 140,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-14",
+          "barcode": "0671803000014"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/14.jpg"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Loungefly Disney EU Exclusive Tote",
+      "handle": "product-15",
+      "body_html": "EU Exclusive",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 150,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-15",
+          "barcode": "0671803000015"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/15.jpg"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Loungefly Preorder Crossbody",
+      "handle": "product-16",
+      "body_html": "Pre-order. Estimated arrival: October 2, 2026",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 160,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-16",
+          "barcode": "0671803000016"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/16.jpg"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Loungefly Coming Soon Handbag",
+      "handle": "product-17",
+      "body_html": "Coming Soon",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 170,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-17",
+          "barcode": "0671803000017"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/17.jpg"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Loungefly Sale Backpack",
+      "handle": "product-18",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 180,
+          "available": true,
+          "price": "75.00",
+          "compare_at_price": "100.00",
+          "sku": "LF-18",
+          "barcode": "0671803000018"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/18.jpg"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "Loungefly Low Stock Backpack",
+      "handle": "product-19",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 190,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-19",
+          "barcode": "0671803000019",
+          "inventory_quantity": 2
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/19.jpg"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Loungefly Release Backpack",
+      "handle": "product-20",
+      "body_html": "Release Date: September 20, 2026 at 09:00",
+      "published_at": "2026-08-01T12:00:00-07:00",
+      "vendor": "Gwen's Mermaid Cove",
+      "product_type": "",
+      "tags": [
+        "Loungefly"
+      ],
+      "variants": [
+        {
+          "id": 200,
+          "available": true,
+          "price": "100.00",
+          "compare_at_price": null,
+          "sku": "LF-20",
+          "barcode": "0671803000020"
+        }
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/20.jpg"
+        }
+      ]
+    }
+  ]
+}
