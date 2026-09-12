@@ -35,6 +35,7 @@ TITLES = {
     AlertType.RELEASE_DATETIME_CHANGED: "📅 LOUNGEFLY RELEASE UPDATED",
     AlertType.RELEASING_SOON: "⏰ LOUNGEFLY RELEASING SOON",
     AlertType.RELEASED: "🎉 LOUNGEFLY RELEASED",
+    AlertType.ETA_CHANGED: "📦 RETAILER ETA CHANGED",
 }
 
 COLORS = {
@@ -54,6 +55,7 @@ COLORS = {
     AlertType.RELEASE_DATETIME_CHANGED: 0xFEE75C,
     AlertType.RELEASING_SOON: 0xF0A000,
     AlertType.RELEASED: 0x57F287,
+    AlertType.ETA_CHANGED: 0xFEE75C,
 }
 
 
@@ -62,7 +64,7 @@ def _display(value: str) -> str:
 
 
 def _money(value: Decimal, currency: str) -> str:
-    symbol = {"GBP": "£", "USD": "$", "EUR": "€"}.get(currency, f"{currency} ")
+    symbol = {"GBP": "£", "USD": "$", "AUD": "$", "EUR": "€"}.get(currency, f"{currency} ")
     return f"{symbol}{value:.2f}"
 
 
@@ -87,10 +89,17 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
         if product.price is not None:
             add("Price", _money(product.price, product.currency))
         if product.original_price is not None and product.original_price != product.price:
-            add("Original Price", _money(product.original_price, product.currency))
+            add("RRP" if product.retailer == "Ozzie Collectables" else "Original Price",
+                _money(product.original_price, product.currency))
         if alert.previous_price is not None:
             add("Previous Price", _money(alert.previous_price, product.currency))
         add("Status", _display(product.availability.value))
+        if product.retailer == "Ozzie Collectables":
+            add("Product Type", _display(product.product_type))
+            if product.sku:
+                add("SKU", product.sku)
+            if product.barcode:
+                add("Barcode", product.barcode)
         if alert.previous_availability is not None:
             add("Previous Status", _display(alert.previous_availability.value))
         if product.franchise:
@@ -105,6 +114,10 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
         if product.new_release:
             add("New Release", "Yes")
         add("Preorder", "Yes" if product.preorder else "No")
+        if product.estimated_arrival_text or product.estimated_arrival_date:
+            add("Retailer ETA", product.estimated_arrival_text or product.estimated_arrival_date.isoformat())
+            if product.preorder and product.release is None:
+                add("Official Release Date", "Unknown")
         if product.release is not None:
             if alert.previous_release is not None:
                 add("Previous Release", format_release(alert.previous_release))

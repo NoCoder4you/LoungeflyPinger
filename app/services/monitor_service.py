@@ -247,6 +247,16 @@ class MonitorService:
                             alert_types.append(stock_alert)
                     if self._is_price_drop(prior_state.price, product, prior_state.currency):
                         alert_types.append(AlertType.PRICE_DROP)
+                    old_eta = prior_state.estimated_arrival_text or (
+                        prior_state.estimated_arrival_date.isoformat()
+                        if prior_state.estimated_arrival_date else None
+                    )
+                    new_eta = product.estimated_arrival_text or (
+                        product.estimated_arrival_date.isoformat()
+                        if product.estimated_arrival_date else None
+                    )
+                    if old_eta is not None and new_eta is not None and old_eta != new_eta:
+                        alert_types.append(AlertType.ETA_CHANGED)
             # A failed parse/check provides no inventory evidence. Preserve the
             # last known stock state until a successful observation replaces it.
             if product.availability != Availability.ERROR:

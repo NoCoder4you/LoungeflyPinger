@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS product_states (
     release_year INTEGER,
     estimated_ship_date TEXT,
     estimated_arrival_date TEXT,
+    estimated_arrival_text TEXT,
     estimated_dispatch_date TEXT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
@@ -192,7 +193,8 @@ class Database:
             "release_source": "TEXT", "release_timezone_inferred": "INTEGER NOT NULL DEFAULT 0",
             "release_month": "INTEGER", "release_year": "INTEGER",
             "estimated_ship_date": "TEXT",
-            "estimated_arrival_date": "TEXT", "estimated_dispatch_date": "TEXT",
+            "estimated_arrival_date": "TEXT", "estimated_arrival_text": "TEXT",
+            "estimated_dispatch_date": "TEXT",
         })
         await self._add_missing_columns("release_history", {"release_key": "TEXT"})
         await self._migrate_release_history_keys()

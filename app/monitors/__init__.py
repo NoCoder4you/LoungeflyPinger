@@ -19,6 +19,7 @@ from .koolaz import KoolazMonitor
 from .lf_lovers import LFLoversMonitor
 from .loungefly_uk import LoungeflyCanadaMonitor, LoungeflyUKMonitor, LoungeflyUSMonitor
 from .modern_pinup import ModernPinUpMonitor
+from .ozzie_collectables import OzzieCollectablesMonitor
 from .merchoid_uk import MerchoidUKMonitor
 from .magic_madhouse import MagicMadhouseMonitor
 from .pink_a_la_mode import PinkALaModeMonitor
@@ -33,6 +34,6 @@ __all__ = [
     "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "GetReadyComicsMonitor", "HotTopicUSMonitor",
     "InfinityCollectablesMonitor", "KoolazMonitor", "LFLoversMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
-    "LoungeflyUSMonitor", "MagicMadhouseMonitor", "MerchoidUKMonitor", "ModernPinUpMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",
+    "LoungeflyUSMonitor", "MagicMadhouseMonitor", "MerchoidUKMonitor", "ModernPinUpMonitor", "OzzieCollectablesMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",
     "RazmatazzMonitor", "SomethingDifferentMonitor", "Street707Monitor", "TruffleShuffleMonitor",
 ]

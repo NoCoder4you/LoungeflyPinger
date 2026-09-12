@@ -11,7 +11,7 @@ from app.monitors import (
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
-    LoungeflyUSMonitor, ModernPinUpMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
+    LoungeflyUSMonitor, ModernPinUpMonitor, OzzieCollectablesMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor,
 )
 from app.notifications import DiscordNotifier
@@ -69,6 +69,7 @@ class Application:
             "something_different_uk": "Something Different Gift Shop UK",
             "forbidden_planet_uk": "Forbidden Planet International UK",
             "popcultcha": "Popcultcha",
+            "ozzie_collectables": "Ozzie Collectables",
             **{
                 ("large_nl" if code == "nl" else f"emp_{code}"): region.name
                 for code, region in EMP_REGIONS.items()
@@ -575,6 +576,25 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "popcultcha", service.synchronize, interval * 60, jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        ozzie = self.config.retailers.get("ozzie_collectables", {})
+        if isinstance(ozzie, dict) and ozzie.get("enabled", False):
+            interval = float(ozzie.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            detail_batch_size = int(ozzie.get("detail_batch_size", 20))
+            service = MonitorService(
+                OzzieCollectablesMonitor(self.http, detail_batch_size=detail_batch_size),
+                self.database, self.notifier, retailer_name="Ozzie Collectables",
+                watchlist=self.config.watchlist, price_alerts=self.config.price_alerts,
+                release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "ozzie_collectables", service.synchronize, interval * 60,
+                jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
