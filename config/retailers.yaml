@@ -188,6 +188,14 @@ retailers:
     enabled: true
     interval_minutes: 10
     status: WORKING
+  # Collector-focused Shopify catalogue plus a product-specific incoming D23 article.
+  amy_david_magic:
+    enabled: true
+    interval_minutes: 10
+    incoming_interval_minutes: 10
+    reconciliation_interval_minutes: 30
+    high_priority_interval_minutes: 5
+    status: WORKING
   # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
   # but run as independent jobs and retain independent health state.
   emp_de:

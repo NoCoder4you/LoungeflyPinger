@@ -152,6 +152,7 @@ class ShopifyRetailerMonitor(RetailerMonitor):
         if accessory and not bag_with_accessory:
             return None
         categories = (
+            (r"\bcoin[ -]+bags?\b", "Coin Bag"),
             (r"\bmini[ -]+backpacks?\b", "Mini Backpack"),
             (r"\bmid[ -]?size(?:d)?\s+backpacks?\b", "Mid Size Backpack"),
             (r"\bfull[ -]?size(?:d)?\s+backpacks?\b", "Full Size Backpack"),

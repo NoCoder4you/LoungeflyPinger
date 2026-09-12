@@ -1,6 +1,7 @@
 """Retailer monitor adapters."""
 
 from .base import RetailerMonitor
+from .amy_david_magic import AmyDavidMagicMonitor
 from .bag_dude import BagDudeMonitor
 from .boxlunch import BoxLunchMonitor, HotTopicUSMonitor
 from .cm_pop import CMPopMonitor
@@ -35,7 +36,7 @@ from .truffleshuffle import TruffleShuffleMonitor
 from .world_1_1_games import World11GamesMonitor
 
 __all__ = [
-    "BagDudeMonitor", "BoxLunchMonitor", "CircleOfHopeMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
+    "AmyDavidMagicMonitor", "BagDudeMonitor", "BoxLunchMonitor", "CircleOfHopeMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
     "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "GetReadyComicsMonitor", "HotTopicUSMonitor",
     "InfinityCollectablesMonitor", "KoolazMonitor", "LFLoversMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
