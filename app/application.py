@@ -12,7 +12,7 @@ from app.monitors import (
     LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
     LoungeflyUSMonitor, ModernPinUpMonitor, OzzieCollectablesMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
-    SomethingDifferentMonitor, TruffleShuffleMonitor,
+    SomethingDifferentMonitor, TruffleShuffleMonitor, World11GamesMonitor,
 )
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
@@ -70,6 +70,7 @@ class Application:
             "forbidden_planet_uk": "Forbidden Planet International UK",
             "popcultcha": "Popcultcha",
             "ozzie_collectables": "Ozzie Collectables",
+            "world_1_1_games": "WORLD 1-1 GAMES",
             **{
                 ("large_nl" if code == "nl" else f"emp_{code}"): region.name
                 for code, region in EMP_REGIONS.items()
@@ -594,6 +595,23 @@ class Application:
             )
             self.scheduler.add_interval_job(
                 "ozzie_collectables", service.synchronize, interval * 60,
+                jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
+        world = self.config.retailers.get("world_1_1_games", {})
+        if isinstance(world, dict) and world.get("enabled", False):
+            interval = float(world.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                World11GamesMonitor(self.http), self.database, self.notifier,
+                retailer_name="WORLD 1-1 GAMES", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "world_1_1_games", service.synchronize, interval * 60,
                 jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )

@@ -164,6 +164,12 @@ retailers:
     interval_minutes: 15
     detail_batch_size: 20
     status: WORKING
+  # Large public Shopify Loungefly catalogue. Overlapping collection feeds are
+  # merged by Shopify product ID and ordinary HTTP retry/backoff handles rate limits.
+  world_1_1_games:
+    enabled: true
+    interval_minutes: 10
+    status: WORKING
   # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
   # but run as independent jobs and retain independent health state.
   emp_de:
