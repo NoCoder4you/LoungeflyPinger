@@ -1,0 +1,497 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "title": "Disney Castle Mini Backpack",
+      "handle": "product-1",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 10,
+          "sku": "LOU-1",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Pokemon Standard Backpack",
+      "handle": "product-2",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "Backpack",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 20,
+          "sku": "LOU-2",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Marvel Hero Crossbody Bag",
+      "handle": "product-3",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 30,
+          "sku": "LOU-3",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Sanrio Friends Tote Bag",
+      "handle": "product-4",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 40,
+          "sku": "LOU-4",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Minnie Evergreen Convertible Tote Bag",
+      "handle": "product-5",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 50,
+          "sku": "LOU-5",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Disney Camera Bag",
+      "handle": "product-6",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "Bags",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 60,
+          "sku": "LOU-6",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Mini Backpack Wallet",
+      "handle": "product-7",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "Wallet",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 70,
+          "sku": "LOU-7",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Loungefly Cardholder",
+      "handle": "product-8",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "Card Holders",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 80,
+          "sku": "LOU-8",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Mini Backpack Keychain Charm",
+      "handle": "product-9",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "Bag Charms",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 90,
+          "sku": "LOU-9",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Mystery Mini Backpack Pin",
+      "handle": "product-10",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "Pins",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 100,
+          "sku": "LOU-10",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Pre-Order Star Wars Mini Backpack",
+      "handle": "product-11",
+      "body_html": "<p>ETA: October 2026</p>",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 110,
+          "sku": "LOU-11",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Horror Mini Backpack",
+      "handle": "product-12",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 120,
+          "sku": "LOU-12",
+          "barcode": null,
+          "available": false,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Low Stock Mini Backpack",
+      "handle": "product-13",
+      "body_html": "",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 130,
+          "sku": "LOU-13",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": 2,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Coming Soon Mini Backpack",
+      "handle": "product-14",
+      "body_html": "Coming Soon",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 140,
+          "sku": "LOU-14",
+          "barcode": null,
+          "available": false,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "BoxLunch Exclusive Mini Backpack",
+      "handle": "product-15",
+      "body_html": "BoxLunch Exclusive",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 150,
+          "sku": "LOU-15",
+          "barcode": "671803000015",
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Australian Exclusive Crossbody",
+      "handle": "product-16",
+      "body_html": "Australian Exclusive",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 160,
+          "sku": "LOU-16",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "129.95",
+          "compare_at_price": null
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Pop Pelican Exclusive Tote Bag",
+      "handle": "product-17",
+      "body_html": "Exclusive to Pop Pelican",
+      "published_at": "2026-08-01T12:00:00+10:00",
+      "vendor": "Pop Pelican",
+      "product_type": "",
+      "tags": [
+        "Loungefly",
+        "Disney"
+      ],
+      "images": [
+        {
+          "src": "//cdn.shopify.com/p.jpg"
+        }
+      ],
+      "variants": [
+        {
+          "id": 170,
+          "sku": "LOU-17",
+          "barcode": null,
+          "available": true,
+          "inventory_quantity": null,
+          "price": "99.95",
+          "compare_at_price": "149.95"
+        }
+      ]
+    }
+  ]
+}

@@ -11,7 +11,7 @@ from app.monitors import (
     EMPMonitor, EMP_REGIONS, ForbiddenPlanetMonitor, GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor, InfinityCollectablesMonitor, KoolazMonitor,
     LFLoversMonitor, MagicMadhouseMonitor, MerchoidUKMonitor, RazmatazzMonitor,
     HotTopicUSMonitor, LoungeflyCanadaMonitor, LoungeflyUKMonitor,
-    LoungeflyUSMonitor, ModernPinUpMonitor, OzzieCollectablesMonitor, PinkALaModeMonitor, PopcultchaMonitor, Street707Monitor,
+    LoungeflyUSMonitor, ModernPinUpMonitor, OzzieCollectablesMonitor, PinkALaModeMonitor, PopcultchaMonitor, PopPelicanMonitor, Street707Monitor,
     SomethingDifferentMonitor, TruffleShuffleMonitor, World11GamesMonitor,
 )
 from app.notifications import DiscordNotifier
@@ -69,6 +69,7 @@ class Application:
             "something_different_uk": "Something Different Gift Shop UK",
             "forbidden_planet_uk": "Forbidden Planet International UK",
             "popcultcha": "Popcultcha",
+            "pop_pelican": "Pop Pelican",
             "ozzie_collectables": "Ozzie Collectables",
             "world_1_1_games": "WORLD 1-1 GAMES",
             **{
@@ -599,6 +600,23 @@ class Application:
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         world = self.config.retailers.get("world_1_1_games", {})
+        pop_pelican = self.config.retailers.get("pop_pelican", {})
+        if isinstance(pop_pelican, dict) and pop_pelican.get("enabled", False):
+            interval = float(pop_pelican.get(
+                "interval_minutes", self.config.monitor.default_interval_minutes
+            ))
+            service = MonitorService(
+                PopPelicanMonitor(self.http), self.database, self.notifier,
+                retailer_name="Pop Pelican", watchlist=self.config.watchlist,
+                price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
+                missing_scan_threshold=self.config.monitor.missing_scan_threshold,
+                failure_alert_threshold=self.config.monitor.failure_alert_threshold,
+            )
+            self.scheduler.add_interval_job(
+                "pop_pelican", service.synchronize, interval * 60,
+                jitter_fraction=0.05,
+                timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
+            )
         if isinstance(world, dict) and world.get("enabled", False):
             interval = float(world.get(
                 "interval_minutes", self.config.monitor.default_interval_minutes
