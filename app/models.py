@@ -141,6 +141,13 @@ class Product:
     estimated_arrival_text: str | None = None
     estimated_dispatch_date: date | None = None
     original_price: Decimal | None = None
+    compare_at_price: Decimal | None = None
+    collections: tuple[str, ...] = ()
+    sale: bool = False
+    clearance: bool = False
+    collection_type: str | None = None
+    vaulted: bool = False
+    exclusivity_text: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -171,6 +178,14 @@ class Product:
             if not original_price.is_finite() or original_price < 0:
                 raise ValueError("original_price must be a finite, non-negative value")
             object.__setattr__(self, "original_price", original_price)
+        if self.compare_at_price is not None:
+            try:
+                compare_at_price = Decimal(str(self.compare_at_price))
+            except InvalidOperation as exc:
+                raise ValueError("compare_at_price must be a decimal number") from exc
+            if not compare_at_price.is_finite() or compare_at_price < 0:
+                raise ValueError("compare_at_price must be a finite, non-negative value")
+            object.__setattr__(self, "compare_at_price", compare_at_price)
         currency = self.currency.strip().upper()
         if len(currency) != 3 or not currency.isalpha():
             raise ValueError("currency must be a three-letter ISO-style code")
@@ -188,6 +203,17 @@ class Product:
         if not all(isinstance(tag, str) and tag.strip() for tag in self.tags):
             raise ValueError("tags must contain only non-empty strings")
         object.__setattr__(self, "tags", tuple(tag.strip() for tag in self.tags))
+        if not all(isinstance(value, str) and value.strip() for value in self.collections):
+            raise ValueError("collections must contain only non-empty strings")
+        object.__setattr__(self, "collections", tuple(dict.fromkeys(
+            value.strip() for value in self.collections
+        )))
+        for field_name in ("collection_type", "exclusivity_text"):
+            value = getattr(self, field_name)
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"{field_name} must be non-empty when provided")
+                object.__setattr__(self, field_name, value.strip())
         if self.listing_published_at is not None and self.listing_published_at.tzinfo is None:
             raise ValueError("listing_published_at must be timezone-aware")
         for field_name in ("exclusive_retailer", "exclusive_region"):

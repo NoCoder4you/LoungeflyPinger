@@ -26,8 +26,10 @@ from .pink_a_la_mode import PinkALaModeMonitor
 from .popcultcha import PopcultchaMonitor
 from .razmatazz import RazmatazzMonitor
 from .something_different import SomethingDifferentMonitor
+from .shopify import ShopifyRetailerMonitor
 from .street_707 import Street707Monitor
 from .truffleshuffle import TruffleShuffleMonitor
+from .world_1_1_games import World11GamesMonitor
 
 __all__ = [
     "BoxLunchMonitor", "CircleOfHopeMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
@@ -35,5 +37,6 @@ __all__ = [
     "InfinityCollectablesMonitor", "KoolazMonitor", "LFLoversMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
     "LoungeflyUSMonitor", "MagicMadhouseMonitor", "MerchoidUKMonitor", "ModernPinUpMonitor", "OzzieCollectablesMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",
-    "RazmatazzMonitor", "SomethingDifferentMonitor", "Street707Monitor", "TruffleShuffleMonitor",
+    "RazmatazzMonitor", "ShopifyRetailerMonitor", "SomethingDifferentMonitor", "Street707Monitor", "TruffleShuffleMonitor",
+    "World11GamesMonitor",
 ]
