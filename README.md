@@ -32,46 +32,45 @@ Important operational safeguards:
 
 - 64-bit Linux/Raspberry Pi OS with `systemd`
 - Python 3.12 or newer, `python3-venv`, Git, and CA certificates
-- An unprivileged system account (the examples use `loungefly`)
+- A Raspberry Pi user named `pi`; the packaged units run under this unprivileged account
 - Outbound HTTPS access to retailer sites and Discord
 
 ## Installation
 
-The packaged service expects `/opt/loungefly-monitor`. Change every matching path in the unit if
-installing elsewhere.
+The packaged services expect the checkout at `/home/pi/LoungeflyPinger` and run as the `pi` user.
+The updater discovers the repository containing `deploy/update.sh`, while the systemd units use
+absolute paths that match this installation location.
 
 ```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv ca-certificates
-sudo useradd --system --home /opt/loungefly-monitor --shell /usr/sbin/nologin loungefly
-sudo git clone <YOUR_REPOSITORY_URL> /opt/loungefly-monitor
-sudo chown -R loungefly:loungefly /opt/loungefly-monitor
-sudo -u loungefly python3 -m venv /opt/loungefly-monitor/.venv
-sudo -u loungefly /opt/loungefly-monitor/.venv/bin/python -m pip install --upgrade pip
-sudo -u loungefly /opt/loungefly-monitor/.venv/bin/pip install -r /opt/loungefly-monitor/requirements.txt
-sudo -u loungefly cp /opt/loungefly-monitor/.env.example /opt/loungefly-monitor/.env
-sudo chmod 600 /opt/loungefly-monitor/.env
-sudo chmod 0755 /opt/loungefly-monitor/deploy/update.sh
-sudo install -m 0644 /opt/loungefly-monitor/deploy/loungefly-update.service \
+sudo -u pi git clone <YOUR_REPOSITORY_URL> /home/pi/LoungeflyPinger
+sudo -u pi python3 -m venv /home/pi/LoungeflyPinger/.venv
+sudo -u pi /home/pi/LoungeflyPinger/.venv/bin/python -m pip install --upgrade pip
+sudo -u pi /home/pi/LoungeflyPinger/.venv/bin/pip install -r /home/pi/LoungeflyPinger/requirements.txt
+sudo -u pi cp /home/pi/LoungeflyPinger/.env.example /home/pi/LoungeflyPinger/.env
+sudo chmod 600 /home/pi/LoungeflyPinger/.env
+sudo chmod 0755 /home/pi/LoungeflyPinger/deploy/update.sh
+sudo install -m 0644 /home/pi/LoungeflyPinger/deploy/loungefly-update.service \
   /etc/systemd/system/loungefly-update.service
-sudo install -m 0644 /opt/loungefly-monitor/deploy/loungefly-monitor.service \
+sudo install -m 0644 /home/pi/LoungeflyPinger/deploy/loungefly-monitor.service \
   /etc/systemd/system/loungefly-monitor.service
 sudo systemctl daemon-reload
 sudo systemctl enable loungefly-update.service loungefly-monitor.service
 sudo systemctl start loungefly-monitor.service
 ```
 
-The service must not run as root. Root is only used during installation to create the account,
-install the unit, and manage the service. Ensure `data/` and `logs/` remain writable by
-`loungefly:loungefly` after deployments.
+The service must not run as root. Root is only used to install the units and manage the service.
+Ensure the checkout, including `data/` and `logs/`, remains owned by `pi:pi` after deployments.
 
 At boot, `loungefly-update.service` runs before the monitor. It takes an exclusive lock, retries a
 failed fetch, accepts fast-forward updates only, backs up `.env` and stopped SQLite state, builds an
 isolated replacement virtual environment for each candidate, and runs compilation plus the full test
 suite before activating it. A failed validation restores the previous Git commit; remote outages
 or local tracked changes leave the installed version untouched. The updater never restarts the
-monitor itself. Its defaults can be overridden with systemd environment variables such as
-`BRANCH`, `PYTHON_BIN`, `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
+monitor itself. By default it updates the checkout containing the script. Its defaults can be
+overridden with systemd environment variables such as `APP_DIR`, `BRANCH`, `PYTHON_BIN`,
+`FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
 
 ## Configuration
 
@@ -100,9 +99,9 @@ product types, exclusivity, preorder, and maximum price.
 ### Discord webhook test
 
 ```bash
-cd /opt/loungefly-monitor
-sudo -u loungefly .venv/bin/python -m app.tools.test_notification
-sudo -u loungefly .venv/bin/python -m app.tools.test_notification --admin
+cd /home/pi/LoungeflyPinger
+sudo -u pi .venv/bin/python -m app.tools.test_notification
+sudo -u pi .venv/bin/python -m app.tools.test_notification --admin
 ```
 
 These commands refuse to send when the applicable URL is blank. Treat webhook URLs as passwords;
@@ -113,8 +112,8 @@ rotate one in Discord immediately if it is exposed.
 Manual production-equivalent run (stop with Ctrl+C):
 
 ```bash
-cd /opt/loungefly-monitor
-sudo -u loungefly .venv/bin/python -m app.main
+cd /home/pi/LoungeflyPinger
+sudo -u pi .venv/bin/python -m app.main
 ```
 
 Development run and checks:
@@ -180,20 +179,20 @@ dependency.
 
 ## SQLite operations
 
-The default live database is `/opt/loungefly-monitor/data/loungefly.db` (relative configuration is
+The default live database is `/home/pi/LoungeflyPinger/data/loungefly.db` (relative configuration is
 resolved from the service working directory). WAL sidecars may exist while running; do not copy
 only the `.db` file with ordinary `cp` during writes.
 
-Automatic backups are consistent snapshots in `/opt/loungefly-monitor/data/backups`, defaulting to
+Automatic backups are consistent snapshots in `/home/pi/LoungeflyPinger/data/backups`, defaulting to
 24-hour intervals and seven retained files. To make an immediate safe manual snapshot, stop the
 service before copying the database, then confirm the copy's integrity:
 
 ```bash
 sudo systemctl stop loungefly-monitor.service
-sudo -u loungefly cp /opt/loungefly-monitor/data/loungefly.db /opt/loungefly-monitor/data/backups/manual-$(date -u +%Y%m%dT%H%M%SZ).db
+sudo -u pi cp /home/pi/LoungeflyPinger/data/loungefly.db /home/pi/LoungeflyPinger/data/backups/manual-$(date -u +%Y%m%dT%H%M%SZ).db
 sudo systemctl start loungefly-monitor.service
-sudo -u loungefly find /opt/loungefly-monitor/data/backups -maxdepth 1 -name '*.db' -type f -printf '%TY-%Tm-%Td %TT %p\n'
-sudo -u loungefly sqlite3 /opt/loungefly-monitor/data/backups/<BACKUP>.db 'PRAGMA integrity_check;'
+sudo -u pi find /home/pi/LoungeflyPinger/data/backups -maxdepth 1 -name '*.db' -type f -printf '%TY-%Tm-%Td %TT %p\n'
+sudo -u pi sqlite3 /home/pi/LoungeflyPinger/data/backups/<BACKUP>.db 'PRAGMA integrity_check;'
 ```
 
 Restore only while stopped, preserve the current database, copy one verified snapshot, and restore
@@ -201,11 +200,11 @@ ownership. SQLite creates fresh WAL sidecars on startup:
 
 ```bash
 sudo systemctl stop loungefly-monitor.service
-sudo mv /opt/loungefly-monitor/data/loungefly.db /opt/loungefly-monitor/data/loungefly.db.pre-restore
-sudo rm -f /opt/loungefly-monitor/data/loungefly.db-wal /opt/loungefly-monitor/data/loungefly.db-shm
-sudo cp /opt/loungefly-monitor/data/backups/<BACKUP>.db /opt/loungefly-monitor/data/loungefly.db
-sudo chown loungefly:loungefly /opt/loungefly-monitor/data/loungefly.db
-sudo chmod 600 /opt/loungefly-monitor/data/loungefly.db
+sudo mv /home/pi/LoungeflyPinger/data/loungefly.db /home/pi/LoungeflyPinger/data/loungefly.db.pre-restore
+sudo rm -f /home/pi/LoungeflyPinger/data/loungefly.db-wal /home/pi/LoungeflyPinger/data/loungefly.db-shm
+sudo cp /home/pi/LoungeflyPinger/data/backups/<BACKUP>.db /home/pi/LoungeflyPinger/data/loungefly.db
+sudo chown pi:pi /home/pi/LoungeflyPinger/data/loungefly.db
+sudo chmod 600 /home/pi/LoungeflyPinger/data/loungefly.db
 sudo systemctl start loungefly-monitor.service
 ```
 
