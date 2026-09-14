@@ -72,6 +72,10 @@ monitor itself. By default it updates the checkout containing the script. Its de
 overridden with systemd environment variables such as `APP_DIR`, `BRANCH`, `PYTHON_BIN`,
 `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
 
+Existing installations whose copied systemd unit still invokes `deploy/update.sh` remain supported:
+that compatibility entry point forwards to the root updater. Reinstall the packaged unit and run
+`sudo systemctl daemon-reload` to adopt the current `/home/pi/LoungeflyPinger/update.sh` path.
+
 ## Configuration
 
 Copy `.env.example` to `.env`; never commit `.env`. `python-dotenv` loads it for manual runs and
@@ -254,6 +258,7 @@ sudo systemctl start loungefly-monitor.service
 ├── data/                        # ignored live DB and bounded backups
 ├── deploy/loungefly-monitor.service
 ├── deploy/loungefly-update.service
+├── deploy/update.sh              # compatibility launcher for older installed units
 ├── update.sh
 ├── logs/                        # ignored rotating logs
 ├── tests/                       # unit, integration, lifecycle, persistence tests
