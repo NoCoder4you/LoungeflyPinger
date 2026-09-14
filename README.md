@@ -38,7 +38,7 @@ Important operational safeguards:
 ## Installation
 
 The packaged services expect the checkout at `/home/pi/LoungeflyPinger` and run as the `pi` user.
-The updater discovers the repository containing `deploy/update.sh`, while the systemd units use
+The updater discovers the repository containing `update.sh`, while the systemd units use
 absolute paths that match this installation location.
 
 ```bash
@@ -50,7 +50,7 @@ sudo -u pi /home/pi/LoungeflyPinger/.venv/bin/python -m pip install --upgrade pi
 sudo -u pi /home/pi/LoungeflyPinger/.venv/bin/pip install -r /home/pi/LoungeflyPinger/requirements.txt
 sudo -u pi cp /home/pi/LoungeflyPinger/.env.example /home/pi/LoungeflyPinger/.env
 sudo chmod 600 /home/pi/LoungeflyPinger/.env
-sudo chmod 0755 /home/pi/LoungeflyPinger/deploy/update.sh
+sudo chmod 0755 /home/pi/LoungeflyPinger/update.sh
 sudo install -m 0644 /home/pi/LoungeflyPinger/deploy/loungefly-update.service \
   /etc/systemd/system/loungefly-update.service
 sudo install -m 0644 /home/pi/LoungeflyPinger/deploy/loungefly-monitor.service \
@@ -71,6 +71,10 @@ or local tracked changes leave the installed version untouched. The updater neve
 monitor itself. By default it updates the checkout containing the script. Its defaults can be
 overridden with systemd environment variables such as `APP_DIR`, `BRANCH`, `PYTHON_BIN`,
 `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
+
+Existing installations whose copied systemd unit still invokes `deploy/update.sh` remain supported:
+that compatibility entry point forwards to the root updater. Reinstall the packaged unit and run
+`sudo systemctl daemon-reload` to adopt the current `/home/pi/LoungeflyPinger/update.sh` path.
 
 ## Configuration
 
@@ -254,7 +258,8 @@ sudo systemctl start loungefly-monitor.service
 ├── data/                        # ignored live DB and bounded backups
 ├── deploy/loungefly-monitor.service
 ├── deploy/loungefly-update.service
-├── deploy/update.sh
+├── deploy/update.sh              # compatibility launcher for older installed units
+├── update.sh
 ├── logs/                        # ignored rotating logs
 ├── tests/                       # unit, integration, lifecycle, persistence tests
 ├── pyproject.toml
