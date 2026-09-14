@@ -37,8 +37,11 @@ Important operational safeguards:
 
 ## Installation
 
-The packaged service expects `/opt/LoungeflyPinger`. Change every matching path in the unit if
-installing elsewhere.
+The installation example uses `/opt/LoungeflyPinger` because `/opt` is the conventional location
+for a self-contained, system-managed application; cloning the project there is optional. The
+updater discovers the repository containing `deploy/update.sh`, so it also works from another
+checkout location. The packaged systemd units use absolute paths and must be adjusted if installing
+elsewhere.
 
 ```bash
 sudo apt update
@@ -70,8 +73,9 @@ failed fetch, accepts fast-forward updates only, backs up `.env` and stopped SQL
 isolated replacement virtual environment for each candidate, and runs compilation plus the full test
 suite before activating it. A failed validation restores the previous Git commit; remote outages
 or local tracked changes leave the installed version untouched. The updater never restarts the
-monitor itself. Its defaults can be overridden with systemd environment variables such as
-`BRANCH`, `PYTHON_BIN`, `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
+monitor itself. By default it updates the checkout containing the script. Its defaults can be
+overridden with systemd environment variables such as `APP_DIR`, `BRANCH`, `PYTHON_BIN`,
+`FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
 
 ## Configuration
 
