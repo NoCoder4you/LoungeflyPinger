@@ -1,0 +1,26 @@
+[Unit]
+Description=LoungeflyPinger product availability monitor
+Wants=network-online.target
+Wants=loungefly-pinger-update.service
+After=network-online.target loungefly-pinger-update.service
+
+[Service]
+Type=simple
+User=loungefly
+Group=loungefly
+WorkingDirectory=/opt/LoungeflyPinger
+EnvironmentFile=/opt/LoungeflyPinger/.env
+ExecStart=/opt/LoungeflyPinger/.venv/bin/python -m app.main
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=45s
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/LoungeflyPinger/data /opt/LoungeflyPinger/logs
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

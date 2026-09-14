@@ -71,7 +71,7 @@ def _money(value: Decimal, currency: str) -> str:
 def build_discord_payload(alert: Alert) -> dict[str, Any]:
     """Build a Discord-compatible embed without performing network I/O."""
     product = alert.product
-    description = alert.message or (product.name if product else "Loungefly monitor status update")
+    description = alert.message or (product.name if product else "LoungeflyPinger status update")
     embed: dict[str, Any] = {
         "title": TITLES[alert.alert_type],
         "description": description[:4096],
@@ -144,7 +144,7 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
             embed["thumbnail"] = {"url": product.image_url}
     if alert.new_state and not product:
         add("Status", _display(alert.new_state))
-    return {"username": "Loungefly Monitor", "allowed_mentions": {"parse": []}, "embeds": [embed]}
+    return {"username": "LoungeflyPinger", "allowed_mentions": {"parse": []}, "embeds": [embed]}
 
 
 class DiscordNotifier(NotificationProvider):

@@ -29,7 +29,7 @@ database:
 
 logging:
   level: INFO
-  path: logs/loungefly-monitor.log
+  path: logs/loungefly-pinger.log
   max_bytes: 5242880
   backup_count: 3
 

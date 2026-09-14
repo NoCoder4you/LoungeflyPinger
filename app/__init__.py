@@ -1,1 +1,1 @@
-"""Loungefly Monitor application package."""
+"""LoungeflyPinger application package."""

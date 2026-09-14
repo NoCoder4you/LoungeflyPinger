@@ -1,4 +1,4 @@
-# Loungefly Monitor — Production Guide
+# LoungeflyPinger — Production Guide
 
 An asynchronous, stateful Loungefly product monitor intended for continuous operation on Linux,
 including Raspberry Pi OS (64-bit). It normalizes retailer data, stores a silent first-scan
@@ -37,29 +37,41 @@ Important operational safeguards:
 
 ## Installation
 
-The packaged service expects `/opt/loungefly-monitor`. Change every matching path in the unit if
+The packaged service expects `/opt/LoungeflyPinger`. Change every matching path in the unit if
 installing elsewhere.
 
 ```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv ca-certificates
-sudo useradd --system --home /opt/loungefly-monitor --shell /usr/sbin/nologin loungefly
-sudo git clone <YOUR_REPOSITORY_URL> /opt/loungefly-monitor
-sudo chown -R loungefly:loungefly /opt/loungefly-monitor
-sudo -u loungefly python3 -m venv /opt/loungefly-monitor/.venv
-sudo -u loungefly /opt/loungefly-monitor/.venv/bin/python -m pip install --upgrade pip
-sudo -u loungefly /opt/loungefly-monitor/.venv/bin/pip install -r /opt/loungefly-monitor/requirements.txt
-sudo -u loungefly cp /opt/loungefly-monitor/.env.example /opt/loungefly-monitor/.env
-sudo chmod 600 /opt/loungefly-monitor/.env
-sudo install -m 0644 /opt/loungefly-monitor/deploy/loungefly-monitor.service \
-  /etc/systemd/system/loungefly-monitor.service
+sudo useradd --system --home /opt/LoungeflyPinger --shell /usr/sbin/nologin loungefly
+sudo git clone <YOUR_REPOSITORY_URL> /opt/LoungeflyPinger
+sudo chown -R loungefly:loungefly /opt/LoungeflyPinger
+sudo -u loungefly python3 -m venv /opt/LoungeflyPinger/.venv
+sudo -u loungefly /opt/LoungeflyPinger/.venv/bin/python -m pip install --upgrade pip
+sudo -u loungefly /opt/LoungeflyPinger/.venv/bin/pip install -r /opt/LoungeflyPinger/requirements.txt
+sudo -u loungefly cp /opt/LoungeflyPinger/.env.example /opt/LoungeflyPinger/.env
+sudo chmod 600 /opt/LoungeflyPinger/.env
+sudo chmod 0755 /opt/LoungeflyPinger/deploy/update.sh
+sudo install -m 0644 /opt/LoungeflyPinger/deploy/loungefly-pinger-update.service \
+  /etc/systemd/system/loungefly-pinger-update.service
+sudo install -m 0644 /opt/LoungeflyPinger/deploy/loungefly-pinger.service \
+  /etc/systemd/system/loungefly-pinger.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now loungefly-monitor.service
+sudo systemctl enable loungefly-pinger-update.service loungefly-pinger.service
+sudo systemctl start loungefly-pinger.service
 ```
 
 The service must not run as root. Root is only used during installation to create the account,
 install the unit, and manage the service. Ensure `data/` and `logs/` remain writable by
 `loungefly:loungefly` after deployments.
+
+At boot, `loungefly-pinger-update.service` runs before the monitor. It takes an exclusive lock,
+retries a failed fetch, accepts fast-forward updates only, backs up `.env` and stopped SQLite state,
+builds an isolated replacement virtual environment for each candidate, and runs compilation plus
+the full test suite before activating it. A failed validation restores the previous Git commit;
+remote outages or local tracked changes leave the installed version untouched. The updater never
+restarts the monitor itself. Its defaults can be overridden with systemd environment variables
+such as `BRANCH`, `PYTHON_BIN`, `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
 
 ## Configuration
 
@@ -74,7 +86,7 @@ systemd loads the same file with `EnvironmentFile`.
 | `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
 | `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number |
 | `LOUNGEFLY_BACKUP_COUNT` | No | `7`; positive integer retained |
-| `LOUNGEFLY_LOG_PATH` | No | `logs/loungefly-monitor.log` |
+| `LOUNGEFLY_LOG_PATH` | No | `logs/loungefly-pinger.log` |
 | `LOUNGEFLY_LOG_LEVEL` | No | `INFO`; one of DEBUG/INFO/WARNING/ERROR/CRITICAL |
 
 `config/retailers.yaml` controls global HTTP limits, alert thresholds, prices/releases, log
@@ -88,7 +100,7 @@ product types, exclusivity, preorder, and maximum price.
 ### Discord webhook test
 
 ```bash
-cd /opt/loungefly-monitor
+cd /opt/LoungeflyPinger
 sudo -u loungefly .venv/bin/python -m app.tools.test_notification
 sudo -u loungefly .venv/bin/python -m app.tools.test_notification --admin
 ```
@@ -101,7 +113,7 @@ rotate one in Discord immediately if it is exposed.
 Manual production-equivalent run (stop with Ctrl+C):
 
 ```bash
-cd /opt/loungefly-monitor
+cd /opt/LoungeflyPinger
 sudo -u loungefly .venv/bin/python -m app.main
 ```
 
@@ -117,15 +129,15 @@ python3 -m venv .venv
 
 ### Service management
 
-Service name: **`loungefly-monitor.service`**.
+Service name: **`loungefly-pinger.service`**.
 
 ```bash
-sudo systemctl start loungefly-monitor.service
-sudo systemctl stop loungefly-monitor.service
-sudo systemctl restart loungefly-monitor.service
-sudo systemctl status loungefly-monitor.service
-sudo journalctl -u loungefly-monitor.service -f
-sudo journalctl -u loungefly-monitor.service --since today
+sudo systemctl start loungefly-pinger.service
+sudo systemctl stop loungefly-pinger.service
+sudo systemctl restart loungefly-pinger.service
+sudo systemctl status loungefly-pinger.service
+sudo journalctl -u loungefly-pinger.service -f
+sudo journalctl -u loungefly-pinger.service --since today
 ```
 
 A normal stop sends SIGTERM and allows 45 seconds for graceful closure. Unexpected non-zero exits
@@ -168,33 +180,33 @@ dependency.
 
 ## SQLite operations
 
-The default live database is `/opt/loungefly-monitor/data/loungefly.db` (relative configuration is
+The default live database is `/opt/LoungeflyPinger/data/loungefly.db` (relative configuration is
 resolved from the service working directory). WAL sidecars may exist while running; do not copy
 only the `.db` file with ordinary `cp` during writes.
 
-Automatic backups are consistent snapshots in `/opt/loungefly-monitor/data/backups`, defaulting to
+Automatic backups are consistent snapshots in `/opt/LoungeflyPinger/data/backups`, defaulting to
 24-hour intervals and seven retained files. To make an immediate safe manual snapshot, stop the
 service before copying the database, then confirm the copy's integrity:
 
 ```bash
-sudo systemctl stop loungefly-monitor.service
-sudo -u loungefly cp /opt/loungefly-monitor/data/loungefly.db /opt/loungefly-monitor/data/backups/manual-$(date -u +%Y%m%dT%H%M%SZ).db
-sudo systemctl start loungefly-monitor.service
-sudo -u loungefly find /opt/loungefly-monitor/data/backups -maxdepth 1 -name '*.db' -type f -printf '%TY-%Tm-%Td %TT %p\n'
-sudo -u loungefly sqlite3 /opt/loungefly-monitor/data/backups/<BACKUP>.db 'PRAGMA integrity_check;'
+sudo systemctl stop loungefly-pinger.service
+sudo -u loungefly cp /opt/LoungeflyPinger/data/loungefly.db /opt/LoungeflyPinger/data/backups/manual-$(date -u +%Y%m%dT%H%M%SZ).db
+sudo systemctl start loungefly-pinger.service
+sudo -u loungefly find /opt/LoungeflyPinger/data/backups -maxdepth 1 -name '*.db' -type f -printf '%TY-%Tm-%Td %TT %p\n'
+sudo -u loungefly sqlite3 /opt/LoungeflyPinger/data/backups/<BACKUP>.db 'PRAGMA integrity_check;'
 ```
 
 Restore only while stopped, preserve the current database, copy one verified snapshot, and restore
 ownership. SQLite creates fresh WAL sidecars on startup:
 
 ```bash
-sudo systemctl stop loungefly-monitor.service
-sudo mv /opt/loungefly-monitor/data/loungefly.db /opt/loungefly-monitor/data/loungefly.db.pre-restore
-sudo rm -f /opt/loungefly-monitor/data/loungefly.db-wal /opt/loungefly-monitor/data/loungefly.db-shm
-sudo cp /opt/loungefly-monitor/data/backups/<BACKUP>.db /opt/loungefly-monitor/data/loungefly.db
-sudo chown loungefly:loungefly /opt/loungefly-monitor/data/loungefly.db
-sudo chmod 600 /opt/loungefly-monitor/data/loungefly.db
-sudo systemctl start loungefly-monitor.service
+sudo systemctl stop loungefly-pinger.service
+sudo mv /opt/LoungeflyPinger/data/loungefly.db /opt/LoungeflyPinger/data/loungefly.db.pre-restore
+sudo rm -f /opt/LoungeflyPinger/data/loungefly.db-wal /opt/LoungeflyPinger/data/loungefly.db-shm
+sudo cp /opt/LoungeflyPinger/data/backups/<BACKUP>.db /opt/LoungeflyPinger/data/loungefly.db
+sudo chown loungefly:loungefly /opt/LoungeflyPinger/data/loungefly.db
+sudo chmod 600 /opt/LoungeflyPinger/data/loungefly.db
+sudo systemctl start loungefly-pinger.service
 ```
 
 ## Troubleshooting
@@ -241,7 +253,9 @@ sudo systemctl start loungefly-monitor.service
 │   ├── retailers.yaml           # intervals, limits, enabled retailers
 │   └── watchlist.yaml           # alert selection
 ├── data/                        # ignored live DB and bounded backups
-├── deploy/loungefly-monitor.service
+├── deploy/loungefly-pinger.service
+├── deploy/loungefly-pinger-update.service
+├── deploy/update.sh
 ├── logs/                        # ignored rotating logs
 ├── tests/                       # unit, integration, lifecycle, persistence tests
 ├── pyproject.toml

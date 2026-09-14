@@ -49,7 +49,7 @@ class ReleaseAlertConfig:
 @dataclass(frozen=True, slots=True)
 class LoggingConfig:
     level: str = "INFO"
-    path: Path = Path("logs/loungefly-monitor.log")
+    path: Path = Path("logs/loungefly-pinger.log")
     max_bytes: int = 5_242_880
     backup_count: int = 3
 
@@ -140,7 +140,7 @@ def load_config(
         raise ConfigurationError("logging level is invalid")
     logging_config = LoggingConfig(
         level=level,
-        path=Path(os.getenv("LOUNGEFLY_LOG_PATH", logging_raw.get("path", "logs/loungefly-monitor.log"))),
+        path=Path(os.getenv("LOUNGEFLY_LOG_PATH", logging_raw.get("path", "logs/loungefly-pinger.log"))),
         max_bytes=_positive(logging_raw.get("max_bytes", 5_242_880), "max_bytes", int),
         backup_count=_positive(logging_raw.get("backup_count", 3), "backup_count", int),
     )
