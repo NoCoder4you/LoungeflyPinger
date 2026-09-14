@@ -23,6 +23,9 @@ release_alerts:
 
 database:
   path: data/loungefly.db
+  backup_directory: data/backups
+  backup_interval_hours: 24
+  backup_count: 7
 
 logging:
   level: INFO
