@@ -72,6 +72,9 @@ class AppConfig:
     watchlist: Watchlist | None = None
     price_alerts: PriceAlertConfig = field(default_factory=PriceAlertConfig)
     release_alerts: ReleaseAlertConfig = field(default_factory=ReleaseAlertConfig)
+    backup_directory: Path = Path("data/backups")
+    backup_interval_hours: float = 24
+    backup_count: int = 7
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -137,7 +140,7 @@ def load_config(
         raise ConfigurationError("logging level is invalid")
     logging_config = LoggingConfig(
         level=level,
-        path=Path(logging_raw.get("path", "logs/loungefly-monitor.log")),
+        path=Path(os.getenv("LOUNGEFLY_LOG_PATH", logging_raw.get("path", "logs/loungefly-monitor.log"))),
         max_bytes=_positive(logging_raw.get("max_bytes", 5_242_880), "max_bytes", int),
         backup_count=_positive(logging_raw.get("backup_count", 3), "backup_count", int),
     )
@@ -145,6 +148,17 @@ def load_config(
     if not isinstance(database_raw, dict):
         raise ConfigurationError("database settings must be a mapping")
     database_path = Path(os.getenv("LOUNGEFLY_DATABASE_PATH", database_raw.get("path", "data/loungefly.db")))
+    backup_directory = Path(os.getenv(
+        "LOUNGEFLY_BACKUP_DIRECTORY", database_raw.get("backup_directory", "data/backups")
+    ))
+    backup_interval_hours = _positive(
+        os.getenv("LOUNGEFLY_BACKUP_INTERVAL_HOURS", database_raw.get("backup_interval_hours", 24)),
+        "backup_interval_hours",
+    )
+    backup_count = _positive(
+        os.getenv("LOUNGEFLY_BACKUP_COUNT", database_raw.get("backup_count", 7)),
+        "backup_count", int,
+    )
     notifications_raw = raw.get("notifications", {})
     retailers = raw.get("retailers", {})
     if not isinstance(notifications_raw, dict) or not isinstance(retailers, dict):
@@ -192,5 +206,5 @@ def load_config(
     )
     return AppConfig(
         monitor, database_path, logging_config, notifications, retailers, watchlist, price_alerts,
-        release_alerts,
+        release_alerts, backup_directory, backup_interval_hours, backup_count,
     )

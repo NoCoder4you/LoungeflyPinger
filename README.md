@@ -1,229 +1,260 @@
-# Loungefly Monitor
+# Loungefly Monitor — Production Guide
 
-A lightweight, asynchronous foundation for continuously monitoring Loungefly Mini Backpack
-availability. It provides lifecycle management, normalized models, SQLite persistence,
-configuration, HTTP transport, logging, scheduling, and Discord webhook notifications.
-CM POP UK, Geek Garage UK, Razmatazz UK, and GeekCore UK are monitored through Shopify's public structured collection feeds, and
-Disney Mad UK is monitored through complete, deduplicated Shopify Backpacks and Disney Parks feeds, and
-TruffleShuffle UK and the Loungefly UK/US/Canada storefronts are monitored through public product JSON-LD. Disney Store UK
-uses its public Loungefly ItemList and structured storefront product telemetry. Get Ready Comics UK uses the public
-WooCommerce Store API exposed by its Loungefly backpack category.
+An asynchronous, stateful Loungefly product monitor intended for continuous operation on Linux,
+including Raspberry Pi OS (64-bit). It normalizes retailer data, stores a silent first-scan
+baseline in SQLite, detects later changes, and sends deduplicated Discord alerts.
 
-## Retailer status
+## Production readiness and architecture
 
-| Retailer | Status | Data source |
-| --- | --- | --- |
-| CM POP UK | Working | Public Shopify Loungefly collection and product feeds |
-| Disney Mad UK | Working | Public Shopify Backpacks/Disney Parks collection and product feeds |
-| GeekCore | Working | Public Shopify product feeds |
-| Geek Garage UK | Working | Public Shopify product feeds |
-| Razmatazz UK | Working | Public Shopify Loungefly collection and product feeds |
-| Get Ready Comics UK | Working | Public WooCommerce Store API |
-| TruffleShuffle | Working | Public category and product JSON-LD |
-| Loungefly UK | Working | Public schema.org ItemList and Product JSON-LD |
-| Loungefly US | Working | Public schema.org ItemList/Product JSON-LD and product flags |
-| Loungefly Canada | Working | Public schema.org ItemList/Product JSON-LD and product flags |
-| Disney Store UK | Working | Public ItemList and product telemetry |
-| Disney Store US | Working | Public schema.org ListItem microdata and product telemetry |
-| BoxLunch US | Working | Public schema.org CollectionPage and Product JSON-LD |
-| Hot Topic US | Working | Public schema.org CollectionPage and Product JSON-LD |
-| Entertainment Earth US | Working | Public schema.org ItemList and Product JSON-LD |
-| Modern PinUp US | Working | Public Shopify collection and product feeds |
-| Gwen's Mermaid Cove US | Working | Public Shopify multi-collection product feeds |
-| The Bag Dude US | Working | Public Shopify bag/Vault feeds and curated homepage New Arrivals |
-| Pink a la Mode US | Working | Public Shopify Mini Backpacks and New Arrivals feeds |
-| Magic Madhouse UK | Working | Public BigCommerce Loungefly Mini Backpack search data |
-| 707 Street US | Working | Public Shopify Mini Backpacks collection and product feeds |
-| Cordy's Corner US | Working | Public Shopify Loungefly Backpacks and Shop Exclusive feeds |
-| Infinity Collectables UK | Working | Public Shopify Loungefly collection and product feeds |
-| Popcultcha Australia | Working | Public Magento manufacturer catalogue and Product JSON-LD |
-| EMP Germany | Working | Shared Salesforce Commerce Cloud product microdata |
-| EMP France | Working | Shared Salesforce Commerce Cloud product microdata |
-| EMP Spain | Working | Shared Salesforce Commerce Cloud product microdata |
-| EMP Italy | Working | Shared Salesforce Commerce Cloud product microdata |
-| Large Netherlands | Working | Shared EMP Salesforce Commerce Cloud product microdata |
+The composition root in `app/application.py` creates one shared bounded HTTP client, SQLite
+connection, notifier, and scheduler. Every enabled storefront receives its own scheduler task and
+`MonitorService`; an exception or timeout is logged by that task and does not stop other retailers.
+`MonitorService` performs each scan's persistence atomically and keeps parser/network errors from
+being treated as stock evidence. SQLite stores retailer health and notification deduplication, so a
+restart retains the baseline and does not resend unchanged product notifications.
 
-Release metadata is parsed conservatively from retailer-published structured descriptions or
-dedicated telemetry fields. Current capability is:
+Important operational safeguards:
 
-| Retailer | Release metadata |
-| --- | --- |
-| CM POP UK | Partial (explicit product descriptions/tags; publication timestamps remain listing metadata) |
-| Disney Mad UK | Partial (explicit product descriptions only; publication and anniversary dates remain metadata) |
-| GeekCore | Partial (explicit Shopify tags/descriptions) |
-| Razmatazz UK | Partial (explicit Shopify descriptions/tags; publication timestamps remain listing metadata) |
-| Get Ready Comics UK | Partial (explicit descriptions and Coming Soon category) |
-| TruffleShuffle | Partial (explicit Product JSON-LD descriptions) |
-| Loungefly UK | Partial (explicit Product JSON-LD descriptions) |
-| Loungefly US | Partial (explicit Product JSON-LD descriptions; no date is inferred from publication or shipping) |
-| Loungefly Canada | Partial (explicit Product JSON-LD descriptions; times require an explicit timezone) |
-| Disney Store UK | Partial (dedicated product telemetry messages when published) |
-| Disney Store US | Partial (dedicated product telemetry messages when explicitly published) |
-| BoxLunch US | Partial (explicit Product JSON-LD descriptions only) |
-| Hot Topic US | Partial (explicit Product JSON-LD descriptions only) |
-| Entertainment Earth US | Partial (explicit release wording only; estimated ship dates are stored separately) |
-| Modern PinUp US | Partial (explicit Shopify tags/descriptions; publication timestamps are not releases) |
-| Gwen's Mermaid Cove US | Partial (explicit product descriptions only; publication timestamps remain listing metadata) |
-| The Bag Dude US | Partial (explicit product descriptions only; New/Vault labels and publication timestamps remain listing metadata) |
-| Pink a la Mode US | Partial (product-specific Shopify descriptions/tags; publication timestamps are not releases) |
-| Magic Madhouse UK | Partial (dedicated custom release fields only; arrival estimates remain separate) |
-| 707 Street US | Partial (explicit product descriptions; wave tags and publication timestamps remain metadata) |
-| Cordy's Corner US | Partial (explicit product descriptions; publication timestamps remain listing metadata) |
-| Infinity Collectables UK | Partial (explicit product descriptions; publication timestamps remain listing metadata) |
-| Popcultcha Australia | Partial (explicit release wording; retailer ETA is stored separately) |
-| EMP Germany | Supported (dedicated schema.org `releaseDate`; date-only precision) |
-| EMP France | Supported (dedicated schema.org `releaseDate`; date-only precision) |
-| EMP Spain | Supported (dedicated schema.org `releaseDate`; date-only precision) |
-| EMP Italy | Supported when published (dedicated schema.org `releaseDate`; date-only precision) |
-| Large Netherlands | Supported when published (dedicated schema.org `releaseDate`; date-only precision) |
-
-Missing or malformed release text never clears a previously known release. Exact times use the
-configured retailer-local IANA timezone (`Europe/London` for UK and `America/Los_Angeles` for
-Loungefly US), record when that zone was inferred, and apply the offset in effect on the release
-date.
-Canada spans multiple timezones, so the Canada adapter accepts an exact release time only when
-the retailer supplies an explicit timezone; it never guesses one from the storefront market.
+- HTTP concurrency, rate, timeout, retries/backoff, and per-retailer job runtime are bounded.
+- `SIGINT`/`SIGTERM` requests shutdown; scheduler jobs are cancelled, then Discord/HTTP and SQLite
+  are closed in order. Startup, ready, shutdown-requested, stopping, and stopped events are logged.
+- SQLite uses foreign keys, WAL mode, a 5-second busy timeout, serialized writes, schema upgrades,
+  and persistent product/alert state.
+- A consistent SQLite online backup runs at every configured interval. Every backup is
+  integrity checked before atomic publication and only the newest configured number are retained.
+- Logs rotate by size. Defaults retain the active 5 MiB file plus three rotated files (about 20 MiB
+  maximum). Webhook values are never logged by application code. The service also writes to the
+  system journal, whose global retention is controlled by `journald.conf`.
+- Secrets are environment-only. `.env`, databases, backups, virtual environments, and logs are
+  excluded from Git.
 
 ## Requirements
 
-- Python 3.12+
-- Linux (including Raspberry Pi 5 / ARM64)
+- 64-bit Linux/Raspberry Pi OS with `systemd`
+- Python 3.12 or newer, `python3-venv`, Git, and CA certificates
+- An unprivileged system account (the examples use `loungefly`)
+- Outbound HTTPS access to retailer sites and Discord
 
-## Setup
+## Installation
+
+The packaged service expects `/opt/loungefly-monitor`. Change every matching path in the unit if
+installing elsewhere.
+
+```bash
+sudo apt update
+sudo apt install -y git python3 python3-venv ca-certificates
+sudo useradd --system --home /opt/loungefly-monitor --shell /usr/sbin/nologin loungefly
+sudo git clone <YOUR_REPOSITORY_URL> /opt/loungefly-monitor
+sudo chown -R loungefly:loungefly /opt/loungefly-monitor
+sudo -u loungefly python3 -m venv /opt/loungefly-monitor/.venv
+sudo -u loungefly /opt/loungefly-monitor/.venv/bin/python -m pip install --upgrade pip
+sudo -u loungefly /opt/loungefly-monitor/.venv/bin/pip install -r /opt/loungefly-monitor/requirements.txt
+sudo -u loungefly cp /opt/loungefly-monitor/.env.example /opt/loungefly-monitor/.env
+sudo chmod 600 /opt/loungefly-monitor/.env
+sudo install -m 0644 /opt/loungefly-monitor/deploy/loungefly-monitor.service \
+  /etc/systemd/system/loungefly-monitor.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now loungefly-monitor.service
+```
+
+The service must not run as root. Root is only used during installation to create the account,
+install the unit, and manage the service. Ensure `data/` and `logs/` remain writable by
+`loungefly:loungefly` after deployments.
+
+## Configuration
+
+Copy `.env.example` to `.env`; never commit `.env`. `python-dotenv` loads it for manual runs and
+systemd loads the same file with `EnvironmentFile`.
+
+| Environment variable | Required | Default/effect |
+| --- | --- | --- |
+| `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
+| `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
+| `LOUNGEFLY_DATABASE_PATH` | No | `data/loungefly.db` |
+| `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
+| `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number |
+| `LOUNGEFLY_BACKUP_COUNT` | No | `7`; positive integer retained |
+| `LOUNGEFLY_LOG_PATH` | No | `logs/loungefly-monitor.log` |
+| `LOUNGEFLY_LOG_LEVEL` | No | `INFO`; one of DEBUG/INFO/WARNING/ERROR/CRITICAL |
+
+`config/retailers.yaml` controls global HTTP limits, alert thresholds, prices/releases, log
+rotation, retailers, and each `interval_minutes`. Set a retailer's `enabled: false` to disable it.
+Avoid aggressive intervals: retailer throttling makes scans less reliable, not more useful.
+`config/watchlist.yaml` controls alerts only; all discovered state is still persisted. Fields in a
+watch are ANDed, list values match any entry, and separate watches are ORed. Supported constraints
+include URL/product ID/SKU/name, required or excluded keywords, franchise, character, retailers,
+product types, exclusivity, preorder, and maximum price.
+
+### Discord webhook test
+
+```bash
+cd /opt/loungefly-monitor
+sudo -u loungefly .venv/bin/python -m app.tools.test_notification
+sudo -u loungefly .venv/bin/python -m app.tools.test_notification --admin
+```
+
+These commands refuse to send when the applicable URL is blank. Treat webhook URLs as passwords;
+rotate one in Discord immediately if it is exposed.
+
+## Running
+
+Manual production-equivalent run (stop with Ctrl+C):
+
+```bash
+cd /opt/loungefly-monitor
+sudo -u loungefly .venv/bin/python -m app.main
+```
+
+Development run and checks:
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python -m app.main
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m app.main
+.venv/bin/python -m pytest -q
+.venv/bin/python -m compileall -q app tests
 ```
 
-Press `Ctrl+C` or send `SIGTERM` to stop cleanly. Runtime defaults are in
-`config/retailers.yaml`; secrets and optional path/level overrides belong in `.env`.
-Product alert selection is configured separately in `config/watchlist.yaml`.
+### Service management
 
-## Watchlist matching
-
-Each entry under `products` is an independent watch. Properties within one watch are combined
-with AND, while a product may match several watches. Matching is case- and punctuation-insensitive
-for names, keywords, retailer names, franchises, characters, IDs, SKUs, and product types.
-Supported constraints are `exact_url` (or `url`), `retailer_product_id`, `sku`, `product_name`,
-`keywords` (or `required_keywords`), `excluded_keywords`, `franchise`, `character`, `retailers`,
-`product_types`, `exclusivity` (or `exclusive`), `preorder`, and `max_price`.
-
-```yaml
-products:
-  - name: Stitch Backpacks
-    priority: high
-    keywords: [stitch]
-    franchise: Disney
-    character: Stitch
-    product_types: [mini_backpack]
-    retailers: [geekcore, truffleshuffle, disney store UK]
-    excluded_keywords: [wallet]
-    max_price: 90
-```
-
-Priorities are `low`, `normal`, or `high`. Alerts expose their highest matched priority as
-notification metadata for future routing (such as SMS), and Discord embeds show all matched watch
-names plus that priority. An empty `products` list disables product alerts without disabling
-collection and persistence.
-
-## Architecture
-
-- `app/models.py`: normalized product, availability, and alert types
-- `app/database.py`: SQLite schema and asynchronous connection lifecycle
-- `app/http.py`: pooled HTTP client with bounded concurrency and finite retries
-- `app/scheduler.py`: independent asynchronous interval jobs
-- `app/monitors/base.py`: contract for retailer adapters
-- `app/monitors/cm_pop.py`: CM POP UK Shopify discovery, stock, pricing, and exclusivity normalization
-- `app/monitors/geekcore.py`: GeekCore UK discovery and stock normalization
-- `app/monitors/geek_garage.py`: Geek Garage UK discovery, stock, pricing, and exclusivity normalization
-- `app/monitors/razmatazz.py`: Razmatazz UK Shopify discovery, stock, pricing, preorder, and release normalization
-- `app/monitors/get_ready_comics.py`: Get Ready Comics UK WooCommerce discovery and product-state normalization
-- `app/monitors/lf_lovers.py`: LF Lovers Shopify backpack discovery, preorder, monthly release, and ETA metadata normalization
-- `app/monitors/truffleshuffle.py`: TruffleShuffle UK JSON-LD discovery and normalization
-- `app/monitors/loungefly_uk.py`: shared regional Loungefly UK/US/Canada JSON-LD discovery and normalization
-- `app/monitors/disney_store_uk.py`: shared Disney Store UK/US structured storefront adapter
-- `app/monitors/disney_mad.py`: Disney Mad UK shared-Shopify bag and Disney Parks adapter
-- `app/monitors/boxlunch.py`: shared BoxLunch/Hot Topic US structured collection adapter
-- `app/monitors/entertainment_earth.py`: Entertainment Earth US structured product adapter
-- `app/monitors/emp.py`: shared, configured EMP Germany/France/Spain/Italy and Large Netherlands Commerce Cloud adapter
-- `app/monitors/modern_pinup.py`: Modern PinUp US Shopify product adapter
-- `app/monitors/gwens_mermaid_cove.py`: Gwen's Mermaid Cove US shared-Shopify configuration
-- `app/monitors/bag_dude.py`: The Bag Dude US shared-Shopify bag, Vault, and New Arrivals adapter
-- `app/monitors/circle_of_hope.py`: Circle Of Hope Boutique US Shopify multi-collection adapter
-- `app/monitors/magic_madhouse.py`: Magic Madhouse UK structured Loungefly Mini Backpack search adapter
-- `app/monitors/pink_a_la_mode.py`: Pink a la Mode US Shopify product adapter
-- `app/monitors/street_707.py`: 707 Street US Shopify product adapter
-- `app/monitors/cordys_corner.py`: Cordy's Corner US Shopify product adapter
-- `app/monitors/infinity_collectables.py`: Infinity Collectables UK Shopify product adapter
-- `app/monitors/popcultcha.py`: Popcultcha Australia Magento catalogue adapter
-- `app/notifications/base.py`: contract for notification destinations
-- `app/notifications/discord.py`: Discord embeds, webhook routing, and persistent deduplication
-- `app/services/`: persistence operations for products, stock, and alert audits
-- `app/watchlist.py`: watchlist validation, deterministic classification, and product matching
-- `app/application.py`: startup and graceful shutdown orchestration
-
-The default database is `data/loungefly.db`, and rotating logs are written to
-`logs/loungefly-monitor.log`. Both runtime artifacts are ignored by Git.
-
-## Resilience and retailer health
-
-Each retailer has an independently timed, bounded scheduler task. HTTP requests use a pooled
-session, a global concurrency cap, configurable request rate, timeout, retry limit, exponential
-backoff, and `Retry-After` handling for throttling. Tune `failure_alert_threshold`,
-`retry_backoff_seconds`, `rate_limit_requests_per_second`, and
-`retailer_job_timeout_seconds` in `config/retailers.yaml`.
-
-SQLite retains `last_success`, `last_failure`, `consecutive_failures`, `last_error`, the most
-recent HTTP response status, request duration, and a `HEALTHY`, `DEGRADED`, `FAILED`, or
-`DISABLED` state. A failure episode issues one administrator alert after the configured threshold
-and one recovery alert after the next successful scan; these episode flags survive application
-restarts. Failed parses and `ERROR` observations are not inventory evidence: successful product
-history is preserved, and a failed scan is rolled back rather than partially updating products.
-
-## Development checks
+Service name: **`loungefly-monitor.service`**.
 
 ```bash
-pytest
-python -m compileall -q app tests
+sudo systemctl start loungefly-monitor.service
+sudo systemctl stop loungefly-monitor.service
+sudo systemctl restart loungefly-monitor.service
+sudo systemctl status loungefly-monitor.service
+sudo journalctl -u loungefly-monitor.service -f
+sudo journalctl -u loungefly-monitor.service --since today
 ```
 
-## Discord notifications
+A normal stop sends SIGTERM and allows 45 seconds for graceful closure. Unexpected non-zero exits
+restart after 10 seconds. Configuration errors exit non-zero and are therefore retried; inspect the
+journal rather than allowing a persistent typo to loop unnoticed.
 
-Set product and administrator webhook URLs in `.env` (never in committed YAML):
+## Retailers and intervals
 
-```dotenv
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-DISCORD_ADMIN_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
+“Supported” means an adapter and test fixtures exist. “Limited” describes release-date enrichment,
+not core catalogue/stock monitoring: most sites publish release information inconsistently.
 
-Product alerts use the first URL; monitor error and recovery alerts use the administrator URL.
-Deliveries are persisted for deduplication only after Discord accepts them. Reuse an alert's
-`occurrence_id` when retrying or restoring that event; create a new `Alert` for a later episode,
-even when its product state and price match an earlier episode. Failed product notification
-requests remain eligible for retry, and delivery failures return `False` rather than crashing the
-monitor. A retailer-health failure alert is issued only once per failure episode even if Discord
-is unavailable, preventing an unattended alert storm.
+| Default interval | Supported retailers |
+| --- | --- |
+| 5 min | GeekCore; AmyDavidMagic high-priority lane |
+| 10 min | Disney Mad UK; Damaged Society UK; Koolaz UK; Cool-Merch UK; LF Lovers; CM POP UK; Geek Garage UK; Razmatazz UK; TruffleShuffle; Loungefly UK/US/Canada; Disney Store UK/US; Modern PinUp; Circle Of Hope Boutique; Merchoid UK; Magic Madhouse UK; Pink a la Mode; 707 Street; Cordy's Corner; Infinity Collectables; Something Different Gift Shop UK; Forbidden Planet International UK; Popcultcha; WORLD 1-1 GAMES; The Bag Dude; AmyDavidMagic incoming lane; EMP Germany/France/Spain/Italy; Large Netherlands |
+| 15 min | Get Ready Comics UK; BoxLunch; Hot Topic US; Entertainment Earth; Ozzie Collectables; Pop Pelican; Gwen's Mermaid Cove |
+| 30 min | AmyDavidMagic reconciliation lane |
 
-To safely generate a standalone sample event (with no retailer adapter involved), configure
-`DISCORD_WEBHOOK_URL` and run:
+Core stock monitoring is supported for every retailer above. Release metadata is **limited** for
+most retailers because only explicit retailer-published values are trusted; EMP region stores have
+the strongest date-only support. No adapter exists for retailers absent from this list; they are
+**unsupported** until implemented and tested. Retailer HTML/API changes remain an inherent external
+dependency.
+
+## Adding a retailer
+
+1. Implement `RetailerMonitor` from `app/monitors/base.py`; use `AsyncHttpClient`, never a second
+   unmanaged session. Discovery must return normalized, stable `Product` identities.
+2. Prefer a documented/public structured feed. Bound pagination and requests, respect 403/429 and
+   `Retry-After`, and never bypass access controls. Treat malformed or incomplete responses as
+   errors rather than out-of-stock evidence.
+3. Normalize prices/currency, availability, preorder, URLs, stable IDs, and optional metadata.
+   Parse releases only from explicit retailer claims; do not infer them from publication dates.
+4. Export the adapter from `app/monitors/__init__.py`, register exactly one independent job and
+   retailer health row in `Application.start`, and add a disabled-by-default YAML entry while it is
+   being validated.
+5. Add captured, secret-free fixtures and tests for parsing, pagination/deduplication, silent first
+   sync, changes, failures, restart persistence, and notification behavior. Run the complete suite.
+6. Document support level, data source, interval, and limitations here before enabling production.
+
+## SQLite operations
+
+The default live database is `/opt/loungefly-monitor/data/loungefly.db` (relative configuration is
+resolved from the service working directory). WAL sidecars may exist while running; do not copy
+only the `.db` file with ordinary `cp` during writes.
+
+Automatic backups are consistent snapshots in `/opt/loungefly-monitor/data/backups`, defaulting to
+24-hour intervals and seven retained files. To make an immediate safe manual snapshot, stop the
+service before copying the database, then confirm the copy's integrity:
 
 ```bash
-python -m app.tools.test_notification
+sudo systemctl stop loungefly-monitor.service
+sudo -u loungefly cp /opt/loungefly-monitor/data/loungefly.db /opt/loungefly-monitor/data/backups/manual-$(date -u +%Y%m%dT%H%M%SZ).db
+sudo systemctl start loungefly-monitor.service
+sudo -u loungefly find /opt/loungefly-monitor/data/backups -maxdepth 1 -name '*.db' -type f -printf '%TY-%Tm-%Td %TT %p\n'
+sudo -u loungefly sqlite3 /opt/loungefly-monitor/data/backups/<BACKUP>.db 'PRAGMA integrity_check;'
 ```
 
-The command prints an error and sends nothing when the applicable webhook is not configured.
-Use `--admin` to test routing to `DISCORD_ADMIN_WEBHOOK_URL`.
+Restore only while stopped, preserve the current database, copy one verified snapshot, and restore
+ownership. SQLite creates fresh WAL sidecars on startup:
 
-The first successful retailer run is a silent baseline synchronization: products and stock are
-persisted without flooding Discord. Later discoveries emit `NEW_PRODUCT`, and an
-`OUT_OF_STOCK` to `IN_STOCK` transition emits `RESTOCK`. SMS delivery and historical product
-states are reserved for later stages.
+```bash
+sudo systemctl stop loungefly-monitor.service
+sudo mv /opt/loungefly-monitor/data/loungefly.db /opt/loungefly-monitor/data/loungefly.db.pre-restore
+sudo rm -f /opt/loungefly-monitor/data/loungefly.db-wal /opt/loungefly-monitor/data/loungefly.db-shm
+sudo cp /opt/loungefly-monitor/data/backups/<BACKUP>.db /opt/loungefly-monitor/data/loungefly.db
+sudo chown loungefly:loungefly /opt/loungefly-monitor/data/loungefly.db
+sudo chmod 600 /opt/loungefly-monitor/data/loungefly.db
+sudo systemctl start loungefly-monitor.service
+```
 
-Release reminders and upgrade synchronization are configured in `config/retailers.yaml`.
-`DATE_ONLY`, `MONTH_ONLY`, and `COMING_SOON` releases never receive an invented midnight
-countdown. Existing installations silently enrich known products on the first release-aware scan;
-set `notify_existing_on_upgrade: true` only when those discovery notifications are desired.
+## Troubleshooting
+
+- **One retailer fails:** inspect its last exception and retailer health row. Confirm DNS/TLS and
+  the site manually. Other jobs continue independently. Disable only that YAML entry if it is noisy.
+- **Discord webhook fails:** run the standalone test, confirm the URL has no quotes/whitespace and
+  still exists, and inspect HTTP status logs. Failed deliveries are not marked successful and can
+  retry; admin failure episodes deliberately avoid alert storms.
+- **Database problems:** stop the service, preserve all `.db`, `-wal`, and `-shm` files, check disk
+  space/ownership, run `PRAGMA integrity_check`, and restore a verified backup. Never edit live
+  tables while the monitor runs.
+- **Parser errors:** a retailer likely changed markup. Preserve a sanitized response as a fixture,
+  update only that adapter, and run its tests plus the full suite. Parser errors do not clear stock.
+- **HTTP 403:** verify the configured user agent and reduce request pressure; the site may no longer
+  permit automated access. Do not bypass a block. **HTTP 429:** honor `Retry-After`, reduce the
+  retailer interval/global rate, and allow exponential retries to settle.
+- **Service does not start:** use `systemctl status` and `journalctl`; verify absolute unit paths,
+  `.env` syntax and mode, Python 3.12+, installed dependencies, YAML validity, and write ownership
+  for `data/` and `logs/`. Run the exact `ExecStart` as the `loungefly` user.
+- **Disk usage:** inspect `du -sh data logs`; backups and application log files are bounded by
+  configuration. Configure global journal limits in `/etc/systemd/journald.conf` if necessary.
+- **Restart notifications:** unchanged state should be silent. If alerts recur, do not delete the
+  database; verify the configured path and service working directory point to the persistent file.
+
+## Project structure
+
+```text
+.
+├── .env.example                 # documented, secret-free environment template
+├── app/
+│   ├── application.py           # composition root and lifecycle
+│   ├── config.py                # YAML/.env validation
+│   ├── database.py              # schema, migrations, lifecycle, backups
+│   ├── http.py                  # bounded resilient HTTP transport
+│   ├── logging_config.py        # console and size-rotating file logs
+│   ├── main.py                  # CLI and Unix signal handlers
+│   ├── models.py                # normalized domain models
+│   ├── monitors/                # retailer adapters and shared bases
+│   ├── notifications/           # Discord delivery and deduplication
+│   ├── services/                # monitor/product/stock/release/alert workflows
+│   └── tools/test_notification.py
+├── config/
+│   ├── retailers.yaml           # intervals, limits, enabled retailers
+│   └── watchlist.yaml           # alert selection
+├── data/                        # ignored live DB and bounded backups
+├── deploy/loungefly-monitor.service
+├── logs/                        # ignored rotating logs
+├── tests/                       # unit, integration, lifecycle, persistence tests
+├── pyproject.toml
+└── requirements.txt
+```
+
+## Known limitations and future improvements
+
+Retailer endpoints and markup can change without notice; Cloudflare/bot protection can make a
+retailer unavailable; release precision is limited to explicit source data; one global HTTP rate
+limiter is conservative but not retailer-specific; SQLite is appropriate for one process but not
+multiple active monitor replicas; there is no metrics/health HTTP endpoint or automated off-device
+backup. Sensible future work is a small health/metrics exporter, per-host circuit breakers, alerts
+for low disk space/backup age, off-device encrypted backup replication, and extracting the verbose
+adapter registration into a declarative registry. These are deliberately not part of this
+production-hardening change.

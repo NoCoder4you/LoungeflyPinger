@@ -21,6 +21,7 @@ class Scheduler:
         *,
         jitter_fraction: float = 0.0,
         timeout_seconds: float | None = None,
+        initial_delay_seconds: float = 0.0,
     ) -> None:
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be positive")
@@ -28,8 +29,13 @@ class Scheduler:
             raise RuntimeError("scheduler is stopping")
         if not 0 <= jitter_fraction <= 1:
             raise ValueError("jitter_fraction must be between zero and one")
+        if initial_delay_seconds < 0:
+            raise ValueError("initial_delay_seconds must not be negative")
         task = asyncio.create_task(
-            self._run_job(name, callback, interval_seconds, jitter_fraction, timeout_seconds),
+            self._run_job(
+                name, callback, interval_seconds, jitter_fraction, timeout_seconds,
+                initial_delay_seconds,
+            ),
             name=f"scheduler:{name}",
         )
         self._tasks.add(task)
@@ -38,7 +44,14 @@ class Scheduler:
     async def _run_job(
         self, name: str, callback: Callable[[], Awaitable[None]], interval: float,
         jitter_fraction: float, timeout_seconds: float | None,
+        initial_delay_seconds: float,
     ) -> None:
+        if initial_delay_seconds:
+            try:
+                await asyncio.wait_for(self._stopping.wait(), timeout=initial_delay_seconds)
+                return
+            except TimeoutError:
+                pass
         while not self._stopping.is_set():
             try:
                 if timeout_seconds is None:

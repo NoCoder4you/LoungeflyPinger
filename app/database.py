@@ -3,6 +3,9 @@
 import hashlib
 import json
 import asyncio
+import os
+import sqlite3
+from datetime import UTC, datetime
 
 from pathlib import Path
 
@@ -247,87 +250,78 @@ class Database:
         await self._migrate_release_history_keys()
         await self.connection.commit()
 
-async def _migrate_release_history_keys(self) -> None:
-    """Backfill release keys safely and collapse duplicate historical rows."""
-    assert self.connection is not None
+    async def _migrate_release_history_keys(self) -> None:
+        """Backfill release keys safely and collapse duplicate historical rows."""
+        assert self.connection is not None
 
-    rows = await (
+        rows = await (
+            await self.connection.execute(
+                """
+                SELECT
+                    id, product_id, release_date, release_time, release_timezone,
+                    release_datetime, release_precision, release_text, release_source,
+                    release_timezone_inferred, release_month, release_year
+                FROM release_history
+                ORDER BY id
+                """
+            )
+        ).fetchall()
+
+        # Work out the desired key for every historical row first.
+        calculated: list[tuple[int, int, str]] = []
+
+        for row in rows:
+            row_id = int(row[0])
+            product_id = int(row[1])
+            key = release_history_key(tuple(row[2:]))
+
+            calculated.append((row_id, product_id, key))
+
+        # Determine which duplicate rows should be retained.
+        seen: set[tuple[int, str]] = set()
+        duplicate_ids: list[int] = []
+        keepers: list[tuple[int, str]] = []
+
+        for row_id, product_id, key in calculated:
+            identity = (product_id, key)
+
+            if identity in seen:
+                duplicate_ids.append(row_id)
+                continue
+
+            seen.add(identity)
+            keepers.append((row_id, key))
+
+        # Delete duplicates before assigning keys; legacy databases may already
+        # have the unique (product_id, release_key) index installed.
+        for row_id in duplicate_ids:
+            await self.connection.execute(
+                "DELETE FROM release_history WHERE id = ?",
+                (row_id,),
+            )
+
+        # Move survivors through row-unique non-NULL values first. New schemas
+        # require release_key, while legacy schemas may already have the unique
+        # index and stale keys that would collide during an in-place update.
+        for row_id, key in keepers:
+            await self.connection.execute(
+                "UPDATE release_history SET release_key = ? WHERE id = ?",
+                (f"migration-{row_id}-{key}", row_id),
+            )
+
+        # Now safely assign the calculated keys to the surviving rows.
+        for row_id, key in keepers:
+            await self.connection.execute(
+                "UPDATE release_history SET release_key = ? WHERE id = ?",
+                (key, row_id),
+            )
+
         await self.connection.execute(
             """
-            SELECT
-                id,
-                product_id,
-                release_date,
-                release_time,
-                release_timezone,
-                release_datetime,
-                release_precision,
-                release_text,
-                release_source,
-                release_timezone_inferred,
-                release_month,
-                release_year
-            FROM release_history
-            ORDER BY id
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_release_history_product_key
+            ON release_history(product_id, release_key)
             """
         )
-    ).fetchall()
-
-    # Work out the desired key for every historical row first.
-    calculated: list[tuple[int, int, str]] = []
-
-    for row in rows:
-        row_id = int(row[0])
-        product_id = int(row[1])
-        key = release_history_key(tuple(row[2:]))
-
-        calculated.append((row_id, product_id, key))
-
-    # Determine which duplicate rows should be retained.
-    seen: set[tuple[int, str]] = set()
-    duplicate_ids: list[int] = []
-    keepers: list[tuple[int, str]] = []
-
-    for row_id, product_id, key in calculated:
-        identity = (product_id, key)
-
-        if identity in seen:
-            duplicate_ids.append(row_id)
-            continue
-
-        seen.add(identity)
-        keepers.append((row_id, key))
-
-    # Delete duplicate rows BEFORE assigning keys.
-    #
-    # This is important because an older database may already have the
-    # unique (product_id, release_key) index installed.
-    for row_id in duplicate_ids:
-        await self.connection.execute(
-            "DELETE FROM release_history WHERE id = ?",
-            (row_id,),
-        )
-
-    # Clear existing keys first. SQLite allows multiple NULL values in a
-    # UNIQUE constraint. This also makes the migration safe if existing
-    # rows contain stale keys that would otherwise collide while updating.
-    await self.connection.execute(
-        "UPDATE release_history SET release_key = NULL"
-    )
-
-    # Now safely assign the calculated keys to the surviving rows.
-    for row_id, key in keepers:
-        await self.connection.execute(
-            "UPDATE release_history SET release_key = ? WHERE id = ?",
-            (key, row_id),
-        )
-
-    await self.connection.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_release_history_product_key
-        ON release_history(product_id, release_key)
-        """
-    )
 
     async def _add_missing_columns(self, table: str, columns: dict[str, str]) -> None:
         assert self.connection is not None
@@ -350,3 +344,43 @@ async def _migrate_release_history_keys(self) -> None:
 
     async def __aexit__(self, *_: object) -> None:
         await self.close()
+
+    async def backup(self, directory: str | Path, keep: int = 7) -> Path:
+        """Create a consistent online backup and prune older managed backups."""
+        if keep <= 0:
+            raise ValueError("keep must be positive")
+        if self.connection is None:
+            raise RuntimeError("database is not connected")
+        backup_directory = Path(directory)
+        backup_directory.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        destination = backup_directory / f"{self.path.stem}-{stamp}.db"
+        temporary = destination.with_suffix(".db.tmp")
+        try:
+            async with self.write_lock:
+                target = sqlite3.connect(temporary)
+                try:
+                    operation = asyncio.create_task(self.connection.backup(target))
+                    try:
+                        await asyncio.shield(operation)
+                    except asyncio.CancelledError:
+                        # The SQLite worker thread cannot be interrupted safely. Wait
+                        # before closing its destination, then propagate cancellation.
+                        await operation
+                        raise
+                    row = target.execute("PRAGMA integrity_check").fetchone()
+                    if row is None or row[0] != "ok":
+                        raise RuntimeError("SQLite backup integrity check failed")
+                finally:
+                    target.close()
+                os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+        backups = sorted(
+            backup_directory.glob(f"{self.path.stem}-*.db"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+        for expired in backups[keep:]:
+            expired.unlink()
+        return destination

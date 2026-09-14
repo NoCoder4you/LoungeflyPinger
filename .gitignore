@@ -209,6 +209,7 @@ tempCodeRunnerFile.py
 # Runtime state
 data/*.db
 data/*.db-*
+data/backups/
 logs/*.log*
 
 # PyPI configuration file
