@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.database import Database
+from app.database import Database, release_history_key
 
 
 @pytest.mark.asyncio
@@ -85,4 +85,60 @@ async def test_database_migrates_and_deduplicates_nullable_release_history(tmp_p
         "PRAGMA index_list(release_history)"
     )).fetchall()
     assert any(row[1] == "idx_release_history_product_key" and row[2] for row in indexes)
+    await database.close()
+
+
+@pytest.mark.asyncio
+async def test_release_key_migration_handles_stale_and_interrupted_unique_keys(
+    tmp_path: Path,
+) -> None:
+    """Production keys left by older migrations must be safely repaired."""
+    database = Database(tmp_path / "crossed-release-keys.db")
+    await database.connect()
+    assert database.connection is not None
+    await database.connection.executescript(
+        """CREATE TABLE release_history (
+               id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL, release_date TEXT,
+               release_time TEXT, release_timezone TEXT, release_datetime TEXT,
+               release_precision TEXT NOT NULL, release_text TEXT, release_source TEXT,
+               release_timezone_inferred INTEGER NOT NULL DEFAULT 0,
+               release_month INTEGER, release_year INTEGER, release_key TEXT NOT NULL,
+               detected_at TEXT NOT NULL
+           );
+           CREATE UNIQUE INDEX idx_release_history_product_key
+               ON release_history(product_id, release_key);
+           INSERT INTO release_history
+               (id, product_id, release_date, release_precision, release_text,
+                release_source, release_key, detected_at)
+           VALUES (1, 7, '2026-09-18', 'DATE_ONLY', 'September 18', 'fixture',
+                   'stale-a', 'first'),
+                  (2, 7, '2026-09-19', 'DATE_ONLY', 'September 19', 'fixture',
+                   'stale-b', 'second');"""
+    )
+    rows = await (await database.connection.execute(
+        """SELECT release_date, release_time, release_timezone, release_datetime,
+                  release_precision, release_text, release_source,
+                  release_timezone_inferred, release_month, release_year
+           FROM release_history ORDER BY id"""
+    )).fetchall()
+    expected = [release_history_key(tuple(row)) for row in rows]
+    # Emulate both a stale crossed value and the deterministic temporary value
+    # used by the previous migration. Its first temporary UPDATE would collide.
+    await database.connection.execute(
+        "UPDATE release_history SET release_key = CASE id WHEN 1 THEN ? ELSE ? END",
+        (expected[1], f"migration-1-{expected[0]}"),
+    )
+    await database.connection.commit()
+
+    await database.initialize()
+
+    keys = [row[0] for row in await (await database.connection.execute(
+        "SELECT release_key FROM release_history ORDER BY id"
+    )).fetchall()]
+    assert keys == expected
+    # The migration is idempotent and safe on the next real application restart.
+    await database.initialize()
+    assert [row[0] for row in await (await database.connection.execute(
+        "SELECT release_key FROM release_history ORDER BY id"
+    )).fetchall()] == expected
     await database.close()

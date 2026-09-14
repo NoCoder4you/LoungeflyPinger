@@ -5,6 +5,7 @@ import json
 import asyncio
 import os
 import sqlite3
+import uuid
 from datetime import UTC, datetime
 
 from pathlib import Path
@@ -254,6 +255,19 @@ class Database:
         """Backfill release keys safely and collapse duplicate historical rows."""
         assert self.connection is not None
 
+        await self.connection.execute("SAVEPOINT migrate_release_history_keys")
+        try:
+            await self._migrate_release_history_keys_in_transaction()
+        except BaseException:
+            await self.connection.execute("ROLLBACK TO migrate_release_history_keys")
+            await self.connection.execute("RELEASE migrate_release_history_keys")
+            raise
+        await self.connection.execute("RELEASE migrate_release_history_keys")
+
+    async def _migrate_release_history_keys_in_transaction(self) -> None:
+        """Perform the release-key migration within the caller's savepoint."""
+        assert self.connection is not None
+
         rows = await (
             await self.connection.execute(
                 """
@@ -300,13 +314,15 @@ class Database:
                 (row_id,),
             )
 
-        # Move survivors through row-unique non-NULL values first. New schemas
-        # require release_key, while legacy schemas may already have the unique
-        # index and stale keys that would collide during an in-place update.
-        for row_id, key in keepers:
+        # Move every survivor through a run-unique, row-unique non-NULL value.
+        # Existing databases can contain crossed/stale keys, or temporary keys
+        # left by an interrupted older migration. A fresh namespace guarantees
+        # that no update collides with either kind of value.
+        migration_namespace = uuid.uuid4().hex
+        for row_id, _key in keepers:
             await self.connection.execute(
                 "UPDATE release_history SET release_key = ? WHERE id = ?",
-                (f"migration-{row_id}-{key}", row_id),
+                (f"migration-{migration_namespace}-{row_id}", row_id),
             )
 
         # Now safely assign the calculated keys to the surviving rows.
