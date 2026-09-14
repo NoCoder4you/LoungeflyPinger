@@ -51,15 +51,27 @@ sudo -u loungefly /opt/loungefly-monitor/.venv/bin/python -m pip install --upgra
 sudo -u loungefly /opt/loungefly-monitor/.venv/bin/pip install -r /opt/loungefly-monitor/requirements.txt
 sudo -u loungefly cp /opt/loungefly-monitor/.env.example /opt/loungefly-monitor/.env
 sudo chmod 600 /opt/loungefly-monitor/.env
+sudo chmod 0755 /opt/loungefly-monitor/deploy/update.sh
+sudo install -m 0644 /opt/loungefly-monitor/deploy/loungefly-update.service \
+  /etc/systemd/system/loungefly-update.service
 sudo install -m 0644 /opt/loungefly-monitor/deploy/loungefly-monitor.service \
   /etc/systemd/system/loungefly-monitor.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now loungefly-monitor.service
+sudo systemctl enable loungefly-update.service loungefly-monitor.service
+sudo systemctl start loungefly-monitor.service
 ```
 
 The service must not run as root. Root is only used during installation to create the account,
 install the unit, and manage the service. Ensure `data/` and `logs/` remain writable by
 `loungefly:loungefly` after deployments.
+
+At boot, `loungefly-update.service` runs before the monitor. It takes an exclusive lock, retries a
+failed fetch, accepts fast-forward updates only, backs up `.env` and stopped SQLite state, builds an
+isolated replacement virtual environment for each candidate, and runs compilation plus the full test
+suite before activating it. A failed validation restores the previous Git commit; remote outages
+or local tracked changes leave the installed version untouched. The updater never restarts the
+monitor itself. Its defaults can be overridden with systemd environment variables such as
+`BRANCH`, `PYTHON_BIN`, `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
 
 ## Configuration
 
@@ -242,6 +254,8 @@ sudo systemctl start loungefly-monitor.service
 │   └── watchlist.yaml           # alert selection
 ├── data/                        # ignored live DB and bounded backups
 ├── deploy/loungefly-monitor.service
+├── deploy/loungefly-update.service
+├── deploy/update.sh
 ├── logs/                        # ignored rotating logs
 ├── tests/                       # unit, integration, lifecycle, persistence tests
 ├── pyproject.toml
