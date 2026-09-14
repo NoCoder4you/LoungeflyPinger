@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # Safe, unattended updater for the systemd installation documented in README.md.
 # The monitor must be stopped while this runs (the supplied units enforce that).
 
-APP_DIR="${APP_DIR:-/opt/loungefly-monitor}"
+APP_DIR="${APP_DIR:-/opt/LoungeflyPinger}"
 BRANCH="${BRANCH:-main}"
 REMOTE="${REMOTE:-origin}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
