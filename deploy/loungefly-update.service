@@ -8,14 +8,14 @@ Before=loungefly-monitor.service
 Type=oneshot
 User=loungefly
 Group=loungefly
-WorkingDirectory=/opt/loungefly-monitor
-ExecStart=/opt/loungefly-monitor/deploy/update.sh
+WorkingDirectory=/opt/LoungeflyPinger
+ExecStart=/opt/LoungeflyPinger/deploy/update.sh
 TimeoutStartSec=15min
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/loungefly-monitor
+ReadWritePaths=/opt/LoungeflyPinger
 UMask=0077
 
 [Install]
