@@ -115,9 +115,11 @@ retailers:
     interval_minutes: 15
     status: WORKING
   entertainment_earth:
-    enabled: true
+    # Cloudflare currently rejects this service's ordinary HTTP client. Keep the
+    # adapter available, but do not generate permanent failure noise or bypass it.
+    enabled: false
     interval_minutes: 15
-    status: WORKING
+    status: BLOCKED_BY_RETAILER
   modern_pinup:
     enabled: true
     interval_minutes: 10
@@ -135,9 +137,11 @@ retailers:
     status: WORKING
   # Structured search is restricted to the Loungefly brand and Mini Backpack query.
   magic_madhouse_uk:
-    enabled: true
+    # The production host is denied by the storefront even though the public
+    # search remains parseable from permitted networks.
+    enabled: false
     interval_minutes: 10
-    status: WORKING
+    status: BLOCKED_BY_RETAILER
   pink_a_la_mode:
     enabled: true
     interval_minutes: 10
@@ -163,9 +167,11 @@ retailers:
     interval_minutes: 10
     status: WORKING
   popcultcha:
-    enabled: true
+    # Cloudflare currently challenges all catalogue endpoints used by the
+    # server-side monitor; access controls are deliberately not bypassed.
+    enabled: false
     interval_minutes: 10
-    status: WORKING
+    status: BLOCKED_BY_RETAILER
   # Public Shopify collection provides complete catalogue scans; a small rotating
   # detail batch enriches changed products with barcode and exact inventory data.
   ozzie_collectables:

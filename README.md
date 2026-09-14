@@ -155,8 +155,8 @@ not core catalogue/stock monitoring: most sites publish release information inco
 | Default interval | Supported retailers |
 | --- | --- |
 | 5 min | GeekCore; AmyDavidMagic high-priority lane |
-| 10 min | Disney Mad UK; Damaged Society UK; Koolaz UK; Cool-Merch UK; LF Lovers; CM POP UK; Geek Garage UK; Razmatazz UK; TruffleShuffle; Loungefly UK/US/Canada; Disney Store UK/US; Modern PinUp; Circle Of Hope Boutique; Merchoid UK; Magic Madhouse UK; Pink a la Mode; 707 Street; Cordy's Corner; Infinity Collectables; Something Different Gift Shop UK; Forbidden Planet International UK; Popcultcha; WORLD 1-1 GAMES; The Bag Dude; AmyDavidMagic incoming lane; EMP Germany/France/Spain/Italy; Large Netherlands |
-| 15 min | Get Ready Comics UK; BoxLunch; Hot Topic US; Entertainment Earth; Ozzie Collectables; Pop Pelican; Gwen's Mermaid Cove |
+| 10 min | Disney Mad UK; Damaged Society UK; Koolaz UK; Cool-Merch UK; LF Lovers; CM POP UK; Geek Garage UK; Razmatazz UK; TruffleShuffle; Loungefly UK/US/Canada; Disney Store UK/US; Modern PinUp; Circle Of Hope Boutique; Merchoid UK; Pink a la Mode; 707 Street; Cordy's Corner; Infinity Collectables; Something Different Gift Shop UK; Forbidden Planet International UK; WORLD 1-1 GAMES; The Bag Dude; AmyDavidMagic incoming lane; EMP Germany/France/Spain/Italy; Large Netherlands |
+| 15 min | Get Ready Comics UK; BoxLunch; Hot Topic US; Ozzie Collectables; Pop Pelican; Gwen's Mermaid Cove |
 | 30 min | AmyDavidMagic reconciliation lane |
 
 Core stock monitoring is supported for every retailer above. Release metadata is **limited** for
@@ -164,6 +164,11 @@ most retailers because only explicit retailer-published values are trusted; EMP 
 the strongest date-only support. No adapter exists for retailers absent from this list; they are
 **unsupported** until implemented and tested. Retailer HTML/API changes remain an inherent external
 dependency.
+
+Magic Madhouse UK, Popcultcha, and Entertainment Earth adapters remain implemented and tested but
+are disabled by default because those storefronts currently return HTTP 403 to the production
+monitor. Re-enable an entry only after confirming that ordinary, policy-compliant HTTP access is
+available from the deployment host; the monitor does not attempt to evade storefront access controls.
 
 ## Adding a retailer
 

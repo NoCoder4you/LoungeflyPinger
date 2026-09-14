@@ -89,6 +89,26 @@ def test_malformed_structured_content_fails():
         DisneyStoreUKMonitor.parse_listing(fixture("malformed.html"))
 
 
+def test_listing_accepts_merchandising_query_on_canonical_product_link():
+    html = fixture("listing.html").replace(
+        'href="/disney-exclusive-loungefly-stitch-mini-backpack-442001.html"',
+        'href="/disney-exclusive-loungefly-stitch-mini-backpack-442001.html?searchType=autosuggest"',
+        1,
+    )
+    products = DisneyStoreUKMonitor.parse_listing(html)
+    assert products[0]["tile_id"] == "442001"
+
+
+def test_listing_still_rejects_a_different_product_path():
+    html = fixture("listing.html").replace(
+        'href="/disney-exclusive-loungefly-stitch-mini-backpack-442001.html"',
+        'href="/different-loungefly-mini-backpack-442001.html?searchType=redirect"',
+        1,
+    )
+    with pytest.raises(DisneyStoreUKParseError, match="does not match"):
+        DisneyStoreUKMonitor.parse_listing(html)
+
+
 @pytest.mark.parametrize("field", ["id", "variant_id", "name", "price", "availability", "image_url"])
 def test_missing_expected_product_data_fails(field):
     raw = DisneyStoreUKMonitor.parse_listing(fixture("listing.html"))[0]
