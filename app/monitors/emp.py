@@ -63,7 +63,12 @@ class _Parser(HTMLParser):
             self.depth += 1
         target = self.product if self.product is not None else self.page
         prop = (attrs.get("itemprop") or attrs.get("itemProp") or "").casefold()
-        value = attrs.get("content") or attrs.get("href") or attrs.get("src")
+        # SFCC image markup can put a non-HTTP lazy-load placeholder in ``src``
+        # while the usable product image is in ``data-src``. Prefer that source
+        # for image microdata without changing link/meta extraction.
+        value = (attrs.get("content") or attrs.get("href")
+                 or (attrs.get("data-src") if prop == "image" else None)
+                 or attrs.get("src"))
         if prop and value:
             target.setdefault(prop, [])
             target[prop].append(value)
@@ -216,7 +221,11 @@ class EMPMonitor(RetailerMonitor):
             except ValueError as exc: raise EMPParseError("EMP structured release date is invalid") from exc
             release = ReleaseInfo(ReleasePrecision.DATE_ONLY, release_date=release_date, text=value, source=f"{self.region.name} releaseDate metadata")
         original = max(prices) if len(prices) > 1 and max(prices) > prices[0] else None
+        image = self._first(raw, "image")
+        image_url = urljoin(self.region.base_url + "/", image) if image else None
+        if image_url is not None and urlparse(image_url).scheme not in {"http", "https"}:
+            raise EMPParseError("EMP product image URL is invalid")
         return Product(retailer=self.region.name, retailer_product_id=article_id, sku=article_id,
-                       name=name, url=url, image_url=self._first(raw, "image"), price=prices[0],
+                       name=name, url=url, image_url=image_url, price=prices[0],
                        original_price=original, currency=currency, availability=availability,
                        preorder=preorder, product_type="Mini Backpack", release=release)

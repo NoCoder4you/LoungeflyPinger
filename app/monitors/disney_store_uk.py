@@ -170,10 +170,20 @@ class DisneyStoreMonitor(RetailerMonitor):
         for tile in parser.tiles:
             if not isinstance(tile.get("product"), dict) or not isinstance(tile.get("url"), str):
                 raise DisneyStoreParseError("Product tile is missing structured data")
-            absolute = urljoin(getattr(cls, "REGION_BASE_URL", BASE_URL) + "/", tile["url"])
-            normalized_expected = {urljoin(getattr(cls, "REGION_BASE_URL", BASE_URL) + "/", url)
-                                   for url in expected_urls}
-            if absolute not in normalized_expected:
+            base_url = getattr(cls, "REGION_BASE_URL", BASE_URL) + "/"
+            # Merchandising links may add an internal search attribution query that
+            # the canonical ItemList URL intentionally omits. Compare canonical
+            # origins and paths rather than rejecting otherwise identical products.
+            absolute = urlparse(urljoin(base_url, tile["url"]))
+            normalized_expected = {
+                (parsed.scheme.casefold(), parsed.netloc.casefold(), parsed.path.rstrip("/"))
+                for url in expected_urls
+                if (parsed := urlparse(urljoin(base_url, url))).scheme in {"http", "https"}
+            }
+            canonical_tile = (
+                absolute.scheme.casefold(), absolute.netloc.casefold(), absolute.path.rstrip("/")
+            )
+            if canonical_tile not in normalized_expected:
                 raise DisneyStoreParseError("Product tile does not match the ItemList")
         return parser.tiles
 

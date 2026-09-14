@@ -56,6 +56,17 @@ def test_listing_filters_non_mini_products_and_discovers_product():
     assert EMPMonitor(FakeHttp([]), "fr")._is_mini_backpack(products[0])
 
 
+def test_lazy_loaded_relative_image_is_normalized_to_storefront_url():
+    html = fixture("de").replace(
+        'content="https://cdn.emp.de/60001.jpg"',
+        'src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" '
+        'data-src="/images/60001.jpg"',
+    )
+    monitor = EMPMonitor(FakeHttp([]), "de")
+    product = monitor.parse_product(monitor.parse_product_page(html), source_url=monitor.region.base_url)
+    assert product.image_url == "https://www.emp.de/images/60001.jpg"
+
+
 @pytest.mark.asyncio
 async def test_large_uses_shared_adapter_and_confirms_dutch_product_type_from_pdp():
     listing = fixture("nl").replace(
