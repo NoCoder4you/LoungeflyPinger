@@ -6,11 +6,11 @@ After=network-online.target loungefly-update.service
 
 [Service]
 Type=simple
-User=loungefly
-Group=loungefly
-WorkingDirectory=/opt/loungefly-monitor
-EnvironmentFile=/opt/loungefly-monitor/.env
-ExecStart=/opt/loungefly-monitor/.venv/bin/python -m app.main
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/LoungeflyPinger
+EnvironmentFile=/home/pi/LoungeflyPinger/.env
+ExecStart=/home/pi/LoungeflyPinger/.venv/bin/python -m app.main
 Restart=on-failure
 RestartSec=10s
 TimeoutStopSec=45s
@@ -18,8 +18,8 @@ KillSignal=SIGTERM
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/loungefly-monitor/data /opt/loungefly-monitor/logs
+ProtectHome=read-only
+ReadWritePaths=/home/pi/LoungeflyPinger/data /home/pi/LoungeflyPinger/logs
 UMask=0077
 
 [Install]

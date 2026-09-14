@@ -4,7 +4,10 @@ set -Eeuo pipefail
 # Safe, unattended updater for the systemd installation documented in README.md.
 # The monitor must be stopped while this runs (the supplied units enforce that).
 
-APP_DIR="${APP_DIR:-/opt/loungefly-monitor}"
+# The updater lives at the repository root, so its directory is the checkout to
+# update. APP_DIR remains available when intentionally managing another checkout.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+APP_DIR="${APP_DIR:-$SCRIPT_DIR}"
 BRANCH="${BRANCH:-main}"
 REMOTE="${REMOTE:-origin}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
