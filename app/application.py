@@ -42,6 +42,12 @@ class Application:
         LOGGER.info("Application starting")
         await self.database.connect()
         await self.database.initialize()
+        self.scheduler.add_interval_job(
+            "database_backup",
+            self._backup_database,
+            self.config.backup_interval_hours * 3600,
+            initial_delay_seconds=self.config.backup_interval_hours * 3600,
+        )
         await self.http.start()
         retailer_names = {
             "damaged_society_uk": "Damaged Society UK",
@@ -704,6 +710,12 @@ class Application:
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
+
+    async def _backup_database(self) -> None:
+        backup = await self.database.backup(
+            self.config.backup_directory, self.config.backup_count
+        )
+        LOGGER.info("Database backup completed", extra={"backup": str(backup)})
 
     def request_shutdown(self) -> None:
         if not self.stop_event.is_set():
