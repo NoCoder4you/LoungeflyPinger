@@ -6,16 +6,16 @@ Before=loungefly-monitor.service
 
 [Service]
 Type=oneshot
-User=loungefly
-Group=loungefly
-WorkingDirectory=/opt/LoungeflyPinger
-ExecStart=/opt/LoungeflyPinger/deploy/update.sh
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/LoungeflyPinger
+ExecStart=/home/pi/LoungeflyPinger/deploy/update.sh
 TimeoutStartSec=15min
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/LoungeflyPinger
+ProtectHome=read-only
+ReadWritePaths=/home/pi/LoungeflyPinger
 UMask=0077
 
 [Install]
