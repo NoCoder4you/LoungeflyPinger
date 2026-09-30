@@ -85,6 +85,14 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
         "Status": "In Stock", "Previous Status": "Out Of Stock", "Franchise": "Disney",
         "Character": "Stitch", "Exclusive": "Yes", "Preorder": "No",
     }
+    assert payload["content"] == "@everyone"
+    assert payload["allowed_mentions"] == {"parse": ["everyone"]}
+
+
+def test_discord_payload_does_not_mention_everyone_for_removed_product(product: Product) -> None:
+    payload = build_discord_payload(Alert(AlertType.PRODUCT_REMOVED, product=product))
+
+    assert "content" not in payload
     assert payload["allowed_mentions"] == {"parse": []}
 
 
