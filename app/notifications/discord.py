@@ -144,7 +144,15 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
             embed["thumbnail"] = {"url": product.image_url}
     if alert.new_state and not product:
         add("Status", _display(alert.new_state))
-    return {"username": "Loungefly Monitor", "allowed_mentions": {"parse": []}, "embeds": [embed]}
+    payload: dict[str, Any] = {
+        "username": "Loungefly Monitor",
+        "allowed_mentions": {"parse": []},
+        "embeds": [embed],
+    }
+    if alert.alert_type is not AlertType.PRODUCT_REMOVED:
+        payload["content"] = "@everyone"
+        payload["allowed_mentions"] = {"parse": ["everyone"]}
+    return payload
 
 
 class DiscordNotifier(NotificationProvider):

@@ -111,6 +111,10 @@ sudo -u pi .venv/bin/python -m app.tools.test_notification --admin
 These commands refuse to send when the applicable URL is blank. Treat webhook URLs as passwords;
 rotate one in Discord immediately if it is exposed.
 
+Discord notifications mention `@everyone` so subscribers are alerted, except for product-removal
+notifications. The webhook's Discord channel permissions must allow everyone mentions for the
+mention to notify channel members.
+
 ## Running
 
 Manual production-equivalent run (stop with Ctrl+C):
