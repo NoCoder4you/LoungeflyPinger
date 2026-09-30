@@ -182,7 +182,9 @@ class SomethingDifferentMonitor(RetailerMonitor):
         evidence = " ".join((title, description, *tags))
         preorder = bool(re.search(r"\bpre[ -]?order(?:ed|ing)?\b", evidence, re.I))
         available = any(v["available"] for v in variants)
-        availability = self._availability(html, available=available, preorder=preorder)
+        availability = self._availability(
+            html, variant_id=variant_id, available=available, preorder=preorder
+        )
         release = parse_release_text(
             description, source="Something Different Shopify product data",
             local_timezone="Europe/London", date_order="DMY",
@@ -224,21 +226,39 @@ class SomethingDifferentMonitor(RetailerMonitor):
         )
 
     @staticmethod
-    def _availability(html: object, *, available: bool, preorder: bool) -> Availability:
+    def _availability(
+        html: object, *, variant_id: str, available: bool, preorder: bool
+    ) -> Availability:
         if not isinstance(html, str) or not html.strip():
             raise SomethingDifferentParseError("product HTML is empty")
         if preorder and available:
             return Availability.PREORDER
-        # The live theme publishes exact variant inventory in this structured app payload.
-        quantities = re.findall(r"variantsInventoryQuantity\s*=\s*\{([^}]+)\}", html)
-        if not quantities:
-            raise SomethingDifferentParseError("inventory payload is missing")
-        values = [int(value) for block in quantities for value in re.findall(r'parseInt\("(-?\d+)"\)', block)]
-        if not values:
-            raise SomethingDifferentParseError("inventory quantity is missing")
-        if not available or max(values) <= 0:
+        # Restock Rocket publishes exact variant inventory in this structured app
+        # payload. The app has emitted both parseInt("3") and plain numeric values,
+        # so parse the JavaScript object entries rather than depending on one value
+        # representation.
+        payloads = re.findall(r"variantsInventoryQuantity\s*=\s*\{([^}]*)\}", html)
+        if not payloads:
+            return Availability.IN_STOCK if available else Availability.OUT_OF_STOCK
+        entries: dict[str, int] = {}
+        entry_pattern = re.compile(
+            r'''["']?(?P<variant>\d+)["']?\s*:\s*'''
+            r'''(?:parseInt\s*\(\s*)?["']?(?P<quantity>-?\d+)["']?\s*\)?'''
+        )
+        for payload in payloads:
+            entries.update(
+                (match.group("variant"), int(match.group("quantity")))
+                for match in entry_pattern.finditer(payload)
+            )
+        # Exact inventory is optional in Shopify and may be rendered as null when
+        # the retailer disables quantity tracking. In that case, the variant's
+        # public `available` flag remains the authoritative stock signal.
+        if variant_id not in entries:
+            return Availability.IN_STOCK if available else Availability.OUT_OF_STOCK
+        quantity = entries[variant_id]
+        if not available or quantity <= 0:
             return Availability.OUT_OF_STOCK
-        return Availability.LOW_STOCK if max(values) == 1 else Availability.IN_STOCK
+        return Availability.LOW_STOCK if quantity == 1 else Availability.IN_STOCK
 
     @staticmethod
     def _wave_from_release(release: ReleaseInfo | None) -> tuple[int, int, str] | None:

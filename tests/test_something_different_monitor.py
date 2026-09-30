@@ -4,9 +4,7 @@ from decimal import Decimal
 import pytest
 
 from app.models import Availability, ReleasePrecision
-from app.monitors.something_different import (
-    SomethingDifferentMonitor, SomethingDifferentParseError,
-)
+from app.monitors.something_different import SomethingDifferentMonitor
 
 
 def product(**changes):
@@ -74,6 +72,32 @@ def test_only_one_left_is_low_stock_and_still_available():
     item = SomethingDifferentMonitor(FakeHttp()).parse_product(product(), html=inventory(1))
     assert item.availability == Availability.LOW_STOCK
     assert item.preorder is False
+
+
+@pytest.mark.parametrize("value", ["3", "'3'", 'parseInt("3")', "parseInt( '3' )"])
+def test_inventory_supports_current_and_legacy_javascript_values(value):
+    html = (
+        '<div class="product-stock-level__badge-text">in stock</div>'
+        f'<script>window._RestockRocketConfig.variantsInventoryQuantity = '
+        f'{{"64474146079097": {value},}};</script>'
+    )
+    item = SomethingDifferentMonitor(FakeHttp()).parse_product(product(), html=html)
+    assert item.availability == Availability.IN_STOCK
+
+
+def test_inventory_uses_the_selected_variant_quantity():
+    raw = product()
+    raw["variants"] = [
+        {**raw["variants"][0], "available": False},
+        {**raw["variants"][0], "id": 64474146079098, "available": True},
+    ]
+    html = (
+        '<script>window._RestockRocketConfig.variantsInventoryQuantity = '
+        '{64474146079097: 20, 64474146079098: 1};</script>'
+    )
+    item = SomethingDifferentMonitor(FakeHttp()).parse_product(raw, html=html)
+    assert item.variant_id == "64474146079098"
+    assert item.availability == Availability.LOW_STOCK
 
 
 @pytest.mark.parametrize("quantity, expected", [(0, Availability.OUT_OF_STOCK), (-2, Availability.OUT_OF_STOCK)])
@@ -147,15 +171,23 @@ async def test_discovery_suppresses_duplicate_product_ids():
     assert items[0].availability == Availability.LOW_STOCK
 
 
-def test_missing_inventory_is_parser_failure():
-    with pytest.raises(SomethingDifferentParseError):
-        SomethingDifferentMonitor(FakeHttp()).parse_product(product(), html="<html>in stock</html>")
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<html>in stock</html>",
+        '<script>window._RestockRocketConfig.variantsInventoryQuantity = '
+        '{64474146079097: null};</script>',
+    ],
+)
+def test_missing_exact_inventory_falls_back_to_shopify_availability(html):
+    item = SomethingDifferentMonitor(FakeHttp()).parse_product(product(), html=html)
+    assert item.availability == Availability.IN_STOCK
 
 
 @pytest.mark.asyncio
 async def test_check_parser_failure_returns_error():
     monitor = SomethingDifferentMonitor(FakeHttp(
-        json_responses=[product()], text_responses=["<html>broken</html>",]
+        json_responses=[product()], text_responses=[""]
     ))
     original = monitor.parse_product(product(), html=inventory(3))
     checked = await monitor.check_product(replace(original, availability=Availability.IN_STOCK))
