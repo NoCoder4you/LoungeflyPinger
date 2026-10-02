@@ -1,5 +1,7 @@
 [Unit]
 Description=Loungefly product availability monitor
+StartLimitIntervalSec=5min
+StartLimitBurst=5
 Wants=network-online.target
 Wants=loungefly-update.service
 After=network-online.target loungefly-update.service

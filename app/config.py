@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -18,6 +19,19 @@ class ConfigurationError(ValueError):
     """Raised when application configuration is missing or invalid."""
 
 
+SUPPORTED_RETAILERS = frozenset({
+    "amy_david_magic", "bag_dude", "boxlunch", "circle_of_hope", "cm_pop_uk",
+    "cool_merch_uk", "cordys_corner", "damaged_society_uk", "disney_mad_uk",
+    "disney_store_uk", "disney_store_us", "emp_de", "emp_es", "emp_fr", "emp_it",
+    "entertainment_earth", "forbidden_planet_uk", "geek_garage_uk", "geekcore",
+    "get_ready_comics_uk", "gwens_mermaid_cove", "hot_topic_us", "infinity_collectables",
+    "koolaz_uk", "large_nl", "lf_lovers", "loungefly_canada", "loungefly_uk",
+    "loungefly_us", "magic_madhouse_uk", "merchoid_uk", "modern_pinup",
+    "ozzie_collectables", "pink_a_la_mode", "pop_pelican", "popcultcha", "razmatazz_uk",
+    "something_different_uk", "street_707", "truffleshuffle", "world_1_1_games",
+})
+
+
 @dataclass(frozen=True, slots=True)
 class MonitorConfig:
     default_interval_minutes: float = 5
@@ -30,6 +44,7 @@ class MonitorConfig:
     retry_backoff_seconds: float = 1
     rate_limit_requests_per_second: float = 5
     retailer_job_timeout_seconds: float = 120
+    max_response_bytes: int = 10_485_760
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,15 +89,18 @@ class AppConfig:
     release_alerts: ReleaseAlertConfig = field(default_factory=ReleaseAlertConfig)
     backup_directory: Path = Path("data/backups")
     backup_interval_hours: float = 24
+    backup_initial_delay_seconds: float = 30
     backup_count: int = 7
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
+    if isinstance(value, bool):
+        raise ConfigurationError(f"{name} must be a number")
     try:
         converted = cast(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ConfigurationError(f"{name} must be a number") from exc
-    if converted <= 0:
+    if converted <= 0 or not math.isfinite(converted):
         raise ConfigurationError(f"{name} must be greater than zero")
     return converted
 
@@ -127,6 +145,9 @@ def load_config(
             monitor_raw.get("retailer_job_timeout_seconds", 120),
             "retailer_job_timeout_seconds",
         ),
+        max_response_bytes=_positive(
+            monitor_raw.get("max_response_bytes", 10_485_760), "max_response_bytes", int
+        ),
     )
     if not monitor.user_agent:
         raise ConfigurationError("user_agent must not be empty")
@@ -155,6 +176,13 @@ def load_config(
         os.getenv("LOUNGEFLY_BACKUP_INTERVAL_HOURS", database_raw.get("backup_interval_hours", 24)),
         "backup_interval_hours",
     )
+    backup_initial_delay_seconds = _positive(
+        os.getenv(
+            "LOUNGEFLY_BACKUP_INITIAL_DELAY_SECONDS",
+            database_raw.get("backup_initial_delay_seconds", 30),
+        ),
+        "backup_initial_delay_seconds",
+    )
     backup_count = _positive(
         os.getenv("LOUNGEFLY_BACKUP_COUNT", database_raw.get("backup_count", 7)),
         "backup_count", int,
@@ -163,6 +191,30 @@ def load_config(
     retailers = raw.get("retailers", {})
     if not isinstance(notifications_raw, dict) or not isinstance(retailers, dict):
         raise ConfigurationError("notifications and retailers must be mappings")
+    unknown_retailers = set(retailers) - SUPPORTED_RETAILERS
+    if unknown_retailers:
+        raise ConfigurationError(
+            f"unknown retailer key(s): {', '.join(sorted(unknown_retailers))}"
+        )
+    allowed_retailer_keys = {"enabled", "interval_minutes", "incoming_interval_minutes",
+                             "reconciliation_interval_minutes", "high_priority_interval_minutes",
+                             "detail_batch_size", "status"}
+    for retailer, settings in retailers.items():
+        if not isinstance(settings, dict):
+            raise ConfigurationError(f"retailers.{retailer} must be a mapping")
+        unknown = set(settings) - allowed_retailer_keys
+        if unknown:
+            raise ConfigurationError(
+                f"retailers.{retailer} has unknown setting(s): {', '.join(sorted(unknown))}"
+            )
+        if "enabled" not in settings or not isinstance(settings["enabled"], bool):
+            raise ConfigurationError(f"retailers.{retailer}.enabled must be a boolean")
+        for key in ("interval_minutes", "incoming_interval_minutes",
+                    "reconciliation_interval_minutes", "high_priority_interval_minutes"):
+            if key in settings:
+                _positive(settings[key], f"retailers.{retailer}.{key}")
+        if "detail_batch_size" in settings:
+            _positive(settings["detail_batch_size"], f"retailers.{retailer}.detail_batch_size", int)
     notifications = NotificationConfig(
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
@@ -206,5 +258,6 @@ def load_config(
     )
     return AppConfig(
         monitor, database_path, logging_config, notifications, retailers, watchlist, price_alerts,
-        release_alerts, backup_directory, backup_interval_hours, backup_count,
+        release_alerts, backup_directory, backup_interval_hours, backup_initial_delay_seconds,
+        backup_count,
     )

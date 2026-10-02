@@ -6,6 +6,26 @@ from app.database import Database, release_history_key
 
 
 @pytest.mark.asyncio
+async def test_online_backup_is_verified_and_retention_is_bounded(tmp_path: Path) -> None:
+    database = Database(tmp_path / "monitor.db")
+    await database.connect()
+    await database.initialize()
+    backup_dir = tmp_path / "backups"
+    try:
+        for _ in range(4):
+            backup = await database.backup(backup_dir, keep=2)
+            assert backup.exists()
+        backups = list(backup_dir.glob("monitor-*.db"))
+        assert len(backups) == 2
+        import sqlite3
+        for path in backups:
+            with sqlite3.connect(path) as connection:
+                assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+    finally:
+        await database.close()
+
+
+@pytest.mark.asyncio
 async def test_database_initialization(tmp_path: Path) -> None:
     database = Database(tmp_path / "monitor.db")
     await database.connect()

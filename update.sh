@@ -112,17 +112,17 @@ systemctl_do() {
         return
     fi
 
-    if sudo -n true >/dev/null 2>&1; then
-        sudo systemctl "$@"
-        return
-    fi
-
     if [[ -t 0 || -t 1 ]]; then
         sudo systemctl "$@"
         return
     fi
 
-    log "ERROR: systemctl requires elevated privileges, but no interactive sudo is available."
+    # Probe only the exact operation requested. This supports a narrowly scoped
+    # sudoers rule without requiring (or encouraging) broad passwordless sudo.
+    if sudo -n systemctl "$@"; then
+        return
+    fi
+    log "ERROR: denied: sudo -n systemctl $*. Stop/start $SERVICE as root around a pi-owned manual update, or install a narrowly scoped rule."
     return 126
 }
 

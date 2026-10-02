@@ -96,6 +96,22 @@ def test_discord_payload_does_not_mention_everyone_for_removed_product(product: 
     assert payload["allowed_mentions"] == {"parse": []}
 
 
+@pytest.mark.parametrize("alert_type", list(AlertType))
+def test_every_alert_type_obeys_everyone_mention_policy(
+    alert_type: AlertType, product: Product
+) -> None:
+    alert = (Alert(alert_type, message="Retailer state changed")
+             if alert_type in {AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED}
+             else Alert(alert_type, product=product))
+    payload = build_discord_payload(alert)
+    if alert_type is AlertType.PRODUCT_REMOVED:
+        assert "content" not in payload
+        assert payload["allowed_mentions"] == {"parse": []}
+    else:
+        assert payload["content"] == "@everyone"
+        assert payload["allowed_mentions"] == {"parse": ["everyone"]}
+
+
 def test_discord_payload_shows_watches_and_highest_priority(product: Product) -> None:
     payload = build_discord_payload(Alert(
         AlertType.NEW_PRODUCT, product=product,
