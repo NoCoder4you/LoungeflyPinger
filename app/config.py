@@ -78,6 +78,15 @@ class NotificationConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class DiscordBotConfig:
+    enabled: bool = False
+    token: str | None = None
+    guild_id: int | None = None
+    allowed_user_ids: frozenset[int] = frozenset()
+    allowed_role_ids: frozenset[int] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     monitor: MonitorConfig
     database_path: Path
@@ -91,6 +100,7 @@ class AppConfig:
     backup_interval_hours: float = 24
     backup_initial_delay_seconds: float = 30
     backup_count: int = 7
+    discord_bot: DiscordBotConfig = field(default_factory=DiscordBotConfig)
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -219,6 +229,35 @@ def load_config(
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
     )
+    def discord_id(name: str) -> int | None:
+        raw_value = os.getenv(name, "").strip()
+        if not raw_value:
+            return None
+        if not raw_value.isdecimal() or int(raw_value) <= 0:
+            raise ConfigurationError(f"{name} must be a positive Discord ID")
+        return int(raw_value)
+
+    def discord_ids(name: str) -> frozenset[int]:
+        raw_value = os.getenv(name, "").strip()
+        if not raw_value:
+            return frozenset()
+        values = [part.strip() for part in raw_value.split(",")]
+        if any(not part.isdecimal() or int(part) <= 0 for part in values):
+            raise ConfigurationError(f"{name} must be comma-separated positive Discord IDs")
+        return frozenset(map(int, values))
+
+    enabled_value = os.getenv("DISCORD_BOT_ENABLED", "false").strip().casefold()
+    if enabled_value not in {"true", "false"}:
+        raise ConfigurationError("DISCORD_BOT_ENABLED must be true or false")
+    discord_bot = DiscordBotConfig(
+        enabled=enabled_value == "true",
+        token=os.getenv("DISCORD_BOT_TOKEN") or None,
+        guild_id=discord_id("DISCORD_BOT_GUILD_ID"),
+        allowed_user_ids=discord_ids("DISCORD_BOT_ALLOWED_USER_IDS"),
+        allowed_role_ids=discord_ids("DISCORD_BOT_ALLOWED_ROLE_IDS"),
+    )
+    if discord_bot.enabled and not discord_bot.token:
+        raise ConfigurationError("DISCORD_BOT_TOKEN is required when the bot is enabled")
     # Local import avoids coupling the configuration dataclasses to matching internals.
     from app.watchlist import load_watchlist
     watchlist = load_watchlist(watchlist_path)
@@ -259,5 +298,5 @@ def load_config(
     return AppConfig(
         monitor, database_path, logging_config, notifications, retailers, watchlist, price_alerts,
         release_alerts, backup_directory, backup_interval_hours, backup_initial_delay_seconds,
-        backup_count,
+        backup_count, discord_bot,
     )

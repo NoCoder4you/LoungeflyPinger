@@ -127,12 +127,8 @@ def _strings(raw: dict[str, Any], key: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value)
 
 
-def load_watchlist(path: str | Path = "config/watchlist.yaml") -> Watchlist:
-    config_path = Path(path)
-    try:
-        raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError) as exc:
-        raise ConfigurationError(f"Unable to load watchlist: {config_path}") from exc
+def watchlist_from_mapping(raw: object) -> Watchlist:
+    """Validate the public YAML-shaped representation of a watchlist."""
     if not isinstance(raw, dict) or not isinstance(raw.get("products", []), list):
         raise ConfigurationError("watchlist root must contain a products list")
     rules: list[WatchRule] = []
@@ -163,3 +159,35 @@ def load_watchlist(path: str | Path = "config/watchlist.yaml") -> Watchlist:
             return tuple(values)
         rules.append(WatchRule(name.strip(), priority, optional_string("exact_url") or optional_string("url"), optional_string("retailer_product_id"), optional_string("sku"), optional_string("product_name"), _strings(item, "keywords") + _strings(item, "required_keywords"), _strings(item, "excluded_keywords"), choices("franchise", "franchises"), choices("character", "characters"), _strings(item, "retailers"), _strings(item, "product_types"), item.get("exclusivity", item.get("exclusive")), item.get("preorder"), max_price))
     return Watchlist(tuple(rules))
+
+
+def load_watchlist(path: str | Path = "config/watchlist.yaml") -> Watchlist:
+    config_path = Path(path)
+    try:
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ConfigurationError(f"Unable to load watchlist: {config_path}") from exc
+    return watchlist_from_mapping(raw)
+
+
+def rule_to_mapping(rule: WatchRule) -> dict[str, Any]:
+    """Return a stable, YAML/JSON-safe representation without credentials."""
+    result: dict[str, Any] = {"name": rule.name, "priority": rule.priority.value}
+    scalar = ("exact_url", "retailer_product_id", "sku", "product_name", "exclusive", "preorder")
+    sequence = ("keywords", "excluded_keywords", "franchises", "characters", "retailers", "product_types")
+    for key in scalar:
+        value = getattr(rule, key)
+        if value is not None:
+            result[key] = value
+    for key in sequence:
+        value = getattr(rule, key)
+        if value:
+            result[key] = list(value)
+    if rule.max_price is not None:
+        result["max_price"] = str(rule.max_price)
+    return result
+
+
+def rule_from_mapping(value: dict[str, Any]) -> WatchRule:
+    """Validate one YAML-shaped rule using exactly the file-loader rules."""
+    return watchlist_from_mapping({"products": [value]}).rules[0]

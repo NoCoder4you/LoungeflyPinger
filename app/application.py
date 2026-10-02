@@ -18,6 +18,9 @@ from app.monitors import (
 from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.monitor_service import MonitorService
+from app.services.watchlist_manager import WatchlistManager
+from app.discord_control import DiscordControlService
+from app.watchlist import Watchlist
 
 LOGGER = logging.getLogger("monitor")
 
@@ -37,6 +40,10 @@ class Application:
         )
         self.scheduler = Scheduler()
         self.notifier = DiscordNotifier(config.notifications, self.database)
+        self.watchlists = WatchlistManager(self.database)
+        self.discord_control = DiscordControlService(
+            config.discord_bot, self.watchlists, self.database, config
+        )
         self.stop_event = asyncio.Event()
         self._close_lock = asyncio.Lock()
         self._closed = False
@@ -45,6 +52,7 @@ class Application:
         LOGGER.info("Application starting")
         await self.database.connect()
         await self.database.initialize()
+        await self.watchlists.initialize(self.config.watchlist or Watchlist())
         self.scheduler.add_interval_job(
             "database_backup",
             self._backup_database,
@@ -114,7 +122,7 @@ class Application:
             ))
             service = MonitorService(
                 DisneyMadMonitor(self.http), self.database, self.notifier,
-                retailer_name="Disney Mad", watchlist=self.config.watchlist,
+                retailer_name="Disney Mad", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -129,7 +137,7 @@ class Application:
             ))
             service = MonitorService(
                 DamagedSocietyMonitor(self.http), self.database, self.notifier,
-                retailer_name="Damaged Society UK", watchlist=self.config.watchlist,
+                retailer_name="Damaged Society UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -145,7 +153,7 @@ class Application:
             ))
             service = MonitorService(
                 KoolazMonitor(self.http), self.database, self.notifier,
-                retailer_name="Koolaz UK", watchlist=self.config.watchlist,
+                retailer_name="Koolaz UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -161,7 +169,7 @@ class Application:
             ))
             service = MonitorService(
                 CoolMerchMonitor(self.http), self.database, self.notifier,
-                retailer_name="Cool-Merch UK", watchlist=self.config.watchlist,
+                retailer_name="Cool-Merch UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -177,7 +185,7 @@ class Application:
                 interval = float(settings.get("interval_minutes", self.config.monitor.default_interval_minutes))
                 service = MonitorService(
                     EMPMonitor(self.http, region), self.database, self.notifier,
-                    retailer_name=region.name, watchlist=self.config.watchlist,
+                    retailer_name=region.name, watchlist=self.watchlists,
                     price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                     missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                     failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -193,7 +201,7 @@ class Application:
             ))
             service = MonitorService(
                 CMPopMonitor(self.http), self.database, self.notifier,
-                retailer_name="CM POP UK", watchlist=self.config.watchlist,
+                retailer_name="CM POP UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -207,7 +215,7 @@ class Application:
             interval = float(geekcore.get("interval_minutes", self.config.monitor.default_interval_minutes))
             service = MonitorService(
                 GeekCoreMonitor(self.http), self.database, self.notifier, retailer_name="GeekCore",
-                watchlist=self.config.watchlist,
+                watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
@@ -224,7 +232,7 @@ class Application:
             ))
             service = MonitorService(
                 GeekGarageMonitor(self.http), self.database, self.notifier,
-                retailer_name="Geek Garage", watchlist=self.config.watchlist,
+                retailer_name="Geek Garage", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -240,7 +248,7 @@ class Application:
             ))
             service = MonitorService(
                 RazmatazzMonitor(self.http), self.database, self.notifier,
-                retailer_name="Razmatazz UK", watchlist=self.config.watchlist,
+                retailer_name="Razmatazz UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -256,7 +264,7 @@ class Application:
             ))
             service = MonitorService(
                 GetReadyComicsMonitor(self.http), self.database, self.notifier,
-                retailer_name="Get Ready Comics UK", watchlist=self.config.watchlist,
+                retailer_name="Get Ready Comics UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -273,7 +281,7 @@ class Application:
             ))
             service = MonitorService(
                 LFLoversMonitor(self.http), self.database, self.notifier,
-                retailer_name="LF Lovers", watchlist=self.config.watchlist,
+                retailer_name="LF Lovers", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -292,7 +300,7 @@ class Application:
                 self.database,
                 self.notifier,
                 retailer_name="TruffleShuffle",
-                watchlist=self.config.watchlist,
+                watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
@@ -312,7 +320,7 @@ class Application:
                 self.database,
                 self.notifier,
                 retailer_name="Loungefly UK",
-                watchlist=self.config.watchlist,
+                watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
@@ -327,7 +335,7 @@ class Application:
             interval = float(loungefly_us.get("interval_minutes", self.config.monitor.default_interval_minutes))
             service = MonitorService(
                 LoungeflyUSMonitor(self.http), self.database, self.notifier,
-                retailer_name="Loungefly US", watchlist=self.config.watchlist,
+                retailer_name="Loungefly US", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -343,7 +351,7 @@ class Application:
             ))
             service = MonitorService(
                 LoungeflyCanadaMonitor(self.http), self.database, self.notifier,
-                retailer_name="Loungefly Canada", watchlist=self.config.watchlist,
+                retailer_name="Loungefly Canada", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -360,7 +368,7 @@ class Application:
             service = MonitorService(
                 DisneyStoreUKMonitor(self.http), self.database, self.notifier,
                 retailer_name="Disney Store UK",
-                watchlist=self.config.watchlist,
+                watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
@@ -377,7 +385,7 @@ class Application:
             ))
             service = MonitorService(
                 DisneyStoreUSMonitor(self.http), self.database, self.notifier,
-                retailer_name="Disney Store US", watchlist=self.config.watchlist,
+                retailer_name="Disney Store US", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -393,7 +401,7 @@ class Application:
             ))
             service = MonitorService(
                 BoxLunchMonitor(self.http), self.database, self.notifier,
-                retailer_name="BoxLunch", watchlist=self.config.watchlist,
+                retailer_name="BoxLunch", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -409,7 +417,7 @@ class Application:
             ))
             service = MonitorService(
                 HotTopicUSMonitor(self.http), self.database, self.notifier,
-                retailer_name="Hot Topic US", watchlist=self.config.watchlist,
+                retailer_name="Hot Topic US", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -425,7 +433,7 @@ class Application:
             ))
             service = MonitorService(
                 EntertainmentEarthMonitor(self.http), self.database, self.notifier,
-                retailer_name="Entertainment Earth", watchlist=self.config.watchlist,
+                retailer_name="Entertainment Earth", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -443,7 +451,7 @@ class Application:
             ))
             service = MonitorService(
                 MerchoidUKMonitor(self.http), self.database, self.notifier,
-                retailer_name="Merchoid UK", watchlist=self.config.watchlist,
+                retailer_name="Merchoid UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -459,7 +467,7 @@ class Application:
             ))
             service = MonitorService(
                 MagicMadhouseMonitor(self.http), self.database, self.notifier,
-                retailer_name="Magic Madhouse UK", watchlist=self.config.watchlist,
+                retailer_name="Magic Madhouse UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -474,7 +482,7 @@ class Application:
             ))
             service = MonitorService(
                 ModernPinUpMonitor(self.http), self.database, self.notifier,
-                retailer_name="Modern PinUp", watchlist=self.config.watchlist,
+                retailer_name="Modern PinUp", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -489,7 +497,7 @@ class Application:
             ))
             service = MonitorService(
                 CircleOfHopeMonitor(self.http), self.database, self.notifier,
-                retailer_name="Circle Of Hope Boutique", watchlist=self.config.watchlist,
+                retailer_name="Circle Of Hope Boutique", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -505,7 +513,7 @@ class Application:
             ))
             service = MonitorService(
                 PinkALaModeMonitor(self.http), self.database, self.notifier,
-                retailer_name="Pink a la Mode", watchlist=self.config.watchlist,
+                retailer_name="Pink a la Mode", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -521,7 +529,7 @@ class Application:
             ))
             service = MonitorService(
                 Street707Monitor(self.http), self.database, self.notifier,
-                retailer_name="707 Street", watchlist=self.config.watchlist,
+                retailer_name="707 Street", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -537,7 +545,7 @@ class Application:
             ))
             service = MonitorService(
                 CordysCornerMonitor(self.http), self.database, self.notifier,
-                retailer_name="Cordy's Corner", watchlist=self.config.watchlist,
+                retailer_name="Cordy's Corner", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -553,7 +561,7 @@ class Application:
             ))
             service = MonitorService(
                 InfinityCollectablesMonitor(self.http), self.database, self.notifier,
-                retailer_name="Infinity Collectables", watchlist=self.config.watchlist,
+                retailer_name="Infinity Collectables", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -569,7 +577,7 @@ class Application:
             ))
             service = MonitorService(
                 SomethingDifferentMonitor(self.http), self.database, self.notifier,
-                retailer_name="Something Different Gift Shop UK", watchlist=self.config.watchlist,
+                retailer_name="Something Different Gift Shop UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -585,7 +593,7 @@ class Application:
             ))
             service = MonitorService(
                 ForbiddenPlanetMonitor(self.http), self.database, self.notifier,
-                retailer_name="Forbidden Planet International UK", watchlist=self.config.watchlist,
+                retailer_name="Forbidden Planet International UK", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -601,7 +609,7 @@ class Application:
             ))
             service = MonitorService(
                 PopcultchaMonitor(self.http), self.database, self.notifier,
-                retailer_name="Popcultcha", watchlist=self.config.watchlist,
+                retailer_name="Popcultcha", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -619,7 +627,7 @@ class Application:
             service = MonitorService(
                 OzzieCollectablesMonitor(self.http, detail_batch_size=detail_batch_size),
                 self.database, self.notifier, retailer_name="Ozzie Collectables",
-                watchlist=self.config.watchlist, price_alerts=self.config.price_alerts,
+                watchlist=self.watchlists, price_alerts=self.config.price_alerts,
                 release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -640,7 +648,7 @@ class Application:
             ))
             service = MonitorService(
                 PopPelicanMonitor(self.http), self.database, self.notifier,
-                retailer_name="Pop Pelican", watchlist=self.config.watchlist,
+                retailer_name="Pop Pelican", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -656,7 +664,7 @@ class Application:
             ))
             service = MonitorService(
                 World11GamesMonitor(self.http), self.database, self.notifier,
-                retailer_name="WORLD 1-1 GAMES", watchlist=self.config.watchlist,
+                retailer_name="WORLD 1-1 GAMES", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -672,7 +680,7 @@ class Application:
             ))
             service = MonitorService(
                 GwensMermaidCoveMonitor(self.http), self.database, self.notifier,
-                retailer_name="Gwen's Mermaid Cove", watchlist=self.config.watchlist,
+                retailer_name="Gwen's Mermaid Cove", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -688,7 +696,7 @@ class Application:
             ))
             service = MonitorService(
                 BagDudeMonitor(self.http), self.database, self.notifier,
-                retailer_name="The Bag Dude", watchlist=self.config.watchlist,
+                retailer_name="The Bag Dude", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -703,7 +711,7 @@ class Application:
             ))
             service = MonitorService(
                 AmyDavidMagicMonitor(self.http), self.database, self.notifier,
-                retailer_name="AmyDavidMagic", watchlist=self.config.watchlist,
+                retailer_name="AmyDavidMagic", watchlist=self.watchlists,
                 price_alerts=self.config.price_alerts, release_alerts=self.config.release_alerts,
                 missing_scan_threshold=self.config.monitor.missing_scan_threshold,
                 failure_alert_threshold=self.config.monitor.failure_alert_threshold,
@@ -712,6 +720,7 @@ class Application:
                 "amy_david_magic", service.synchronize, interval * 60, jitter_fraction=0.05,
                 timeout_seconds=self.config.monitor.retailer_job_timeout_seconds,
             )
+        await self.discord_control.start()
         LOGGER.info("Application ready", extra={"database": str(self.config.database_path)})
 
     async def _backup_database(self) -> None:
@@ -738,12 +747,15 @@ class Application:
                 return
             LOGGER.info("Application stopping")
             failures: list[tuple[str, BaseException]] = []
-            for name, closer in (
-                ("scheduler", self.scheduler.stop),
+            closers = [("scheduler", self.scheduler.stop)]
+            if self.config.discord_bot.enabled:
+                closers.append(("Discord control", self.discord_control.close))
+            closers.extend((
                 ("Discord notifier", self.notifier.close),
                 ("HTTP client", self.http.close),
                 ("SQLite database", self.database.close),
-            ):
+            ))
+            for name, closer in closers:
                 try:
                     await closer()
                 except BaseException as exc:

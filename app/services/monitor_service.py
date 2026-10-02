@@ -16,8 +16,14 @@ from app.services.product_service import ProductService
 from app.services.release_service import ReleaseService
 from app.services.stock_service import StockService
 from app.watchlist import Watchlist, classify_product
+from typing import Protocol
 
 LOGGER = logging.getLogger("monitor.retailers")
+
+
+class WatchlistProvider(Protocol):
+    @property
+    def current(self) -> Watchlist: ...
 
 
 class MonitorService:
@@ -30,7 +36,7 @@ class MonitorService:
         notifier: NotificationProvider,
         *,
         retailer_name: str,
-        watchlist: Watchlist | None = None,
+        watchlist: Watchlist | WatchlistProvider | None = None,
         price_alerts: PriceAlertConfig | None = None,
         missing_scan_threshold: int = 3,
         release_alerts: ReleaseAlertConfig | None = None,
@@ -83,7 +89,8 @@ class MonitorService:
                 percent >= Decimal(str(self.price_alerts.minimum_drop_percent)))
 
     def _matches(self, product: Product):
-        return self.watchlist.match(product) if self.watchlist is not None else ()
+        watchlist = self.watchlist.current if hasattr(self.watchlist, "current") else self.watchlist
+        return watchlist.match(product) if watchlist is not None else ()
 
     @staticmethod
     def _release_key(info):

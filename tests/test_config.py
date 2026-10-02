@@ -117,3 +117,24 @@ def test_non_string_logging_level_is_rejected(
 
     with pytest.raises(ConfigurationError, match="logging level must be a string"):
         load_config(path, tmp_path / ".env")
+
+
+def test_discord_bot_defaults_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("DISCORD_BOT_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_BOT_GUILD_ID",
+                 "DISCORD_BOT_ALLOWED_USER_IDS", "DISCORD_BOT_ALLOWED_ROLE_IDS"):
+        monkeypatch.delenv(name, raising=False)
+    path = tmp_path / "settings.yaml"; path.write_text("{}", encoding="utf-8")
+    assert not load_config(path, tmp_path / ".env").discord_bot.enabled
+
+
+def test_discord_bot_configuration_parsing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "settings.yaml"; path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_BOT_ENABLED", "true")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "secret")
+    monkeypatch.setenv("DISCORD_BOT_GUILD_ID", "123")
+    monkeypatch.setenv("DISCORD_BOT_ALLOWED_USER_IDS", "1, 2")
+    monkeypatch.setenv("DISCORD_BOT_ALLOWED_ROLE_IDS", "3")
+    config = load_config(path, tmp_path / ".env").discord_bot
+    assert config.guild_id == 123
+    assert config.allowed_user_ids == frozenset({1, 2})
+    assert config.allowed_role_ids == frozenset({3})
