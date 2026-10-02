@@ -3,7 +3,7 @@
 import logging
 import asyncio
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from app.config import PriceAlertConfig, ReleaseAlertConfig
@@ -11,6 +11,7 @@ from app.database import Database
 from app.http import HttpClientError
 from app.models import Alert, AlertType, Availability, Product, RetailerHealth
 from app.monitors.base import RetailerMonitor
+from app.monitors.base import IncompleteScanError
 from app.notifications.base import NotificationProvider
 from app.services.product_service import ProductService
 from app.services.release_service import ReleaseService
@@ -35,6 +36,8 @@ class MonitorService:
         missing_scan_threshold: int = 3,
         release_alerts: ReleaseAlertConfig | None = None,
         failure_alert_threshold: int = 5,
+        circuit_failure_threshold: int = 5,
+        circuit_cooldown_seconds: float = 900,
     ) -> None:
         self.monitor = monitor
         self.database = database
@@ -54,6 +57,10 @@ class MonitorService:
         if failure_alert_threshold < 1:
             raise ValueError("failure_alert_threshold must be at least one")
         self.failure_alert_threshold = failure_alert_threshold
+        if circuit_failure_threshold < 1 or circuit_cooldown_seconds <= 0:
+            raise ValueError("circuit settings must be positive")
+        self.circuit_failure_threshold = circuit_failure_threshold
+        self.circuit_cooldown_seconds = circuit_cooldown_seconds
 
     @staticmethod
     def _stock_alert(previous: Availability, product: Product) -> AlertType | None:
@@ -121,6 +128,9 @@ class MonitorService:
 
     async def synchronize(self) -> list[Alert]:
         """Run one isolated scan, atomically persist it, and maintain durable health."""
+        if not await self._claim_circuit_probe():
+            LOGGER.info("scan_skipped_circuit_open", extra={"retailer": self.retailer_name})
+            return []
         started = time.monotonic()
         reset_metrics = getattr(getattr(self.monitor, "http", None), "reset_metrics", None)
         if reset_metrics:
@@ -130,6 +140,11 @@ class MonitorService:
             # Slow retailer I/O happens before the short SQLite critical section,
             # allowing every scheduled retailer to make progress independently.
             discovered = await self.monitor.discover_products()
+            if (not discovered and getattr(self.monitor, "reject_unexpected_empty", False)
+                    and await self._has_existing_products()):
+                raise IncompleteScanError(
+                    "Unexpected empty catalogue; preserving previously observed products"
+                )
             async with self.database.write_lock:
                 connection = self.database.connection
                 if connection is None:
@@ -146,6 +161,38 @@ class MonitorService:
         except Exception as exc:
             return await self._record_failure(exc, time.monotonic() - started)
 
+    async def _has_existing_products(self) -> bool:
+        connection = self.database.connection
+        if connection is None:
+            return False
+        row = await (await connection.execute(
+            "SELECT 1 FROM products WHERE retailer=? LIMIT 1", (self.retailer_name,)
+        )).fetchone()
+        return row is not None
+
+    async def _claim_circuit_probe(self) -> bool:
+        """Skip an open circuit, atomically claiming its single half-open probe."""
+        connection = self.database.connection
+        if connection is None:
+            return True
+        async with self.database.write_lock:
+            row = await (await connection.execute(
+                "SELECT circuit_state, circuit_open_until FROM retailers WHERE name=?",
+                (self.retailer_name,),
+            )).fetchone()
+            if not row or row[0] == "CLOSED":
+                return True
+            now = datetime.now(UTC)
+            eligible = datetime.fromisoformat(row[1]) if row[1] else now
+            if eligible > now or row[0] == "HALF_OPEN":
+                return False
+            result = await connection.execute(
+                "UPDATE retailers SET circuit_state='HALF_OPEN' WHERE name=? AND circuit_state='OPEN'",
+                (self.retailer_name,),
+            )
+            await connection.commit()
+            return result.rowcount == 1
+
     async def _record_failure(self, exc: Exception, duration: float) -> list[Alert]:
         connection = self.database.connection
         if connection is None:
@@ -155,29 +202,52 @@ class MonitorService:
         status = exc.status if isinstance(exc, HttpClientError) else getattr(
             getattr(self.monitor, "http", None), "response_status", None
         )
-        error = str(exc).strip() or type(exc).__name__
+        http_error = exc if isinstance(exc, HttpClientError) else getattr(
+            getattr(self.monitor, "http", None), "last_error", None
+        )
+        error = (http_error.diagnostic() if isinstance(http_error, HttpClientError)
+                 else str(exc).strip() or type(exc).__name__)
         async with self.database.write_lock:
             await connection.execute(
                 "INSERT INTO retailers(name) VALUES (?) ON CONFLICT(name) DO NOTHING",
                 (self.retailer_name,),
             )
             row = await (await connection.execute(
-                "SELECT consecutive_failures, failure_alert_sent FROM retailers WHERE name=?",
+                "SELECT consecutive_failures, failure_alert_sent, incident_started_at, "
+                "circuit_open_count, circuit_state FROM retailers WHERE name=?",
                 (self.retailer_name,),
             )).fetchone()
             failures = int(row[0]) + 1
             alert_sent = bool(row[1])
             health = (RetailerHealth.FAILED if failures >= self.failure_alert_threshold
                       else RetailerHealth.DEGRADED)
+            blocked = isinstance(http_error, HttpClientError) and http_error.kind.value == "forbidden"
+            if blocked:
+                health = RetailerHealth.BLOCKED_BY_RETAILER
+            should_open = blocked or failures >= self.circuit_failure_threshold or row[4] == "HALF_OPEN"
+            open_count = int(row[3]) + (1 if should_open else 0)
+            cooldown = min(self.circuit_cooldown_seconds * 2 ** max(0, open_count - 1), 86400)
+            open_until = ((datetime.now(UTC) + timedelta(seconds=cooldown)).isoformat()
+                          if should_open else None)
             await connection.execute(
                 """UPDATE retailers SET last_failure=?, consecutive_failures=?, last_error=?,
-                          response_status=?, request_duration=?, health=? WHERE name=?""",
-                (now, failures, error[:2000], status, duration, health.value, self.retailer_name),
+                          response_status=?, request_duration=?, health=?, error_category=?,
+                          error_hostname=?, error_method=?, retry_attempts=?, retry_after_supplied=?,
+                          incident_started_at=COALESCE(incident_started_at, ?), circuit_state=?,
+                          circuit_open_until=?, circuit_open_count=? WHERE name=?""",
+                (now, failures, error[:2000], status, duration, health.value,
+                 http_error.kind.value if isinstance(http_error, HttpClientError) else "adapter_failure",
+                 http_error.hostname if isinstance(http_error, HttpClientError) else None,
+                 http_error.method if isinstance(http_error, HttpClientError) else None,
+                 http_error.attempts if isinstance(http_error, HttpClientError) else None,
+                 int(http_error.retry_after_supplied) if isinstance(http_error, HttpClientError) else 0,
+                 now, "OPEN" if should_open else "CLOSED", open_until, open_count,
+                 self.retailer_name),
             )
             await connection.commit()
         LOGGER.error("scan_failed", extra={"retailer": self.retailer_name, "failures": failures,
                                            "status": status, "error": error})
-        if health != RetailerHealth.FAILED or alert_sent:
+        if health not in {RetailerHealth.FAILED, RetailerHealth.BLOCKED_BY_RETAILER} or alert_sent:
             return []
         last_success = await (await connection.execute(
             "SELECT last_success FROM retailers WHERE name=?", (self.retailer_name,)
@@ -344,11 +414,16 @@ class MonitorService:
                VALUES (?, ?, 0, 1)
                ON CONFLICT(name) DO UPDATE SET last_success=excluded.last_success,
                  consecutive_failures=0, release_sync_completed=1, last_error=NULL,
-                 response_status=?, request_duration=?, health='HEALTHY', failure_alert_sent=0""",
+                 response_status=?, request_duration=?, health='HEALTHY', failure_alert_sent=0,
+                 error_category=NULL, error_hostname=NULL, error_method=NULL, retry_attempts=NULL,
+                 retry_after_supplied=0, incident_started_at=NULL, circuit_state='CLOSED',
+                 circuit_open_until=NULL, circuit_open_count=0""",
             (retailer, now, status, duration),
         )
         await connection.commit()
-        if previous_health and previous_health[0] == RetailerHealth.FAILED.value:
+        if previous_health and previous_health[0] in {
+            RetailerHealth.FAILED.value, RetailerHealth.BLOCKED_BY_RETAILER.value,
+        }:
             recovery = Alert(
                 AlertType.MONITOR_RECOVERED,
                 message=f"Retailer: {retailer}\nThe retailer monitor is responding normally again.",

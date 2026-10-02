@@ -86,7 +86,9 @@ async def test_http_timeout_retries_then_reports_network_failure():
     try:
         with pytest.raises(HttpClientError) as caught:
             await client.get_text(f"http://127.0.0.1:{port}/slow")
-        assert caught.value.kind == HttpErrorKind.NETWORK
+        assert caught.value.kind == HttpErrorKind.TIMEOUT
+        assert caught.value.hostname == "127.0.0.1"
+        assert caught.value.attempts == 2
     finally:
         await client.close()
         await runner.cleanup()

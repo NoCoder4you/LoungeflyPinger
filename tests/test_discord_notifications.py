@@ -104,7 +104,7 @@ def test_every_alert_type_obeys_everyone_mention_policy(
              if alert_type in {AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED}
              else Alert(alert_type, product=product))
     payload = build_discord_payload(alert)
-    if alert_type is AlertType.PRODUCT_REMOVED:
+    if alert_type in {AlertType.PRODUCT_REMOVED, AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED}:
         assert "content" not in payload
         assert payload["allowed_mentions"] == {"parse": []}
     else:

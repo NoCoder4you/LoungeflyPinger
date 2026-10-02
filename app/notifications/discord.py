@@ -149,7 +149,11 @@ def build_discord_payload(alert: Alert) -> dict[str, Any]:
         "allowed_mentions": {"parse": []},
         "embeds": [embed],
     }
-    if alert.alert_type is not AlertType.PRODUCT_REMOVED:
+    # Operational notifications are deliberately non-mentioning and are routed
+    # to the admin webhook. Product events retain the established policy.
+    if alert.alert_type not in {
+        AlertType.PRODUCT_REMOVED, AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED,
+    }:
         payload["content"] = "@everyone"
         payload["allowed_mentions"] = {"parse": ["everyone"]}
     return payload
