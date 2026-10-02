@@ -17,8 +17,8 @@ class Monitor:
 
 
 class BrokenMonitor:
-    def __init__(self, error): self.error = error
-    async def discover_products(self): raise self.error
+    def __init__(self, error): self.error = error; self.calls = 0
+    async def discover_products(self): self.calls += 1; raise self.error
 
 
 class Notifier:
@@ -103,6 +103,36 @@ async def test_failure_alert_is_once_and_recovery_survives_restart(tmp_path: Pat
             "SELECT consecutive_failures, last_error, health, failure_alert_sent FROM retailers"
         )).fetchone()
         assert row == (0, None, "HEALTHY", 0)
+
+
+@pytest.mark.asyncio
+async def test_open_circuit_survives_restart_and_half_open_success_closes_it(tmp_path: Path):
+    path = tmp_path / "circuit.db"
+    async with Database(path) as database:
+        broken = BrokenMonitor(TimeoutError("upstream stalled"))
+        service = MonitorService(broken, database, Notifier(), retailer_name="GeekCore",
+                                 circuit_failure_threshold=2, circuit_cooldown_seconds=60)
+        await service.synchronize()
+        await service.synchronize()
+        await service.synchronize()
+        assert broken.calls == 2
+        row = await (await database.connection.execute(
+            "SELECT circuit_state, consecutive_failures FROM retailers WHERE name='GeekCore'"
+        )).fetchone()
+        assert row == ("OPEN", 2)
+
+    async with Database(path) as database:
+        await database.connection.execute(
+            "UPDATE retailers SET circuit_open_until='2000-01-01T00:00:00+00:00'"
+        )
+        await database.connection.commit()
+        service = MonitorService(Monitor([product()]), database, Notifier(), retailer_name="GeekCore",
+                                 circuit_failure_threshold=2, circuit_cooldown_seconds=60)
+        await service.synchronize()
+        row = await (await database.connection.execute(
+            "SELECT circuit_state, consecutive_failures, health FROM retailers WHERE name='GeekCore'"
+        )).fetchone()
+        assert row == ("CLOSED", 0, "HEALTHY")
 
 
 @pytest.mark.asyncio
