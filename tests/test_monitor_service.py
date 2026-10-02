@@ -171,6 +171,21 @@ async def test_stock_transitions(tmp_path: Path, before, after, preorder, expect
 
 
 @pytest.mark.asyncio
+async def test_unavailable_preorder_listing_does_not_repeat_preorder_open(tmp_path: Path):
+    """A preorder label is not evidence that an out-of-stock preorder reopened."""
+    async with Database(tmp_path / "closed-preorder.db") as database:
+        monitor = Monitor([
+            replace(product(), availability=Availability.OUT_OF_STOCK, preorder=True)
+        ])
+        service = MonitorService(monitor, database, Notifier(), retailer_name="GeekCore")
+
+        await service.synchronize()
+        alerts = await service.synchronize()
+
+        assert alerts == []
+
+
+@pytest.mark.asyncio
 async def test_every_successful_check_is_historic_and_tracks_price_range(tmp_path: Path):
     async with Database(tmp_path / "history.db") as database:
         monitor = Monitor([replace(product(), price=Decimal("79.99"))])

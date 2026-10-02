@@ -64,9 +64,11 @@ class MonitorService:
             return AlertType.LOW_STOCK
         if previous == Availability.COMING_SOON and current == Availability.IN_STOCK:
             return AlertType.AVAILABILITY
-        if previous in {Availability.COMING_SOON, Availability.OUT_OF_STOCK} and (
-            current == Availability.PREORDER or product.preorder
-        ):
+        # ``preorder`` describes the product/listing, even when ordering is
+        # currently unavailable.  Only the normalized PREORDER availability is
+        # evidence that customers can actually place an order now.
+        if (previous in {Availability.COMING_SOON, Availability.OUT_OF_STOCK}
+                and current == Availability.PREORDER):
             return AlertType.PREORDER_OPEN
         return None
 
