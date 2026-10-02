@@ -106,6 +106,11 @@ systemd loads the same file with `EnvironmentFile`.
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
+| `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
+| `DISCORD_BOT_TOKEN` | When enabled | Bot token, kept only in the environment |
+| `DISCORD_BOT_GUILD_ID` | Recommended | Guild used for immediate, guild-scoped command registration |
+| `DISCORD_BOT_ALLOWED_USER_IDS` | For user authorization | Comma-separated Discord user IDs |
+| `DISCORD_BOT_ALLOWED_ROLE_IDS` | For role authorization | Comma-separated Discord role IDs |
 | `LOUNGEFLY_DATABASE_PATH` | No | `data/loungefly.db` |
 | `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
 | `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number between later backups |
@@ -140,6 +145,38 @@ rotate one in Discord immediately if it is exposed.
 Discord notifications mention `@everyone` so subscribers are alerted, except for product-removal
 notifications. The webhook's Discord channel permissions must allow everyone mentions for the
 mention to notify channel members.
+
+### Discord Control Bot
+
+The optional control bot runs on the monitor's asyncio loop and is separate from outbound webhook
+alerts. In the Discord Developer Portal, create an application and bot, keep its token in `.env`,
+and invite it with the `bot` and `applications.commands` scopes. It needs only **View Channels** and
+**Send Messages** (plus **Attach Files** for `/watch export`); Administrator and Message Content
+intent are not required. Set `DISCORD_BOT_GUILD_ID` for production so commands are registered only
+in that server and synchronize promptly. Leaving `DISCORD_BOT_ENABLED=false` makes no gateway
+connection and preserves the pre-bot operation.
+
+Mutation access is deny-by-default. A caller must have an ID in
+`DISCORD_BOT_ALLOWED_USER_IDS` or a role in `DISCORD_BOT_ALLOWED_ROLE_IDS`; server membership alone
+does not authorize changes. Denials and all attempted mutations are written to the SQLite audit
+log. Management replies are ephemeral, and deletion uses a one-minute confirmation restricted to
+its initiating user.
+
+Commands are `/watch list`, `/watch show`, `/watch add`, `/watch edit`, `/watch delete`,
+`/watch enable`, `/watch disable`, `/watch export`, `/status`, and read-only `/retailers`. On the
+first startup after upgrade, the validated `config/watchlist.yaml` rules are imported into SQLite
+and a durable migration marker is recorded. This happens exactly once—even if every rule is later
+deleted. SQLite is then authoritative; edits do not modify tracked YAML. Enabled rules are held in
+an immutable in-memory snapshot, replaced immediately after each committed mutation, and included
+in the existing online database backups. `/watch export` provides a secret-free YAML copy.
+
+If commands do not appear, verify the application was invited with `applications.commands`, the
+guild ID is correct, and inspect `sudo journalctl -u loungefly-monitor.service -f` for
+`discord_control_ready` or authentication errors. Guild commands normally synchronize as soon as
+the bot connects; global registration (blank guild ID) can take longer. A bot authentication or
+gateway failure is logged but does not stop retailer jobs. Disable it by setting
+`DISCORD_BOT_ENABLED=false` and restarting the existing service. No new daemon, root privilege, or
+systemd sandbox change is needed.
 
 ## Running
 

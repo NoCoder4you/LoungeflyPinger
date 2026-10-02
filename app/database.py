@@ -179,6 +179,34 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_sent_at
     ON notification_deliveries(sent_at);
+CREATE TABLE IF NOT EXISTS application_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS watch_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    priority TEXT NOT NULL,
+    rule_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    discord_user_id TEXT
+);
+CREATE TABLE IF NOT EXISTS discord_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    discord_user_id TEXT NOT NULL,
+    guild_id TEXT,
+    channel_id TEXT,
+    action TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT,
+    before_state TEXT,
+    after_state TEXT,
+    success INTEGER NOT NULL CHECK (success IN (0, 1))
+);
+CREATE INDEX IF NOT EXISTS idx_discord_audit_timestamp ON discord_audit_log(timestamp);
 """
 
 
