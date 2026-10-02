@@ -211,6 +211,13 @@ data/*.db
 data/*.db-*
 data/backups/
 logs/*.log*
+/.update-backups/
+/.update-stage.*/
+/.update.lock
+/.venvs/
+/.venv.new.*
+/.venv.rollback.*
+data/*.db.failed-update-*
 
 # PyPI configuration file
 .pypirc

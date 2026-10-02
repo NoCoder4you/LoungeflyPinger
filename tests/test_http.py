@@ -90,3 +90,36 @@ async def test_http_timeout_retries_then_reports_network_failure():
     finally:
         await client.close()
         await runner.cleanup()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chunked", [False, True])
+async def test_http_rejects_oversized_responses(chunked: bool) -> None:
+    async def handler(_: web.Request) -> web.StreamResponse:
+        if not chunked:
+            return web.Response(body=b"x" * 33)
+        response = web.StreamResponse()
+        await response.prepare(_)
+        await response.write(b"x" * 16)
+        await response.write(b"y" * 17)
+        await response.write_eof()
+        return response
+
+    application = web.Application()
+    application.router.add_get("/large", handler)
+    runner = web.AppRunner(application)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    assert site._server is not None
+    port = site._server.sockets[0].getsockname()[1]
+    client = AsyncHttpClient(timeout_seconds=1, concurrency_limit=1, user_agent="test",
+                             max_retries=0, rate_limit_requests_per_second=1000,
+                             max_response_bytes=32)
+    try:
+        with pytest.raises(HttpClientError) as caught:
+            await client.get_text(f"http://127.0.0.1:{port}/large")
+        assert caught.value.kind is HttpErrorKind.RESPONSE_TOO_LARGE
+    finally:
+        await client.close()
+        await runner.cleanup()

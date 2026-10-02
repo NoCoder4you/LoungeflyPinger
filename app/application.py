@@ -33,10 +33,13 @@ class Application:
             max_retries=config.monitor.max_retries,
             backoff_seconds=config.monitor.retry_backoff_seconds,
             rate_limit_requests_per_second=config.monitor.rate_limit_requests_per_second,
+            max_response_bytes=config.monitor.max_response_bytes,
         )
         self.scheduler = Scheduler()
         self.notifier = DiscordNotifier(config.notifications, self.database)
         self.stop_event = asyncio.Event()
+        self._close_lock = asyncio.Lock()
+        self._closed = False
 
     async def start(self) -> None:
         LOGGER.info("Application starting")
@@ -46,7 +49,7 @@ class Application:
             "database_backup",
             self._backup_database,
             self.config.backup_interval_hours * 3600,
-            initial_delay_seconds=self.config.backup_interval_hours * 3600,
+            initial_delay_seconds=self.config.backup_initial_delay_seconds,
         )
         await self.http.start()
         retailer_names = {
@@ -730,9 +733,28 @@ class Application:
             await self.close()
 
     async def close(self) -> None:
-        LOGGER.info("Application stopping")
-        await self.scheduler.stop()
-        await self.notifier.close()
-        await self.http.close()
-        await self.database.close()
-        LOGGER.info("Application stopped")
+        async with self._close_lock:
+            if self._closed:
+                return
+            LOGGER.info("Application stopping")
+            failures: list[tuple[str, BaseException]] = []
+            for name, closer in (
+                ("scheduler", self.scheduler.stop),
+                ("Discord notifier", self.notifier.close),
+                ("HTTP client", self.http.close),
+                ("SQLite database", self.database.close),
+            ):
+                try:
+                    await closer()
+                except BaseException as exc:
+                    if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    failures.append((name, exc))
+                    LOGGER.exception("Resource cleanup failed", extra={"resource": name})
+            self._closed = True
+            if failures:
+                LOGGER.error("Application stopped with cleanup failures", extra={
+                    "resources": [name for name, _ in failures]
+                })
+            else:
+                LOGGER.info("Application stopped")

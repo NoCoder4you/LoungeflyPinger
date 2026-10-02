@@ -18,6 +18,7 @@ class HttpErrorKind(StrEnum):
     SERVER = "server_error"
     CLIENT = "client_error"
     PARSER = "parser_failure"
+    RESPONSE_TOO_LARGE = "response_too_large"
 
 
 class HttpClientError(RuntimeError):
@@ -30,7 +31,8 @@ class HttpClientError(RuntimeError):
 class AsyncHttpClient:
     def __init__(self, *, timeout_seconds: float, concurrency_limit: int, user_agent: str,
                  max_retries: int, backoff_seconds: float = 1,
-                 rate_limit_requests_per_second: float = 5) -> None:
+                 rate_limit_requests_per_second: float = 5,
+                 max_response_bytes: int = 10_485_760) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self._concurrency_limit = concurrency_limit
         # Use the conventional general-purpose request accept value. Individual
@@ -40,6 +42,7 @@ class AsyncHttpClient:
         self._max_retries = max_retries
         self._backoff_seconds = backoff_seconds
         self._minimum_request_interval = 1 / rate_limit_requests_per_second
+        self._max_response_bytes = max_response_bytes
         self._rate_lock = asyncio.Lock()
         self._next_request_at = 0.0
         self._status: contextvars.ContextVar[int | None] = contextvars.ContextVar(
@@ -87,7 +90,28 @@ class AsyncHttpClient:
                         raise HttpClientError(kind, "Temporary HTTP error; retry limit reached", response.status)
                     if response.status >= 400:
                         raise HttpClientError(HttpErrorKind.CLIENT, "HTTP client error", response.status)
-                    return await response.text()
+                    declared = response.content_length
+                    if declared is not None and declared > self._max_response_bytes:
+                        raise HttpClientError(
+                            HttpErrorKind.RESPONSE_TOO_LARGE,
+                            f"HTTP response exceeds {self._max_response_bytes} byte limit",
+                            response.status,
+                        )
+                    body = bytearray()
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        body.extend(chunk)
+                        if len(body) > self._max_response_bytes:
+                            raise HttpClientError(
+                                HttpErrorKind.RESPONSE_TOO_LARGE,
+                                f"HTTP response exceeds {self._max_response_bytes} byte limit",
+                                response.status,
+                            )
+                    try:
+                        return bytes(body).decode(response.charset or "utf-8")
+                    except (LookupError, UnicodeDecodeError) as exc:
+                        raise HttpClientError(
+                            HttpErrorKind.PARSER, "Response text encoding is invalid", response.status
+                        ) from exc
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self._max_retries:
                     await asyncio.sleep(min(self._backoff_seconds * 2**attempt, 30))

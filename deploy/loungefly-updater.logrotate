@@ -1,0 +1,10 @@
+/home/pi/LoungeflyPinger/logs/updater.log {
+    size 5M
+    rotate 3
+    compress
+    delaycompress
+    missingok
+    notifempty
+    su pi pi
+    create 0600 pi pi
+}

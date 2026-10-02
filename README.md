@@ -15,7 +15,7 @@ restart retains the baseline and does not resend unchanged product notifications
 
 Important operational safeguards:
 
-- HTTP concurrency, rate, timeout, retries/backoff, and per-retailer job runtime are bounded.
+- HTTP concurrency, rate, timeout, retries/backoff, response-body size, and per-retailer job runtime are bounded. Task timeouts protect asynchronous operations but cannot pre-empt arbitrary CPU-bound synchronous parser work; retailer tasks are isolated, not separate processes.
 - `SIGINT`/`SIGTERM` requests shutdown; scheduler jobs are cancelled, then Discord/HTTP and SQLite
   are closed in order. Startup, ready, shutdown-requested, stopping, and stopped events are logged.
 - SQLite uses foreign keys, WAL mode, a 5-second busy timeout, serialized writes, schema upgrades,
@@ -31,7 +31,7 @@ Important operational safeguards:
 ## Requirements
 
 - 64-bit Linux/Raspberry Pi OS with `systemd`
-- Python 3.12 or newer, `python3-venv`, Git, and CA certificates
+- Python 3.12 or newer, `python3-venv`, Git, `sqlite3`, and CA certificates
 - A Raspberry Pi user named `pi`; the packaged units run under this unprivileged account
 - Outbound HTTPS access to retailer sites and Discord
 
@@ -43,7 +43,8 @@ absolute paths that match this installation location.
 
 ```bash
 sudo apt update
-sudo apt install -y git python3 python3-venv ca-certificates
+sudo apt install -y git python3 python3-venv sqlite3 ca-certificates
+python3 -c 'import sys; print(sys.version); raise SystemExit(sys.version_info < (3, 12))'
 sudo -u pi git clone <YOUR_REPOSITORY_URL> /home/pi/LoungeflyPinger
 sudo -u pi python3 -m venv /home/pi/LoungeflyPinger/.venv
 sudo -u pi /home/pi/LoungeflyPinger/.venv/bin/python -m pip install --upgrade pip
@@ -67,10 +68,30 @@ At boot, `loungefly-update.service` runs before the monitor. It takes an exclusi
 failed fetch, accepts fast-forward updates only, backs up `.env` and stopped SQLite state, builds an
 isolated replacement virtual environment for each candidate, and runs compilation plus the full test
 suite before activating it. A failed validation restores the previous Git commit; remote outages
-or local tracked changes leave the installed version untouched. The updater never restarts the
-monitor itself. By default it updates the checkout containing the script. Its defaults can be
+or local tracked changes leave the installed version untouched. At boot the monitor is inactive, so
+systemd starts it after the updater exits. During an interactive update of an active monitor, the
+updater stops it only for activation, restarts it, and performs a health check. By default it updates the checkout containing the script. Its defaults can be
 overridden with systemd environment variables such as `APP_DIR`, `BRANCH`, `PYTHON_BIN`,
 `FETCH_ATTEMPTS`, and `MAX_BACKUPS`.
+
+The initial installation may create `.venv` as a directory. Each successful update builds
+`.venvs/<commit>` and atomically changes `.venv` into a symlink to the active commit environment;
+the prior environment is retained until health verification succeeds. The monitor unit must always
+execute `/home/pi/LoungeflyPinger/.venv/bin/python`.
+
+The recommended privileged manual workflow does not grant broad passwordless sudo:
+
+```bash
+sudo systemctl stop loungefly-monitor.service
+sudo -u pi /home/pi/LoungeflyPinger/update.sh
+sudo systemctl start loungefly-monitor.service
+sudo systemctl is-active loungefly-monitor.service
+```
+
+When launched while the service is active, the updater may use `sudo` only for the exact requested
+`systemctl stop`/`start` operation. Non-interactive denial is explicit. If unattended active-service
+updates are required, grant only those exact service verbs in a locally reviewed sudoers rule—not
+`sudo ALL` and not a general passwordless capability probe.
 
 Existing installations whose copied systemd unit still invokes `deploy/update.sh` remain supported:
 that compatibility entry point forwards to the root updater. Reinstall the packaged unit and run
@@ -87,14 +108,19 @@ systemd loads the same file with `EnvironmentFile`.
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
 | `LOUNGEFLY_DATABASE_PATH` | No | `data/loungefly.db` |
 | `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
-| `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number |
+| `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number between later backups |
+| `LOUNGEFLY_BACKUP_INITIAL_DELAY_SECONDS` | No | `30`; prompt first backup after startup |
 | `LOUNGEFLY_BACKUP_COUNT` | No | `7`; positive integer retained |
 | `LOUNGEFLY_LOG_PATH` | No | `logs/loungefly-monitor.log` |
 | `LOUNGEFLY_LOG_LEVEL` | No | `INFO`; one of DEBUG/INFO/WARNING/ERROR/CRITICAL |
 
 `config/retailers.yaml` controls global HTTP limits, alert thresholds, prices/releases, log
 rotation, retailers, and each `interval_minutes`. Set a retailer's `enabled: false` to disable it.
-Avoid aggressive intervals: retailer throttling makes scans less reliable, not more useful.
+Unknown retailer settings, non-mapping entries, non-boolean `enabled` values, and non-positive or
+non-finite intervals are rejected before scheduler tasks are created. Avoid aggressive intervals:
+retailer throttling makes scans less reliable, not more useful. Absolute database/backup/log paths
+outside `/home/pi/LoungeflyPinger/data` and `logs` require matching `ReadWritePaths=` overrides in
+both installed systemd units; relative paths are resolved from the application working directory.
 `config/watchlist.yaml` controls alerts only; all discovered state is still persisted. Fields in a
 watch are ANDed, list values match any entry, and separate watches are ORed. Supported constraints
 include URL/product ID/SKU/name, required or excluded keywords, franchise, character, retailers,
@@ -148,8 +174,14 @@ sudo journalctl -u loungefly-monitor.service --since today
 ```
 
 A normal stop sends SIGTERM and allows 45 seconds for graceful closure. Unexpected non-zero exits
-restart after 10 seconds. Configuration errors exit non-zero and are therefore retried; inspect the
-journal rather than allowing a persistent typo to loop unnoticed.
+restart after 10 seconds. Configuration errors exit non-zero. The unit retains `Restart=on-failure` and a ten-second delay,
+but limits starts to five per five minutes. Diagnose and clear a corrected persistent failure with:
+
+```bash
+sudo systemctl status loungefly-monitor.service
+sudo journalctl -u loungefly-monitor.service
+sudo systemctl reset-failed loungefly-monitor.service
+```
 
 ## Retailers and intervals
 
@@ -196,30 +228,57 @@ The default live database is `/home/pi/LoungeflyPinger/data/loungefly.db` (relat
 resolved from the service working directory). WAL sidecars may exist while running; do not copy
 only the `.db` file with ordinary `cp` during writes.
 
-Automatic backups are consistent snapshots in `/home/pi/LoungeflyPinger/data/backups`, defaulting to
-24-hour intervals and seven retained files. To make an immediate safe manual snapshot, stop the
-service before copying the database, then confirm the copy's integrity:
+Automatic backups are consistent snapshots in `/home/pi/LoungeflyPinger/data/backups`. The first
+verified online backup is scheduled 30 seconds after startup; later backups default to 24-hour
+intervals, with seven retained application-generated `loungefly-<timestamp>.db` files. Automatic
+retention manages only that filename pattern. Manual snapshots, updater state (ten generations by
+default), restore directories, and `*.failed-update-*` rollback snapshots must be reviewed and pruned
+by the operator after validation, for example with a conservative age filter and an inspected list.
+Never delete the active database or the most recent rollback set.
+
+Create and verify a stopped manual snapshot:
 
 ```bash
 sudo systemctl stop loungefly-monitor.service
-sudo -u pi cp /home/pi/LoungeflyPinger/data/loungefly.db /home/pi/LoungeflyPinger/data/backups/manual-$(date -u +%Y%m%dT%H%M%SZ).db
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+sudo -u pi cp -- /home/pi/LoungeflyPinger/data/loungefly.db "/home/pi/LoungeflyPinger/data/backups/manual-$stamp.db"
+sudo -u pi sqlite3 "/home/pi/LoungeflyPinger/data/backups/manual-$stamp.db" 'PRAGMA integrity_check;'
 sudo systemctl start loungefly-monitor.service
-sudo -u pi find /home/pi/LoungeflyPinger/data/backups -maxdepth 1 -name '*.db' -type f -printf '%TY-%Tm-%Td %TT %p\n'
-sudo -u pi sqlite3 /home/pi/LoungeflyPinger/data/backups/<BACKUP>.db 'PRAGMA integrity_check;'
 ```
 
-Restore only while stopped, preserve the current database, copy one verified snapshot, and restore
-ownership. SQLite creates fresh WAL sidecars on startup:
+Restore with the supplied fail-closed script. It requires the monitor already stopped, immediately
+integrity-checks the selected snapshot, preserves the current database and WAL/SHM sidecars in a
+unique timestamped directory, verifies a mode-0600 temporary replacement, atomically renames it,
+removes stale sidecars only while stopped, restarts, and validates service/database state:
 
 ```bash
 sudo systemctl stop loungefly-monitor.service
-sudo mv /home/pi/LoungeflyPinger/data/loungefly.db /home/pi/LoungeflyPinger/data/loungefly.db.pre-restore
-sudo rm -f /home/pi/LoungeflyPinger/data/loungefly.db-wal /home/pi/LoungeflyPinger/data/loungefly.db-shm
-sudo cp /home/pi/LoungeflyPinger/data/backups/<BACKUP>.db /home/pi/LoungeflyPinger/data/loungefly.db
-sudo chown pi:pi /home/pi/LoungeflyPinger/data/loungefly.db
-sudo chmod 600 /home/pi/LoungeflyPinger/data/loungefly.db
-sudo systemctl start loungefly-monitor.service
+sudo /home/pi/LoungeflyPinger/deploy/restore-backup.sh \
+  /home/pi/LoungeflyPinger/data/backups/<BACKUP>.db
+sudo systemctl is-active loungefly-monitor.service
+sudo -u pi sqlite3 /home/pi/LoungeflyPinger/data/loungefly.db 'PRAGMA integrity_check;'
 ```
+
+If startup or validation fails, leave the service stopped. Copy the preserved `loungefly.db`,
+`loungefly.db-wal`, and `loungefly.db-shm` from the path printed by the script back into `data/`,
+restore `pi:pi` ownership and mode `0600`, start the service, then repeat both validations. Each run
+uses a unique directory; no fixed `loungefly.db.pre-restore` is reused.
+
+### Log retention
+
+These are separate controls: application file logs use the YAML `max_bytes`/`backup_count`; updater
+file logs use `logrotate`; system-journal retention is **not bounded by this project** and depends on
+the host's `journald.conf`. Install and verify updater rotation without restarting the monitor:
+
+```bash
+sudo install -o root -g root -m 0644 deploy/loungefly-updater.logrotate /etc/logrotate.d/loungefly-updater
+sudo logrotate --debug /etc/logrotate.d/loungefly-updater
+sudo logrotate --force /etc/logrotate.d/loungefly-updater
+sudo stat /home/pi/LoungeflyPinger/logs/updater.log
+```
+
+The policy rotates near 5 MiB, retains three compressed generations, tolerates missing/empty logs,
+and performs rotation as `pi:pi`.
 
 ## Troubleshooting
 
@@ -238,9 +297,9 @@ sudo systemctl start loungefly-monitor.service
   retailer interval/global rate, and allow exponential retries to settle.
 - **Service does not start:** use `systemctl status` and `journalctl`; verify absolute unit paths,
   `.env` syntax and mode, Python 3.12+, installed dependencies, YAML validity, and write ownership
-  for `data/` and `logs/`. Run the exact `ExecStart` as the `loungefly` user.
-- **Disk usage:** inspect `du -sh data logs`; backups and application log files are bounded by
-  configuration. Configure global journal limits in `/etc/systemd/journald.conf` if necessary.
+  for `data/` and `logs/`. Run the exact `ExecStart` as the `pi` user.
+- **Disk usage:** inspect `du -sh data logs`; application-generated backups and application/updater file logs are bounded by
+  their separate policies. Manual and failed-update snapshots need operator pruning. Configure global journal limits in `/etc/systemd/journald.conf` if necessary.
 - **Restart notifications:** unchanged state should be silent. If alerts recur, do not delete the
   database; verify the configured path and service working directory point to the persistent file.
 
