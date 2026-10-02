@@ -5,3 +5,5 @@ products:
     priority: normal
     product_types:
       - mini_backpack
+    excluded_keywords:
+      - Pokemon
