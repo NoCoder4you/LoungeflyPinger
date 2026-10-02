@@ -86,12 +86,13 @@ class WatchRule:
     def matches(self, raw_product: Product) -> bool:
         product = classify_product(raw_product)
         text = normalize_text(product.name)
+        exclusion_text = normalize_text(" ".join(filter(None, (product.name, product.franchise))))
         if self.exact_url and normalize_url(product.url) != normalize_url(self.exact_url): return False
         if self.retailer_product_id and normalize_text(product.retailer_product_id) != normalize_text(self.retailer_product_id): return False
         if self.sku and (not product.sku or normalize_text(product.sku) != normalize_text(self.sku)): return False
         if self.product_name and text != normalize_text(self.product_name): return False
         if any(normalize_text(term) not in text for term in self.keywords): return False
-        if any(normalize_text(term) in text for term in self.excluded_keywords): return False
+        if any(normalize_text(term) in exclusion_text for term in self.excluded_keywords): return False
         if self.franchises and normalize_text(product.franchise or "") not in map(normalize_text, self.franchises): return False
         if self.characters and normalize_text(product.character or "") not in map(normalize_text, self.characters): return False
         if self.retailers and normalize_text(product.retailer) not in map(normalize_text, self.retailers): return False

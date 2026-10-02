@@ -44,6 +44,36 @@ def test_excluded_keywords_override_required_keywords(stitch: Product) -> None:
     assert not rule.matches(replace(stitch, name="Stitch floral wallet mini backpack set"))
 
 
+@pytest.mark.parametrize("pokemon_name", [
+    "Loungefly Pokemon Pikachu Mini Backpack",
+    "Loungefly Pokémon Eevee Mini Backpack",
+    "Loungefly POKEMON Pikachu Mini Backpack",
+    "Loungefly—POKÉMON: Eevee Mini-Backpack!",
+])
+def test_configured_generic_watch_excludes_pokemon_names(
+    stitch: Product, pokemon_name: str,
+) -> None:
+    watchlist = load_watchlist()
+    pokemon = replace(stitch, name=pokemon_name, franchise=None)
+
+    assert watchlist.match(pokemon) == ()
+
+
+def test_configured_generic_watch_excludes_classified_pokemon_without_name_keyword(
+    stitch: Product,
+) -> None:
+    watchlist = load_watchlist()
+    pokemon = replace(stitch, name="Loungefly Pikachu Mini Backpack", franchise="Pokemon")
+
+    assert watchlist.match(pokemon) == ()
+
+
+def test_configured_generic_watch_still_matches_non_pokemon_backpacks(stitch: Product) -> None:
+    matches = load_watchlist().match(stitch)
+
+    assert [match.name for match in matches] == ["Any Loungefly Mini Backpack"]
+
+
 def test_maximum_price_requires_a_known_price_at_or_below_limit(stitch: Product) -> None:
     rule = WatchRule("Under 90", max_price=Decimal("90"))
     assert rule.matches(stitch)
