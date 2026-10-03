@@ -381,3 +381,45 @@ backup. Sensible future work is a small health/metrics exporter, per-host circui
 for low disk space/backup age, off-device encrypted backup replication, and extracting the verbose
 adapter registration into a declarative registry. These are deliberately not part of this
 production-hardening change.
+
+## Stage 2: live retailer and scan management
+
+The optional Discord control bot now manages retailer scheduling inside the existing
+`loungefly-monitor.service` process. All `/retailer` responses are ephemeral. The
+same deny-by-default user/role allow-list used by watch management protects
+configuration changes and manual scans; no systemd, shell, SQL, or filesystem
+permissions are granted to Discord.
+
+* `/retailer list` shows every trusted adapter's effective state, interval, and health.
+* `/retailer show geekcore` shows YAML defaults, runtime overrides, persisted health,
+  scan timing/status, and whether a scan is active.
+* `/retailer enable <key>` immediately enables and schedules an adapter.
+* `/retailer disable <key>` asks for a user-bound, 60-second confirmation, then
+  removes future executions. An already-running scan is allowed to finish.
+* `/retailer interval geekcore 8` safely reschedules the main scan lane.
+* `/retailer reset <key>` removes SQLite overrides and restores startup YAML defaults;
+  confirmation is required when the enabled state changes.
+* `/retailer scan geekcore` executes the normal `MonitorService.synchronize()` path.
+  It works while scheduled monitoring is disabled and does not enable it. A second
+  scan of the same retailer is rejected rather than queued, while other retailers
+  can continue concurrently. Manual and scheduled scans share the configured
+  `retailer_job_timeout_seconds` deadline; timeouts update health and scan history
+  as failures and always release the retailer scan lock.
+* `/retailer failures <key>` displays bounded, durable recent failed-scan summaries.
+
+`config/retailers.yaml` is the deployment default and is read only at process startup.
+Discord overrides (enabled and the main interval) live in SQLite and survive restarts;
+the YAML file is never rewritten. Intervals are limited to **1–1440 minutes**.
+Specialized `amy_david_magic` lane intervals and Ozzie's `detail_batch_size` are shown
+read-only and retain their startup values; the command changes only the canonical
+main schedule. Every scheduled and manual scan records bounded metadata (never HTTP
+bodies, headers, tracebacks, or secrets), and retailer actions are audit logged. Scan
+history is capped at the newest 4,000 entries per retailer (nearly three days at the
+minimum interval, or about four weeks at ten minutes); the cap is also enforced during startup upgrades so
+the live database and its backups cannot grow indefinitely from scan history.
+
+For troubleshooting, use `/retailer show`, `/retailer failures`, `/status`, and inspect
+`journalctl -u loungefly-monitor.service` or `logs/loungefly-monitor.log`. Do not edit
+the database. Deployment remains `/home/pi/LoungeflyPinger` with its `.venv`: update
+the checkout and dependencies, run the tests, then restart the existing service once
+to deploy this release. No additional daemon or service permission is required.

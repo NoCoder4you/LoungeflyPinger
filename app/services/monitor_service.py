@@ -207,6 +207,14 @@ class MonitorService:
         await connection.commit()
         return [alert]
 
+    async def record_failure(self, exc: Exception, duration: float) -> list[Alert]:
+        """Record a coordinator-level failure through the canonical health path.
+
+        Scan coordinators use this when a deadline cancels discovery before
+        ``synchronize`` can handle an ordinary adapter exception itself.
+        """
+        return await self._record_failure(exc, duration)
+
     async def _synchronize_success(self, started: float, discovered: list[Product]) -> list[Alert]:
         connection = self.database.connection
         if connection is None:
