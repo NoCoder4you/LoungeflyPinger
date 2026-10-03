@@ -176,6 +176,8 @@ class RetailerManager:
     def _schedule(self, key: str) -> None:
         if self.scheduler.has_job(key): return
         state = self.effective(key)
+        # Do not also set Scheduler.timeout_seconds here. _run_scan owns the
+        # deadline so it can persist health and history before returning.
         self.scheduler.add_interval_job(key, lambda: self._run_scan(key, "scheduled", None), state.interval_minutes * 60,
             jitter_fraction=.05)
 
