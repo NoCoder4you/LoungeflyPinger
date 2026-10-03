@@ -15,6 +15,8 @@ from discord import app_commands
 from app.config import AppConfig, DiscordBotConfig
 from app.database import Database
 from app.services.watchlist_manager import StoredWatchRule, WatchlistManager
+from app.services.retailer_manager import RetailerManager, ScanAlreadyRunning
+from app.scheduler import Scheduler
 
 LOGGER = logging.getLogger("monitor.discord_control")
 
@@ -53,13 +55,49 @@ class DeleteConfirmation(discord.ui.View):
         self.stop()
 
 
+class RetailerConfirmation(discord.ui.View):
+    """User-bound, expiring confirmation for disruptive retailer changes."""
+    def __init__(self, service: "DiscordControlService", user_id: int, key: str,
+                 operation: str) -> None:
+        super().__init__(timeout=60)
+        self.service, self.user_id, self.key, self.operation = service, user_id, key, operation
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the requesting user may confirm.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        assert self.service.retailers is not None
+        before = (await self.service.retailers.get_state(self.key)).as_dict()
+        try:
+            after = (await (self.service.retailers.set_enabled(self.key, False, str(self.user_id))
+                     if self.operation == "disable" else self.service.retailers.reset(self.key))).as_dict()
+            await self.service.audit_retailer(interaction, self.operation, self.key, before, after, True)
+            await interaction.response.edit_message(content=f"{self.key} {self.operation} completed.", view=None)
+        except Exception:
+            await self.service.audit_retailer(interaction, self.operation, self.key, before, None, False)
+            await interaction.response.edit_message(content="Operation failed; see service logs.", view=None)
+            LOGGER.exception("discord_retailer_confirmation_failed")
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        await interaction.response.edit_message(content="Retailer change cancelled.", view=None)
+        self.stop()
+
+
 class DiscordControlService:
     """Own the Discord client without allowing its failures to stop monitoring."""
 
     def __init__(self, config: DiscordBotConfig, manager: WatchlistManager, database: Database,
-                 app_config: AppConfig) -> None:
+                 app_config: AppConfig, retailers: RetailerManager | None = None,
+                 scheduler: Scheduler | None = None) -> None:
         self.config, self.manager, self.database, self.app_config = config, manager, database, app_config
         self.started_at = time.monotonic()
+        self.retailers, self.scheduler = retailers, scheduler
         self.client: discord.Client | None = None
         self.tree: app_commands.CommandTree | None = None
         self._task: asyncio.Task[None] | None = None
@@ -108,8 +146,13 @@ class DiscordControlService:
     async def require_authorized(self, interaction: discord.Interaction, action: str) -> bool:
         if self.authorized(interaction):
             return True
-        await self.audit(interaction, f"denied:{action}", None, None, None, False)
-        await interaction.response.send_message("You are not authorized to manage watches.", ephemeral=True)
+        if action.startswith("retailer:"):
+            await self.audit_retailer(interaction, f"denied:{action}", None, None, None, False)
+            message = "You are not authorized to perform this retailer operation."
+        else:
+            await self.audit(interaction, f"denied:{action}", None, None, None, False)
+            message = "You are not authorized to manage watches."
+        await interaction.response.send_message(message, ephemeral=True)
         return False
 
     async def audit(self, interaction: discord.Interaction, action: str, resource_id: int | None,
@@ -132,6 +175,20 @@ class DiscordControlService:
                  json.dumps(after.as_dict(), default=str) if after else None, success),
             )
             await connection.commit()
+
+    async def audit_retailer(self, interaction: discord.Interaction, action: str, key: str | None,
+                             before: dict[str, Any] | None, after: dict[str, Any] | None,
+                             success: bool) -> None:
+        if self.database.connection is None: return
+        from datetime import UTC, datetime
+        async with self.database.write_lock:
+            await self.database.connection.execute("""INSERT INTO discord_audit_log
+                (timestamp,discord_user_id,guild_id,channel_id,action,resource_type,resource_id,before_state,after_state,success)
+                VALUES(?,?,?,?,?,'retailer',?,?,?,?)""", (datetime.now(UTC).isoformat(), str(interaction.user.id),
+                str(interaction.guild_id) if interaction.guild_id else None,
+                str(interaction.channel_id) if interaction.channel_id else None, action, key,
+                json.dumps(before, default=str) if before else None, json.dumps(after, default=str) if after else None, success))
+            await self.database.connection.commit()
 
     def _register_commands(self) -> None:
         assert self.tree is not None
@@ -220,13 +277,99 @@ class DiscordControlService:
         guild = discord.Object(id=self.config.guild_id) if self.config.guild_id else None
         self.tree.add_command(group, guild=guild)
 
+        if self.retailers is not None:
+            retailer_group = app_commands.Group(name="retailer", description="Manage retailer monitoring")
+
+            async def known(interaction: discord.Interaction, key: str):
+                if key not in self.retailers.registry:
+                    await interaction.response.send_message("Unknown retailer key.", ephemeral=True); return None
+                return await self.retailers.get_state(key)
+
+            @retailer_group.command(name="list", description="List retailer state and health")
+            async def retailer_list(interaction: discord.Interaction) -> None:
+                states = await self.retailers.list_states()
+                lines = [f"{'✅' if s.enabled else '⏸️'} `{s.key}` — {s.health}, {s.interval_minutes:g}m" for s in states]
+                await interaction.response.send_message("\n".join(lines)[:1900], ephemeral=True)
+
+            @retailer_group.command(name="show", description="Show retailer configuration and health")
+            async def retailer_show(interaction: discord.Interaction, retailer: str) -> None:
+                state = await known(interaction, retailer)
+                if state: await interaction.response.send_message(f"```json\n{json.dumps(state.as_dict(), indent=2, default=str)[:1800]}\n```", ephemeral=True)
+
+            @retailer_group.command(name="enable", description="Enable scheduled monitoring")
+            async def retailer_enable(interaction: discord.Interaction, retailer: str) -> None:
+                if not await self.require_authorized(interaction, "retailer:configure"): return
+                state = await known(interaction, retailer)
+                if not state: return
+                after = await self.retailers.set_enabled(retailer, True, str(interaction.user.id))
+                await self.audit_retailer(interaction, "enable", retailer, state.as_dict(), after.as_dict(), True)
+                await interaction.response.send_message(f"Enabled `{retailer}` at {after.interval_minutes:g} minutes.", ephemeral=True)
+
+            @retailer_group.command(name="disable", description="Disable scheduled monitoring")
+            async def retailer_disable(interaction: discord.Interaction, retailer: str) -> None:
+                if not await self.require_authorized(interaction, "retailer:configure"): return
+                if not await known(interaction, retailer): return
+                await interaction.response.send_message(f"Disable `{retailer}`? An active scan will finish safely.", ephemeral=True,
+                    view=RetailerConfirmation(self, interaction.user.id, retailer, "disable"))
+
+            @retailer_group.command(name="interval", description="Set the main scan interval")
+            async def retailer_interval(interaction: discord.Interaction, retailer: str, minutes: float) -> None:
+                if not await self.require_authorized(interaction, "retailer:configure"): return
+                before = await known(interaction, retailer)
+                if not before: return
+                try: after = await self.retailers.set_interval(retailer, minutes, str(interaction.user.id))
+                except ValueError as exc: await interaction.response.send_message(str(exc), ephemeral=True); return
+                await self.audit_retailer(interaction, "interval", retailer, before.as_dict(), after.as_dict(), True)
+                await interaction.response.send_message(f"`{retailer}`: {before.interval_minutes:g} → {after.interval_minutes:g}m (YAML {after.default_interval_minutes:g}m).", ephemeral=True)
+
+            @retailer_group.command(name="reset", description="Restore startup YAML defaults")
+            async def retailer_reset(interaction: discord.Interaction, retailer: str) -> None:
+                if not await self.require_authorized(interaction, "retailer:configure"): return
+                state = await known(interaction, retailer)
+                if not state: return
+                if state.enabled != state.default_enabled:
+                    await interaction.response.send_message(f"Reset `{retailer}` and change enabled state?", ephemeral=True,
+                        view=RetailerConfirmation(self, interaction.user.id, retailer, "reset")); return
+                after = await self.retailers.reset(retailer)
+                await self.audit_retailer(interaction, "reset", retailer, state.as_dict(), after.as_dict(), True)
+                await interaction.response.send_message(f"Reset `{retailer}` to YAML defaults.", ephemeral=True)
+
+            @retailer_group.command(name="scan", description="Run one isolated scan now")
+            async def retailer_scan(interaction: discord.Interaction, retailer: str) -> None:
+                if not await self.require_authorized(interaction, "retailer:scan"): return
+                if retailer not in self.retailers.registry:
+                    await interaction.response.send_message("Unknown retailer key.", ephemeral=True); return
+                await interaction.response.defer(ephemeral=True)
+                try:
+                    result = await self.retailers.scan(retailer, str(interaction.user.id))
+                    await self.audit_retailer(interaction, "manual_scan", retailer, None, result, result["success"])
+                    await interaction.followup.send(f"`{retailer}` scan {'succeeded' if result['success'] else 'failed'} in {result['duration']:.1f}s; {result['alert_count']} alerts; health {result['health']}. Scheduled state remains {'enabled' if result['enabled'] else 'disabled'}.", ephemeral=True)
+                except ScanAlreadyRunning as exc:
+                    await self.audit_retailer(interaction, "manual_scan_rejected", retailer, None, {"reason": "already_running"}, False)
+                    await interaction.followup.send(str(exc), ephemeral=True)
+                except Exception:
+                    await self.audit_retailer(interaction, "manual_scan", retailer, None, {"error": "internal failure"}, False)
+                    LOGGER.exception("discord_manual_scan_failed", extra={"retailer": retailer})
+                    await interaction.followup.send("Scan failed; see service logs.", ephemeral=True)
+
+            @retailer_group.command(name="failures", description="Show recent failed scans")
+            async def retailer_failures(interaction: discord.Interaction, retailer: str) -> None:
+                if retailer not in self.retailers.registry:
+                    await interaction.response.send_message("Unknown retailer key.", ephemeral=True); return
+                rows = await self.retailers.failures(retailer)
+                text = "\n".join(f"{r['completed_at']} [{r['trigger']}] HTTP {r['http_status'] or '-'}: {r['error'] or 'unknown error'}" for r in rows) or "No recorded failures."
+                await interaction.response.send_message(text[:1900], ephemeral=True)
+
+            self.tree.add_command(retailer_group, guild=guild)
+
         @self.tree.command(name="status", description="Show monitor status", guild=guild)
         async def status(interaction: discord.Interaction) -> None:
-            enabled = sum(bool(v.get("enabled")) for v in self.app_config.retailers.values() if isinstance(v, dict))
+            states = await self.retailers.list_states() if self.retailers else []
+            enabled = sum(s.enabled for s in states) if states else sum(bool(v.get("enabled")) for v in self.app_config.retailers.values() if isinstance(v, dict))
             latency = self.client.latency * 1000 if self.client else 0
             await interaction.response.send_message(
                 f"Application: running\nActive watches: {len(self.manager.current.rules)}\n"
-                f"Retailers: {enabled}/{len(self.app_config.retailers)} enabled\nDatabase: connected\n"
+                f"Retailers: {enabled}/{len(states) or len(self.app_config.retailers)} enabled; running scans: {sum(s.running for s in states)}\nDatabase: connected\n"
                 f"Bot latency: {latency:.0f} ms\nUptime: {int(time.monotonic()-self.started_at)}s", ephemeral=True)
 
         @self.tree.command(name="retailers", description="Show retailer health", guild=guild)
