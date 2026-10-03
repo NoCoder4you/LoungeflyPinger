@@ -15,6 +15,7 @@ from app.notifications.base import NotificationProvider
 from app.services.product_service import ProductService
 from app.services.release_service import ReleaseService
 from app.services.stock_service import StockService
+from app.services.product_event_service import ProductEventService
 from app.watchlist import Watchlist, classify_product
 from typing import Protocol
 
@@ -48,6 +49,7 @@ class MonitorService:
         self.retailer_name = retailer_name
         self.products = ProductService(database)
         self.stock = StockService(database)
+        self.events = ProductEventService(database)
         # None keeps backwards compatibility for programmatic users; an explicitly
         # empty configured watchlist intentionally sends no product alerts.
         self.watchlist = watchlist
@@ -288,7 +290,21 @@ class MonitorService:
                 if (self.release_alerts.enabled and release_alert is not None and
                         not is_new and (prior_release is not None or may_notify_found)):
                     alert_types.append(release_alert)
+                if known_product is None:
+                    await self.events.record(
+                        product_id, AlertType.NEW_PRODUCT, new_summary=product.availability.value,
+                        price=product.price, currency=product.currency,
+                        availability=product.availability,
+                    )
             for alert_type in alert_types:
+                if not (alert_type == AlertType.NEW_PRODUCT and known_product is None):
+                    await self.events.record(
+                        product_id, alert_type,
+                        previous_summary=previous.value if previous else None,
+                        new_summary=product.availability.value,
+                        price=product.price, currency=product.currency,
+                        availability=product.availability,
+                    )
                 alert = Alert(
                     alert_type, product, product_id,
                     previous_price=prior_state.price if alert_type == AlertType.PRICE_DROP else None,
@@ -343,6 +359,12 @@ class MonitorService:
                     currency=row[16], product_type=row[7], franchise=row[8], character=row[9],
                     exclusive=bool(row[10]), exclusive_retailer=row[11],
                     new_release=bool(row[12]), preorder=bool(row[17]), sku=row[6],
+                )
+                await self.events.record(
+                    row[0], AlertType.PRODUCT_REMOVED,
+                    previous_summary=row[14], new_summary="REMOVED",
+                    price=missing_product.price, currency=missing_product.currency,
+                    availability=missing_product.availability,
                 )
                 await self._send(Alert(
                     AlertType.PRODUCT_REMOVED, missing_product, row[0],

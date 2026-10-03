@@ -34,6 +34,12 @@ class DeleteConfirmation(discord.ui.View):
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("Only the user who requested deletion may confirm it.", ephemeral=True)
             return False
+        if not self.service.authorized(interaction):
+            await self.service.audit(interaction, "denied:delete_confirmation", self.rule_id,
+                                     self.service.manager.get(self.rule_id), None, False)
+            await interaction.response.send_message(
+                "Your authorization has changed; deletion was denied.", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label="Confirm deletion", style=discord.ButtonStyle.danger)
@@ -65,6 +71,13 @@ class RetailerConfirmation(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("Only the requesting user may confirm.", ephemeral=True)
+            return False
+        if not self.service.authorized(interaction):
+            await self.service.audit_retailer(
+                interaction, f"denied:{self.operation}_confirmation", self.key,
+                None, None, False)
+            await interaction.response.send_message(
+                "Your authorization has changed; this operation was denied.", ephemeral=True)
             return False
         return True
 
@@ -149,6 +162,9 @@ class DiscordControlService:
         if action.startswith("retailer:"):
             await self.audit_retailer(interaction, f"denied:{action}", None, None, None, False)
             message = "You are not authorized to perform this retailer operation."
+        elif action.startswith("product:"):
+            await self.audit(interaction, f"denied:{action}", None, None, None, False)
+            message = "You are not authorized to read the product catalogue."
         else:
             await self.audit(interaction, f"denied:{action}", None, None, None, False)
             message = "You are not authorized to manage watches."
@@ -276,6 +292,9 @@ class DiscordControlService:
 
         guild = discord.Object(id=self.config.guild_id) if self.config.guild_id else None
         self.tree.add_command(group, guild=guild)
+
+        from app.product_commands import register_product_commands
+        register_product_commands(self, guild)
 
         if self.retailers is not None:
             retailer_group = app_commands.Group(name="retailer", description="Manage retailer monitoring")
