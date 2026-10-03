@@ -77,6 +77,19 @@ async def test_overrides_persist_reschedule_and_reset(manager_parts):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("health", ["FAILED", "DEGRADED"])
+async def test_noop_enable_preserves_unhealthy_state(manager_parts, health):
+    manager, database, scheduler, *_ = manager_parts
+    await manager.set_enabled("shop", True, "42")
+    await database.connection.execute("UPDATE retailers SET health=? WHERE name='Shop'", (health,))
+    await database.connection.commit()
+    job = scheduler._jobs["shop"]
+    result = await manager.set_enabled("shop", True, "42")
+    assert result.health == health
+    assert scheduler._jobs["shop"] is job
+
+
+@pytest.mark.asyncio
 async def test_interval_bounds(manager_parts):
     manager, *_ = manager_parts
     with pytest.raises(ValueError): await manager.set_interval("shop", .5, "42")

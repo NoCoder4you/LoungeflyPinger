@@ -171,6 +171,22 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_product_sent ON alerts(product_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_type_sent ON alerts(alert_type, sent_at);
+CREATE TABLE IF NOT EXISTS product_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    detected_at TEXT NOT NULL,
+    previous_summary TEXT,
+    new_summary TEXT,
+    price TEXT,
+    currency TEXT,
+    availability TEXT,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_product_events_detected
+    ON product_events(detected_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_product_events_product_detected
+    ON product_events(product_id, detected_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS notification_deliveries (
     deduplication_key TEXT PRIMARY KEY,
     alert_type TEXT NOT NULL,
@@ -282,9 +298,13 @@ class Database:
             "collection_type": "TEXT", "vaulted": "INTEGER NOT NULL DEFAULT 0",
             "exclusivity_text": "TEXT",
         })
-        await self.connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_products_canonical_key ON products(canonical_key)"
-        )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS idx_products_canonical_key ON products(canonical_key)",
+            "CREATE INDEX IF NOT EXISTS idx_products_first_seen ON products(first_seen DESC, id DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_products_catalogue ON products(removed_at, product_type)",
+            "CREATE INDEX IF NOT EXISTS idx_product_states_availability_price ON product_states(availability, currency, price)",
+        ):
+            await self.connection.execute(statement)
         await self._add_missing_columns("retailers", {
             "release_sync_completed": "INTEGER NOT NULL DEFAULT 0",
             "last_error": "TEXT", "response_status": "INTEGER",

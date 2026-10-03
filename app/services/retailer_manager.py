@@ -195,6 +195,10 @@ class RetailerManager:
     async def set_enabled(self, key: str, enabled: bool, actor: str) -> RetailerState:
         async with self._mutation_lock:
             current = self.effective(key); _, interval = self._overrides.get(key, (None, None))
+            # Idempotent enable must not manufacture a recovery. Only a
+            # successful scan is evidence that DEGRADED/FAILED became healthy.
+            if enabled and current.enabled:
+                return await self.get_state(key)
             await self._persist(key, enabled, interval, actor)
             assert self.database.connection is not None
             async with self.database.write_lock:

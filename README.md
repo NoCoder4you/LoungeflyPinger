@@ -423,3 +423,50 @@ For troubleshooting, use `/retailer show`, `/retailer failures`, `/status`, and 
 the database. Deployment remains `/home/pi/LoungeflyPinger` with its `.venv`: update
 the checkout and dependencies, run the tests, then restart the existing service once
 to deploy this release. No additional daemon or service permission is required.
+# Stage 3 product intelligence
+
+The monitor's SQLite observations now have a typed, read-only catalogue layer:
+Discord commands create immutable `ProductQuery` filters, `ProductQueryService`
+executes parameterized and bounded SQL, and the Discord adapter renders ephemeral
+embeds. Catalogue reads use the existing Discord user/role allow-list and are
+deny-by-default. Pages contain 12 products (hard maximum 25), use deterministic
+ordering, and navigation buttons are bound to the requester and expire after two
+minutes.
+
+Available means a non-removed listing whose normalized state is `IN_STOCK` or
+`LOW_STOCK`. `PREORDER` is included only with `include_preorders:true`;
+`COMING_SOON`, `OUT_OF_STOCK`, `ERROR`, and `UNAVAILABLE` are never considered
+available. Recent discovery uses `first_seen` (24 hours by default), not the most
+recent scan time.
+
+Commands include:
+
+* `/product available product_type:mini_backpack`
+* `/product search query:"Sorcerer's Apprentice"`
+* `/product search franchise:Disney character:Stitch`
+* `/product recent period:24h`
+* `/product show id:123`
+* `/product history id:123`
+* `/product offers id:123`
+* `/product releases franchise:Disney`
+* `/product preorders`, `/product sales`, and `/product exclusives`
+* `/alerts recent`
+
+State history is written only for the first observation or a change to
+availability, price, currency, or preorder state. Release history retains its
+existing distinct-release semantics. Detected product changes are stored in
+`product_events` independently of webhook delivery; retention is capped at 250
+events per product and 20,000 events globally. Notification delivery attempts
+remain separately recorded in `alerts`.
+
+Cross-retailer offers never merge listings. Matching is **HIGH** for a normalized
+barcode or Loungefly code, **MEDIUM** for a credible SKU plus matching normalized
+title and product type, and **POSSIBLE** for matching title, franchise, and type.
+Title-only similarity is not considered certain. Cheapest markers are calculated
+only among currently orderable offers in the same currency; Stage 3 performs no
+currency conversion. These matches are heuristics and should be verified using
+the retailer links.
+
+SQLite schema upgrades and indexes are applied automatically during normal
+startup. No extra service, port, root access, or change to the Raspberry Pi
+systemd deployment is required.

@@ -42,13 +42,18 @@ class StockService:
         high = max(filter(lambda value: value is not None,
                           (old.highest_price if comparable else None,
                            old.price if comparable else None, observed)), default=None)
-        await connection.execute(
-            """INSERT INTO product_state_history
-               (product_id, availability, price, currency, preorder, checked_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (product_id, product.availability.value, str(observed) if observed is not None else None,
-             product.currency, product.preorder, now),
-        )
+        # History is a change log, not a scan log. Current state still receives
+        # every successful observation below so last checked remains accurate.
+        if (old is None or old.availability != product.availability or old.price != observed
+                or old.currency != product.currency or old.preorder != product.preorder):
+            await connection.execute(
+                """INSERT INTO product_state_history
+                   (product_id, availability, price, currency, preorder, checked_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (product_id, product.availability.value,
+                 str(observed) if observed is not None else None,
+                 product.currency, product.preorder, now),
+            )
         await connection.execute(
             """INSERT INTO product_states
                (product_id, availability, price, currency, preorder, checked_at,
