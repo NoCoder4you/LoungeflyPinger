@@ -106,6 +106,7 @@ def build_retailer_registry() -> dict[str, RetailerDefinition]:
 
 class ScanAlreadyRunning(RuntimeError): pass
 class UnknownRetailer(KeyError): pass
+class RetailerScanTimeoutError(TimeoutError): pass
 
 
 class RetailerManager:
@@ -175,8 +176,10 @@ class RetailerManager:
     def _schedule(self, key: str) -> None:
         if self.scheduler.has_job(key): return
         state = self.effective(key)
+        # Do not also set Scheduler.timeout_seconds here. _run_scan owns the
+        # deadline so it can persist health and history before returning.
         self.scheduler.add_interval_job(key, lambda: self._run_scan(key, "scheduled", None), state.interval_minutes * 60,
-            jitter_fraction=.05, timeout_seconds=self.config.monitor.retailer_job_timeout_seconds)
+            jitter_fraction=.05)
 
     async def _persist(self, key: str, enabled: bool | None, interval: float | None, actor: str) -> None:
         assert self.database.connection is not None
@@ -209,7 +212,7 @@ class RetailerManager:
             enabled, _ = self._overrides.get(key, (None, None)); await self._persist(key, enabled, float(minutes), actor)
             if self.effective(key).enabled:
                 await self.scheduler.reschedule_interval_job(key, lambda: self._run_scan(key, "scheduled", None), minutes * 60,
-                    jitter_fraction=.05, timeout_seconds=self.config.monitor.retailer_job_timeout_seconds)
+                    jitter_fraction=.05)
             return await self.get_state(key)
 
     async def reset(self, key: str) -> RetailerState:
@@ -236,7 +239,19 @@ class RetailerManager:
         if lock.locked(): raise ScanAlreadyRunning(f"{key} scan is already running")
         async with lock:
             started_at = datetime.now(UTC); started = time.monotonic()
-            alerts = await self._service(key).synchronize(); duration = time.monotonic() - started
+            service = self._service(key)
+            timeout = self.config.monitor.retailer_job_timeout_seconds
+            try:
+                # The manager owns the common deadline so scheduled and manual
+                # scans have identical cancellation, health, and history behavior.
+                alerts = await asyncio.wait_for(service.synchronize(), timeout)
+            except TimeoutError:
+                duration = time.monotonic() - started
+                error = RetailerScanTimeoutError(
+                    f"scan exceeded configured timeout of {timeout:g} seconds"
+                )
+                alerts = await service.record_failure(error, duration)
+            duration = time.monotonic() - started
             state = await self.get_state(key); success = state.last_failure is None or state.last_success is not None and state.last_success > state.last_failure
             error = (state.last_error or "")[:500] or None
             assert self.database.connection is not None

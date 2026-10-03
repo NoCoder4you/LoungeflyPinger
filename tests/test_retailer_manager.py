@@ -157,3 +157,76 @@ async def test_scan_history_is_pruned_after_each_scan(manager_parts):
         "SELECT COUNT(*) FROM retailer_scan_history WHERE retailer_key='shop'"
     )).fetchone()
     assert count[0] == 2
+
+
+@pytest.mark.asyncio
+async def test_manual_scan_timeout_records_failure_and_releases_lock(manager_parts):
+    _, database, scheduler, monitor, config, registry = manager_parts
+    monitor.gate = asyncio.Event()
+    timeout_config = AppConfig(
+        monitor=MonitorConfig(retailer_job_timeout_seconds=0.01),
+        database_path=config.database_path,
+        logging=config.logging,
+        retailers=config.retailers,
+    )
+    manager = RetailerManager(
+        timeout_config, database, scheduler, object(), AsyncMock(), FakeWatchlists(), registry,
+    )  # type: ignore[arg-type]
+    await manager.initialize()
+
+    result = await asyncio.wait_for(manager.scan("shop", "42"), 0.5)
+
+    assert result["success"] is False
+    assert result["health"] == "DISABLED"
+    assert not (await manager.get_state("shop")).running
+    health = await (await database.connection.execute(
+        "SELECT consecutive_failures, last_error FROM retailers WHERE name='Shop'"
+    )).fetchone()
+    assert health[0] == 1
+    assert health[1] == "scan exceeded configured timeout of 0.01 seconds"
+    history = await (await database.connection.execute(
+        """SELECT trigger_source, success, error_summary
+           FROM retailer_scan_history WHERE retailer_key='shop' ORDER BY id DESC LIMIT 1"""
+    )).fetchone()
+    assert tuple(history) == (
+        "manual", 0, "scan exceeded configured timeout of 0.01 seconds",
+    )
+
+
+@pytest.mark.asyncio
+async def test_scheduled_scan_timeout_is_recorded_before_job_returns(manager_parts):
+    _, database, _, monitor, config, registry = manager_parts
+    monitor.gate = asyncio.Event()
+    scheduler = Scheduler()
+    timeout_config = AppConfig(
+        monitor=MonitorConfig(retailer_job_timeout_seconds=0.01),
+        database_path=config.database_path,
+        logging=config.logging,
+        retailers={"shop": {"enabled": True, "interval_minutes": 5}},
+    )
+    manager = RetailerManager(
+        timeout_config, database, scheduler, object(), AsyncMock(), FakeWatchlists(), registry,
+    )  # type: ignore[arg-type]
+    try:
+        await manager.initialize()
+        async with asyncio.timeout(0.5):
+            while True:
+                history = await (await database.connection.execute(
+                    """SELECT trigger_source, discord_user_id, success, error_summary
+                       FROM retailer_scan_history
+                       WHERE retailer_key='shop' ORDER BY id DESC LIMIT 1"""
+                )).fetchone()
+                if history is not None and not (await manager.get_state("shop")).running:
+                    break
+                await asyncio.sleep(0.005)
+
+        assert tuple(history) == (
+            "scheduled", None, 0,
+            "scan exceeded configured timeout of 0.01 seconds",
+        )
+        state = await manager.get_state("shop")
+        assert state.health == "DEGRADED"
+        assert state.consecutive_failures == 1
+        assert not state.running
+    finally:
+        await scheduler.stop()

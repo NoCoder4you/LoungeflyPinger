@@ -402,7 +402,9 @@ permissions are granted to Discord.
 * `/retailer scan geekcore` executes the normal `MonitorService.synchronize()` path.
   It works while scheduled monitoring is disabled and does not enable it. A second
   scan of the same retailer is rejected rather than queued, while other retailers
-  can continue concurrently.
+  can continue concurrently. Manual and scheduled scans share the configured
+  `retailer_job_timeout_seconds` deadline; timeouts update health and scan history
+  as failures and always release the retailer scan lock.
 * `/retailer failures <key>` displays bounded, durable recent failed-scan summaries.
 
 `config/retailers.yaml` is the deployment default and is read only at process startup.
