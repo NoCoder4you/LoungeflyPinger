@@ -207,6 +207,28 @@ CREATE TABLE IF NOT EXISTS discord_audit_log (
     success INTEGER NOT NULL CHECK (success IN (0, 1))
 );
 CREATE INDEX IF NOT EXISTS idx_discord_audit_timestamp ON discord_audit_log(timestamp);
+CREATE TABLE IF NOT EXISTS retailer_runtime_overrides (
+    retailer_key TEXT PRIMARY KEY,
+    enabled INTEGER CHECK (enabled IS NULL OR enabled IN (0, 1)),
+    interval_minutes REAL CHECK (interval_minutes IS NULL OR interval_minutes > 0),
+    updated_at TEXT NOT NULL,
+    updated_by_discord_user_id TEXT
+);
+CREATE TABLE IF NOT EXISTS retailer_scan_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    retailer_key TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL,
+    trigger_source TEXT NOT NULL CHECK (trigger_source IN ('scheduled','manual')),
+    discord_user_id TEXT,
+    success INTEGER NOT NULL CHECK (success IN (0, 1)),
+    alert_count INTEGER NOT NULL DEFAULT 0,
+    duration REAL NOT NULL,
+    http_status INTEGER,
+    error_summary TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_key_completed
+    ON retailer_scan_history(retailer_key, completed_at DESC);
 """
 
 
