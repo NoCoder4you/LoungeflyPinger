@@ -93,3 +93,67 @@ async def test_manual_disabled_scan_and_overlap_rejection(manager_parts):
     gate.set(); result = await first
     assert result["success"] and result["enabled"] is False and monitor.calls == 1
     assert not manager.scheduler.has_job("shop")
+
+
+@pytest.mark.asyncio
+async def test_disable_during_scan_preserves_disabled_health(manager_parts):
+    manager, database, _, monitor, *_ = manager_parts
+    gate = asyncio.Event(); monitor.gate = gate
+    await manager.set_enabled("shop", True, "42")
+    for _ in range(20):
+        if (await manager.get_state("shop")).running:
+            break
+        await asyncio.sleep(0)
+    assert (await manager.get_state("shop")).running
+
+    disabled = await manager.set_enabled("shop", False, "42")
+    assert disabled.health == "DISABLED"
+    gate.set()
+    for _ in range(20):
+        if not (await manager.get_state("shop")).running:
+            break
+        await asyncio.sleep(0)
+    assert not (await manager.get_state("shop")).running
+    row = await (await database.connection.execute(
+        "SELECT enabled, health FROM retailers WHERE name='Shop'"
+    )).fetchone()  # type: ignore[union-attr]
+    assert tuple(row) == (0, "DISABLED")
+    assert (await manager.get_state("shop")).health == "DISABLED"
+
+
+@pytest.mark.asyncio
+async def test_scan_history_is_bounded_per_retailer_on_startup(manager_parts):
+    manager, database, scheduler, _, config, registry = manager_parts
+    assert database.connection is not None
+    await database.connection.executemany(
+        """INSERT INTO retailer_scan_history
+           (retailer_key,started_at,completed_at,trigger_source,success,duration)
+           VALUES('shop', ?, ?, 'scheduled', ?, 0.1)""",
+        [(f"start-{number}", f"end-{number}", number % 2) for number in range(7)],
+    )
+    await database.connection.commit()
+
+    reconstructed = RetailerManager(
+        config, database, scheduler, object(), AsyncMock(), FakeWatchlists(), registry,
+        scan_history_limit=3,
+    )  # type: ignore[arg-type]
+    await reconstructed.initialize()
+
+    rows = await (await database.connection.execute(
+        "SELECT completed_at FROM retailer_scan_history WHERE retailer_key='shop' ORDER BY id"
+    )).fetchall()
+    assert [row[0] for row in rows] == ["end-4", "end-5", "end-6"]
+
+
+@pytest.mark.asyncio
+async def test_scan_history_is_pruned_after_each_scan(manager_parts):
+    manager, database, *_ = manager_parts
+    manager.scan_history_limit = 2
+    await manager.scan("shop", "42")
+    await manager.scan("shop", "42")
+    await manager.scan("shop", "42")
+
+    count = await (await database.connection.execute(
+        "SELECT COUNT(*) FROM retailer_scan_history WHERE retailer_key='shop'"
+    )).fetchone()
+    assert count[0] == 2

@@ -229,6 +229,10 @@ CREATE TABLE IF NOT EXISTS retailer_scan_history (
 );
 CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_key_completed
     ON retailer_scan_history(retailer_key, completed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_key_id
+    ON retailer_scan_history(retailer_key, id DESC);
+CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_failures
+    ON retailer_scan_history(retailer_key, success, id DESC);
 """
 
 

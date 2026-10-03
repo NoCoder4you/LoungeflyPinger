@@ -31,6 +31,9 @@ from app.services.watchlist_manager import WatchlistManager
 
 MIN_INTERVAL_MINUTES = 1.0
 MAX_INTERVAL_MINUTES = 1440.0
+# This retains nearly three days at the shortest supported interval (and about
+# four weeks at ten minutes) while deterministically bounding DB backups.
+DEFAULT_SCAN_HISTORY_LIMIT = 4000
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,10 +112,14 @@ class RetailerManager:
     """Single authority for effective configuration, jobs and scan coordination."""
     def __init__(self, config: AppConfig, database: Database, scheduler: Scheduler,
                  http: AsyncHttpClient, notifier: NotificationProvider, watchlists: WatchlistManager,
-                 registry: dict[str, RetailerDefinition] | None = None) -> None:
+                 registry: dict[str, RetailerDefinition] | None = None, *,
+                 scan_history_limit: int = DEFAULT_SCAN_HISTORY_LIMIT) -> None:
+        if isinstance(scan_history_limit, bool) or scan_history_limit < 1:
+            raise ValueError("scan_history_limit must be at least one")
         self.config, self.database, self.scheduler = config, database, scheduler
         self.http, self.notifier, self.watchlists = http, notifier, watchlists
         self.registry = registry or build_retailer_registry()
+        self.scan_history_limit = scan_history_limit
         self._overrides: dict[str, tuple[bool | None, float | None]] = {}
         self._services: dict[str, MonitorService] = {}
         self._scan_locks = {key: asyncio.Lock() for key in self.registry}
@@ -123,6 +130,12 @@ class RetailerManager:
         rows = await (await self.database.connection.execute(
             "SELECT retailer_key,enabled,interval_minutes FROM retailer_runtime_overrides")).fetchall()
         self._overrides = {r[0]: (None if r[1] is None else bool(r[1]), r[2]) for r in rows if r[0] in self.registry}
+        # Apply retention at startup as well as after inserts so upgrades bound
+        # history immediately, including retailers that are currently disabled.
+        async with self.database.write_lock:
+            for key in self.registry:
+                await self._prune_scan_history(key)
+            await self.database.connection.commit()
         for key, definition in self.registry.items():
             state = self.effective(key)
             await self.database.connection.execute(
@@ -227,19 +240,53 @@ class RetailerManager:
             state = await self.get_state(key); success = state.last_failure is None or state.last_success is not None and state.last_success > state.last_failure
             error = (state.last_error or "")[:500] or None
             assert self.database.connection is not None
-            async with self.database.write_lock:
-                await self.database.connection.execute("""INSERT INTO retailer_scan_history
-                    (retailer_key,started_at,completed_at,trigger_source,discord_user_id,success,alert_count,duration,http_status,error_summary)
-                    VALUES(?,?,?,?,?,?,?,?,?,?)""", (key, started_at.isoformat(), datetime.now(UTC).isoformat(), source, actor,
-                    success, len(alerts), duration, state.response_status, error)); await self.database.connection.commit()
+            # A disable may happen while MonitorService is doing network I/O. Its
+            # health write must not make the intentionally disabled row healthy
+            # again when that in-flight scan finishes. Serialize this short
+            # reconciliation with configuration mutations, but never the scan.
+            async with self._mutation_lock:
+                enabled = self.effective(key).enabled
+                async with self.database.write_lock:
+                    await self.database.connection.execute("""INSERT INTO retailer_scan_history
+                        (retailer_key,started_at,completed_at,trigger_source,discord_user_id,success,alert_count,duration,http_status,error_summary)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)""", (key, started_at.isoformat(), datetime.now(UTC).isoformat(), source, actor,
+                        success, len(alerts), duration, state.response_status, error))
+                    if not enabled:
+                        await self.database.connection.execute(
+                            "UPDATE retailers SET enabled=0, health='DISABLED' WHERE name=?",
+                            (state.display_name,),
+                        )
+                    await self._prune_scan_history(key)
+                    await self.database.connection.commit()
+            if not enabled:
+                state = await self.get_state(key)
             return {"retailer": key, "success": success, "duration": duration, "alert_count": len(alerts),
-                    "health": state.health, "error": error, "enabled": self.effective(key).enabled}
+                    "health": state.health, "error": error, "enabled": enabled}
+
+    async def _prune_scan_history(self, key: str) -> None:
+        """Keep only the newest configured number of scans for one retailer.
+
+        The caller owns the database write lock and transaction. Per-retailer
+        retention prevents a noisy retailer from evicting another's history.
+        """
+        assert self.database.connection is not None
+        await self.database.connection.execute(
+            """DELETE FROM retailer_scan_history
+               WHERE retailer_key=? AND id NOT IN (
+                   SELECT id FROM retailer_scan_history
+                   WHERE retailer_key=? ORDER BY id DESC LIMIT ?
+               )""",
+            (key, key, self.scan_history_limit),
+        )
 
     async def get_state(self, key: str) -> RetailerState:
         state = self.effective(key); assert self.database.connection is not None
         row = await (await self.database.connection.execute("SELECT health,last_success,last_failure,consecutive_failures,last_error,response_status,request_duration FROM retailers WHERE name=?", (state.display_name,))).fetchone()
         if not row: return state
-        values = state.as_dict(); values.update(health=row[0], last_success=row[1], last_failure=row[2], consecutive_failures=row[3], last_error=(row[4] or "")[:500] or None, response_status=row[5], request_duration=row[6], running=self._scan_locks[key].locked())
+        # Effective disablement is authoritative even during the small window
+        # before an in-flight MonitorService callback is reconciled in SQLite.
+        health = row[0] if state.enabled else "DISABLED"
+        values = state.as_dict(); values.update(health=health, last_success=row[1], last_failure=row[2], consecutive_failures=row[3], last_error=(row[4] or "")[:500] or None, response_status=row[5], request_duration=row[6], running=self._scan_locks[key].locked())
         return RetailerState(**values)
 
     async def list_states(self) -> list[RetailerState]:

@@ -411,7 +411,10 @@ the YAML file is never rewritten. Intervals are limited to **1–1440 minutes**.
 Specialized `amy_david_magic` lane intervals and Ozzie's `detail_batch_size` are shown
 read-only and retain their startup values; the command changes only the canonical
 main schedule. Every scheduled and manual scan records bounded metadata (never HTTP
-bodies, headers, tracebacks, or secrets), and retailer actions are audit logged.
+bodies, headers, tracebacks, or secrets), and retailer actions are audit logged. Scan
+history is capped at the newest 4,000 entries per retailer (nearly three days at the
+minimum interval, or about four weeks at ten minutes); the cap is also enforced during startup upgrades so
+the live database and its backups cannot grow indefinitely from scan history.
 
 For troubleshooting, use `/retailer show`, `/retailer failures`, `/status`, and inspect
 `journalctl -u loungefly-monitor.service` or `logs/loungefly-monitor.log`. Do not edit
