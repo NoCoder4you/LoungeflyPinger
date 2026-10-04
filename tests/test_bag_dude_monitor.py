@@ -175,7 +175,7 @@ async def test_initial_sync_new_listing_restock_preorder_price_drop_and_restart(
         closed = replace(preorder, availability=Availability.OUT_OF_STOCK, preorder=False)
         service.monitor = type("M", (), {"discover_products": lambda self: result([restocked, closed])})()
         alerts = await service.synchronize()
-        assert {a.alert_type for a in alerts} == {AlertType.RESTOCK, AlertType.PRICE_DROP}
+        assert {a.alert_type for a in alerts} == {AlertType.RESTOCK, AlertType.PRICE_DROP, AlertType.OUT_OF_STOCK}
         opened = replace(closed, availability=Availability.PREORDER, preorder=True)
         service.monitor = type("M", (), {"discover_products": lambda self: result([restocked, opened])})()
         assert [a.alert_type for a in await service.synchronize()] == [AlertType.PREORDER_OPEN]

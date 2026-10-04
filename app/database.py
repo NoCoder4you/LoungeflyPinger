@@ -290,7 +290,7 @@ class Database:
             "bundle": "INTEGER NOT NULL DEFAULT 0", "included_items": "TEXT",
             "disney_parks": "INTEGER NOT NULL DEFAULT 0", "parks_origin": "TEXT",
             "exclusive_type": "TEXT", "series": "TEXT", "event_collection": "TEXT",
-            "loungefly_product_code": "TEXT", "canonical_key": "TEXT",
+            "loungefly_product_code": "TEXT", "canonical_key": "TEXT", "cart_url": "TEXT",
             "sale": "INTEGER NOT NULL DEFAULT 0", "clearance": "INTEGER NOT NULL DEFAULT 0",
             "last_chance": "INTEGER NOT NULL DEFAULT 0",
             "limited_edition": "INTEGER NOT NULL DEFAULT 0",

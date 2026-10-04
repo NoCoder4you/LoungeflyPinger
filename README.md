@@ -110,6 +110,8 @@ systemd loads the same file with `EnvironmentFile`.
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
+| `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
+| `DISCORD_ALERT_ROLE_ID` | In role mode | Positive role ID mentioned by product alerts |
 | `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
 | `DISCORD_BOT_TOKEN` | When enabled | Bot token, kept only in the environment |
 | `DISCORD_BOT_GUILD_ID` | Recommended | Guild used for immediate, guild-scoped command registration |
@@ -477,3 +479,37 @@ the retailer links.
 SQLite schema upgrades and indexes are applied automatically during normal
 startup. No extra service, port, root access, or change to the Raspberry Pi
 systemd deployment is required.
+
+## Rich Discord stock alerts
+
+Product webhooks use adaptive Discord embeds: the product name links to its retailer page, the
+primary image is shown as a thumbnail, and only metadata actually supplied by an adapter is shown.
+Status, normalized price, prior price/status, SKU or product ID, explicit exclusivity, release/ETA,
+watch-match context, first-seen/restock time, and optional adapter-supplied Add to Cart links fit
+within Discord's limits. Missing images and optional fields do not prevent delivery.
+
+Alert colours communicate intent: blue identifies new products, coming-soon and informational
+updates; green identifies restocks, availability and price drops; purple identifies preorders;
+orange identifies backorders, low stock, price increases and warnings; red identifies sold-out and
+monitor errors. Supported stock events include **NEW PRODUCT**, **RESTOCK**, **PREORDER**,
+**BACKORDER**, **COMING SOON**, **NOW AVAILABLE/RELEASED**, **PRICE DROP**, **PRICE INCREASE**,
+**STATUS CHANGE**, **PRODUCT UPDATED**, and **SOLD OUT**, plus existing release and monitor-health
+events. Price comparisons use normalized `Decimal` values, so currency symbols or trailing zeroes
+do not create false changes.
+
+Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The backward-compatible
+default is `everyone`; `role` additionally requires `DISCORD_ALERT_ROLE_ID`. Payloads explicitly
+allow only the selected mention type, so scraped product and retailer text cannot ping users or
+roles. Product-removal alerts never mention. Webhook URLs and role IDs belong only in `.env`.
+
+Adapters may optionally populate `image_url`, `sku`, `variant_id`, `loungefly_product_code`,
+`exclusive` plus explicit exclusivity text, release/ETA metadata, and a validated `cart_url`.
+Retailer display name, icon, homepage, currency, and country presentation can be extended in the
+central `app/retailers.py` catalogue without retailer branches in the renderer. No capability is
+inferred merely because a retailer sells an item.
+
+SQLite stock history remains a change log: unchanged scans update current observation time but do
+not append history or send notifications. Notification delivery identities are persisted in
+`notification_deliveries`, preventing the same event from being posted again after restart. The
+schema initializer only adds missing columns/tables and remains compatible with existing database
+files; it never recreates production data.
