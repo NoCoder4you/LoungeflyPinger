@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import AsyncMock
 
 from app.application import Application
-from app.config import AppConfig, LoggingConfig, MonitorConfig
+from app.config import AppConfig, DiscordBotConfig, LoggingConfig, MonitorConfig
 
 
 @pytest.mark.asyncio
@@ -43,6 +43,27 @@ async def test_backup_is_scheduled_promptly_then_uses_configured_interval(tmp_pa
         assert application.database.backup.await_count == 1
     finally:
         await application.close()
+
+
+@pytest.mark.asyncio
+async def test_application_starts_enabled_discord_control(tmp_path: Path) -> None:
+    config = AppConfig(
+        monitor=MonitorConfig(),
+        database_path=tmp_path / "app.db",
+        logging=LoggingConfig(path=tmp_path / "app.log"),
+        discord_bot=DiscordBotConfig(enabled=True, token="test-token"),
+    )
+    application = Application(config)
+    application.discord_control.start = AsyncMock()
+    application.discord_control.close = AsyncMock()
+
+    await application.start()
+    try:
+        application.discord_control.start.assert_awaited_once_with()
+    finally:
+        await application.close()
+
+    application.discord_control.close.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
