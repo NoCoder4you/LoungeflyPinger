@@ -180,7 +180,32 @@ async def test_webhook_routing(tmp_path: Path, product: Product) -> None:
         notifier = DiscordNotifier(NotificationConfig("https://normal", "https://admin"), database, session=session)
         assert await notifier.send(Alert(AlertType.NEW_PRODUCT, product, new_state="new"))
         assert await notifier.send(Alert(AlertType.MONITOR_ERROR, message="Store unavailable", new_state="down"))
-        assert [call[0] for call in session.calls] == ["https://normal", "https://admin"]
+        assert [call[0] for call in session.calls] == [
+            "https://normal?with_components=true", "https://admin"
+        ]
+
+
+@pytest.mark.asyncio
+async def test_product_webhook_enables_components_and_preserves_query_parameters(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "components.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(
+                discord_webhook_url=(
+                    "https://discord.example/webhook?wait=true&thread_id=123&with_components=false"
+                )
+            ),
+            database,
+            session=session,
+        )
+
+        assert await notifier.send(Alert(AlertType.NEW_PRODUCT, product))
+
+        assert session.calls[0][0] == (
+            "https://discord.example/webhook?wait=true&thread_id=123&with_components=true"
+        )
 
 
 @pytest.mark.asyncio

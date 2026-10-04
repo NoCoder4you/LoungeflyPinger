@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 import aiohttp
 
@@ -73,6 +73,20 @@ def _valid_url(value: object) -> bool:
         return False
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc) and len(value) <= 2048
+
+
+def _component_webhook_url(webhook: str, *, enabled: bool) -> str:
+    """Enable webhook components without discarding configured query parameters."""
+    if not enabled:
+        return webhook
+    parsed = urlsplit(webhook)
+    query = [
+        (name, value)
+        for name, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if name != "with_components"
+    ]
+    query.append(("with_components", "true"))
+    return urlunsplit(parsed._replace(query=urlencode(query)))
 
 
 def _display(value: str) -> str:
@@ -305,7 +319,10 @@ class DiscordNotifier(NotificationProvider):
                 self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
                 self._owns_session = True
             try:
-                response = await self._session.post(webhook, json=build_discord_payload(alert, self._config))
+                request_url = _component_webhook_url(webhook, enabled=alert.product is not None)
+                response = await self._session.post(
+                    request_url, json=build_discord_payload(alert, self._config)
+                )
                 try:
                     if not 200 <= response.status < 300:
                         LOGGER.error("Discord webhook rejected notification", extra={**context, "status": response.status})
