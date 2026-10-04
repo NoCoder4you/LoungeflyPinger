@@ -259,6 +259,14 @@ class DiscordNotifier(NotificationProvider):
         await self._database.connection.commit()
 
     async def send(self, alert: Alert) -> bool:
+        if (alert.alert_type is AlertType.PRODUCT_REMOVED and
+                not self._config.product_removed_enabled):
+            LOGGER.info("Product-removed Discord alert is disabled", extra={
+                "retailer": alert.product.retailer if alert.product else None,
+                "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,
+                "event_type": alert.alert_type.value,
+            })
+            return True
         webhook = self._webhook(alert)
         context = {"retailer": alert.product.retailer if alert.product else None,
                    "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,

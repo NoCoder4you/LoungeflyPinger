@@ -80,6 +80,7 @@ class NotificationConfig:
     discord_admin_webhook_url: str | None = None
     discord_alert_mention_mode: str = "everyone"
     discord_alert_role_id: int | None = None
+    product_removed_enabled: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,11 +244,17 @@ def load_config(
     role_id = int(role_value) if role_value else None
     if mention_mode == "role" and role_id is None:
         raise ConfigurationError("DISCORD_ALERT_ROLE_ID is required when mention mode is role")
+    product_removed_value = os.getenv(
+        "DISCORD_PRODUCT_REMOVED_ENABLED", "true"
+    ).strip().casefold()
+    if product_removed_value not in {"true", "false"}:
+        raise ConfigurationError("DISCORD_PRODUCT_REMOVED_ENABLED must be true or false")
     notifications = NotificationConfig(
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
         discord_alert_mention_mode=mention_mode,
         discord_alert_role_id=role_id,
+        product_removed_enabled=product_removed_value == "true",
     )
     def discord_id(name: str) -> int | None:
         raw_value = os.getenv(name, "").strip()
