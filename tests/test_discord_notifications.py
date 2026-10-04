@@ -106,8 +106,24 @@ def test_operational_alert_does_not_repeat_headline_in_description() -> None:
     embed = payload["embeds"][0]
     assert embed["title"] == "🟢 MONITOR RECOVERED"
     assert embed["description"] == (
-        "Retailer: Cool-Merch UK The retailer monitor is responding normally again."
+        "Retailer: Cool-Merch UK\nThe retailer monitor is responding normally again."
     )
+
+
+def test_operational_alert_preserves_diagnostic_line_breaks() -> None:
+    message = (
+        "Retailer: Damaged Society UK\n"
+        "Failures: 5\n"
+        "Last Successful Scan: 2026-10-04T20:04:46+00:00\n"
+        "Error: Rate limit retry exhausted"
+    )
+
+    embed = build_discord_payload(Alert(
+        AlertType.MONITOR_ERROR, message=message, new_state="FAILED"
+    ))["embeds"][0]
+
+    assert embed["title"] == "🔴 MONITOR ERROR"
+    assert embed["description"] == message
 
 
 @pytest.mark.parametrize("alert_type", list(AlertType))

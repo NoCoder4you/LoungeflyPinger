@@ -53,9 +53,15 @@ COLORS = {
 }
 
 
-def truncate(value: object, limit: int) -> str:
+def truncate(value: object, limit: int, *, preserve_lines: bool = False) -> str:
     """Safely fit arbitrary adapter text into a Discord component."""
-    text = " ".join(str(value).split())
+    raw = str(value)
+    if preserve_lines:
+        # Keep intentional structure while still collapsing arbitrary whitespace
+        # within each line and removing empty leading/trailing lines.
+        text = "\n".join(" ".join(line.split()) for line in raw.splitlines()).strip()
+    else:
+        text = " ".join(raw.split())
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 1)].rstrip() + "…"
@@ -107,7 +113,7 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
     description = f"{headline}\n{alert.message}" if product and alert.message else alert.message or headline
     embed: dict[str, Any] = {
         "title": truncate(product.name if product else headline, DISCORD_LIMITS["title"]),
-        "description": truncate(description, DISCORD_LIMITS["description"]),
+        "description": truncate(description, DISCORD_LIMITS["description"], preserve_lines=True),
         "color": COLORS[alert.alert_type], "timestamp": alert.timestamp.astimezone(UTC).isoformat(),
         "fields": [],
     }
