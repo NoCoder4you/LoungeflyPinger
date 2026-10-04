@@ -196,16 +196,17 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
         add("Status", _display(alert.new_state))
     payload: dict[str, Any] = {
         "username": "Loungefly Monitor",
-        "allowed_mentions": {"parse": []},
         "embeds": [embed],
     }
     # Operational notifications are deliberately non-mentioning and are routed
     # to the admin webhook. Product events retain the established policy.
-    if alert.alert_type not in {
+    removed_or_operational = alert.alert_type in {
         AlertType.PRODUCT_REMOVED, AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED,
-    }:
-        payload["content"] = "@everyone"
-        payload["allowed_mentions"] = {"parse": ["everyone"]}
+    }
+    content, allowed_mentions = _mention(config, removed=removed_or_operational)
+    payload["allowed_mentions"] = allowed_mentions
+    if content is not None:
+        payload["content"] = content
     return payload
 
 

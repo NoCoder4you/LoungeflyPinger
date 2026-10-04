@@ -254,6 +254,23 @@ def test_configurable_mentions_are_explicitly_allowlisted(product, mode, role_id
     assert payload["allowed_mentions"] == allowed
 
 
+@pytest.mark.parametrize(("alert_type", "mode", "role_id"), [
+    (AlertType.PRODUCT_REMOVED, "everyone", None),
+    (AlertType.MONITOR_ERROR, "everyone", None),
+    (AlertType.MONITOR_RECOVERED, "role", 123456),
+])
+def test_operational_alerts_never_mention(alert_type, mode, role_id, product):
+    config = NotificationConfig(discord_alert_mention_mode=mode, discord_alert_role_id=role_id)
+    alert = (Alert(alert_type, product)
+             if alert_type is AlertType.PRODUCT_REMOVED
+             else Alert(alert_type, message="Retailer state changed"))
+
+    payload = build_discord_payload(alert, config)
+
+    assert "content" not in payload
+    assert payload["allowed_mentions"] == {"parse": []}
+
+
 def test_optional_cart_sku_and_exclusive_metadata(product):
     enriched = Product(
         retailer=product.retailer, retailer_product_id=product.retailer_product_id,
