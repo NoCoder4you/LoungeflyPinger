@@ -7,7 +7,7 @@ import pytest
 
 from app.config import NotificationConfig
 from app.database import Database
-from app.models import Alert, AlertType, Availability, Priority, Product, WatchMatch
+from app.models import Alert, AlertType, Availability, Priority, Product, RegionalOffer, WatchMatch
 from app.notifications.discord import DiscordNotifier, build_discord_payload
 from app.services.notification_settings import NotificationSettingsService
 
@@ -396,6 +396,28 @@ def test_optional_cart_sku_and_exclusive_metadata(product):
     assert "[Add to Cart](https://shop.example/cart/123)" in fields["Quick Links"]
     payload = build_discord_payload(Alert(AlertType.RESTOCK, enriched))
     assert payload["components"][0]["components"][0]["url"] == enriched.cart_url
+
+
+def test_emp_regional_offers_are_collected_in_one_embed(product):
+    combined = Product(
+        retailer="EMP International", retailer_product_id="60001", name=product.name,
+        url="https://www.emp.de/p/60001", availability=Availability.IN_STOCK,
+        price=Decimal("59.99"), currency="EUR",
+        regional_offers=(
+            RegionalOffer("DE", "EMP Germany", "https://www.emp.de/p/60001",
+                          Availability.IN_STOCK, Decimal("59.99")),
+            RegionalOffer("FR", "EMP France", "https://www.emp-online.fr/p/60001",
+                          Availability.OUT_OF_STOCK, Decimal("64.99")),
+        ),
+    )
+
+    fields = {field["name"]: field["value"] for field in
+              build_discord_payload(Alert(AlertType.NEW_PRODUCT, combined))["embeds"][0]["fields"]}
+
+    assert fields["EMP Regional Stores"] == (
+        "[DE](https://www.emp.de/p/60001) — €59.99 — 🟢 In Stock\n"
+        "[FR](https://www.emp-online.fr/p/60001) — €64.99 — 🔴 Out Of Stock"
+    )
 
 
 def test_missing_optional_data_and_bad_image_are_omitted(product):

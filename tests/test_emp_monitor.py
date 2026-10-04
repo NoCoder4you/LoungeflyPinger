@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.models import Availability, ReleasePrecision
-from app.monitors.emp import EMPMonitor, EMPParseError, EMP_REGIONS
+from app.monitors.emp import EMPInternationalMonitor, EMPMonitor, EMPParseError, EMP_REGIONS
 
 FIXTURES = Path(__file__).parent / "fixtures" / "emp"
 
@@ -140,3 +140,26 @@ async def test_product_failure_is_scoped_to_its_region():
     assert failed.availability == Availability.ERROR
     assert await EMPMonitor(FakeHttp([fixture("fr")]), "fr").health_check() is False  # PDP is not a listing.
     assert failed.retailer == "EMP Germany"
+
+
+@pytest.mark.asyncio
+async def test_international_monitor_combines_matching_articles_into_one_product():
+    # Each locale exposes the same article number, as happens when EMP carries
+    # one bag across its European storefronts.
+    responses = []
+    for index, country in enumerate(("de", "fr", "es", "it"), start=1):
+        html = fixture(country).replace(f"6000{index}", "69999")
+        html = html.replace(
+            'id="pdpMain" data-pid="69999"',
+            'class="product-tile" data-itemid="69999" data-url="/p/loungefly/69999.html"',
+        )
+        responses.append(html)
+    monitor = EMPInternationalMonitor(FakeHttp(responses))
+
+    products = await monitor.discover_products()
+
+    assert len(products) == 1
+    assert products[0].retailer == "EMP International"
+    assert products[0].retailer_product_id == "69999"
+    assert [offer.region for offer in products[0].regional_offers] == ["DE", "FR", "ES", "IT"]
+    assert all(offer.url.startswith("https://www.emp") for offer in products[0].regional_offers)

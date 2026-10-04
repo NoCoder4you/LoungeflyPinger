@@ -219,21 +219,9 @@ retailers:
     reconciliation_interval_minutes: 30
     high_priority_interval_minutes: 5
     status: WORKING
-  # EMP and Large.nl share one configurable Salesforce Commerce Cloud adapter,
-  # but run as independent jobs and retain independent health state.
-  emp_de:
-    enabled: true
-    interval_minutes: 10
-    status: WORKING
-  emp_fr:
-    enabled: true
-    interval_minutes: 10
-    status: WORKING
-  emp_es:
-    enabled: true
-    interval_minutes: 10
-    status: WORKING
-  emp_it:
+  # EMP's non-UK European storefronts are scanned together. Matching article
+  # numbers become one product and one Discord embed with every regional offer.
+  emp_international:
     enabled: true
     interval_minutes: 10
     status: WORKING
