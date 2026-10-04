@@ -17,6 +17,7 @@ from app.models import Alert, AlertType, Availability
 from app.notifications.base import NotificationProvider
 from app.release import format_release
 from app.retailers import retailer_brand
+from app.services.notification_settings import NotificationSettingsService
 
 LOGGER = logging.getLogger("monitor.notifications.discord")
 
@@ -223,8 +224,10 @@ class DiscordNotifier(NotificationProvider):
     """Routes embeds to product/admin webhooks with persistent deduplication."""
 
     def __init__(self, config: NotificationConfig, database: Database, *,
-                 session: aiohttp.ClientSession | None = None) -> None:
+                 session: aiohttp.ClientSession | None = None,
+                 settings: NotificationSettingsService | None = None) -> None:
         self._config, self._database, self._session = config, database, session
+        self._settings = settings
         self._owns_session = session is None
         self._delivery_lock = asyncio.Lock()
 
@@ -259,6 +262,16 @@ class DiscordNotifier(NotificationProvider):
         await self._database.connection.commit()
 
     async def send(self, alert: Alert) -> bool:
+        enabled = (self._settings.enabled(alert.alert_type) if self._settings else
+                   alert.alert_type is not AlertType.PRODUCT_REMOVED or
+                   self._config.product_removed_enabled)
+        if not enabled:
+            LOGGER.info("Discord alert type is disabled", extra={
+                "retailer": alert.product.retailer if alert.product else None,
+                "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,
+                "event_type": alert.alert_type.value,
+            })
+            return True
         webhook = self._webhook(alert)
         context = {"retailer": alert.product.retailer if alert.product else None,
                    "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,

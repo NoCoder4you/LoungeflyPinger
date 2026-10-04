@@ -76,6 +76,27 @@ def test_discord_webhooks_are_loaded_from_environment(tmp_path: Path, monkeypatc
     assert config.notifications.discord_admin_webhook_url == "https://discord.example/admin"
 
 
+def test_product_removed_notifications_can_be_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_PRODUCT_REMOVED_ENABLED", "false")
+
+    assert not load_config(path, tmp_path / ".env").notifications.product_removed_enabled
+
+
+def test_invalid_product_removed_notification_toggle_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_PRODUCT_REMOVED_ENABLED", "yes")
+
+    with pytest.raises(ConfigurationError, match="DISCORD_PRODUCT_REMOVED_ENABLED"):
+        load_config(path, tmp_path / ".env")
+
+
 def test_invalid_config_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 0\n", encoding="utf-8")

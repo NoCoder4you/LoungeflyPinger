@@ -10,6 +10,7 @@ from app.notifications import DiscordNotifier
 from app.scheduler import Scheduler
 from app.services.watchlist_manager import WatchlistManager
 from app.services.retailer_manager import RetailerManager
+from app.services.notification_settings import NotificationSettingsService
 from app.discord_control import DiscordControlService
 from app.watchlist import Watchlist
 
@@ -30,13 +31,19 @@ class Application:
             max_response_bytes=config.monitor.max_response_bytes,
         )
         self.scheduler = Scheduler()
-        self.notifier = DiscordNotifier(config.notifications, self.database)
+        self.notification_settings = NotificationSettingsService(
+            self.database, config.notifications
+        )
+        self.notifier = DiscordNotifier(
+            config.notifications, self.database, settings=self.notification_settings
+        )
         self.watchlists = WatchlistManager(self.database)
         self.retailers = RetailerManager(
             config, self.database, self.scheduler, self.http, self.notifier, self.watchlists
         )
         self.discord_control = DiscordControlService(
-            config.discord_bot, self.watchlists, self.database, config, self.retailers, self.scheduler
+            config.discord_bot, self.watchlists, self.database, config, self.retailers,
+            self.scheduler, self.notification_settings
         )
         self.stop_event = asyncio.Event()
         self._close_lock = asyncio.Lock()
@@ -46,6 +53,7 @@ class Application:
         LOGGER.info("Application starting")
         await self.database.connect()
         await self.database.initialize()
+        await self.notification_settings.initialize()
         await self.watchlists.initialize(self.config.watchlist or Watchlist())
         self.scheduler.add_interval_job(
             "database_backup",

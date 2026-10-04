@@ -204,6 +204,12 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_sent_at
     ON notification_deliveries(sent_at);
+CREATE TABLE IF NOT EXISTS notification_runtime_overrides (
+    alert_type TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    updated_at TEXT NOT NULL,
+    updated_by_discord_user_id TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS application_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
