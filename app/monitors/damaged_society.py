@@ -201,6 +201,7 @@ class DamagedSocietyMonitor(RetailerMonitor):
             raise DamagedSocietyParseError("product vendor is invalid")
         return Product(
             retailer="Damaged Society UK", retailer_product_id=product_id, variant_id=variant_id,
+            cart_url=urljoin(self.base_url + "/", f"cart/{quote(variant_id)}:1"),
             sku=str(selected["sku"]).strip() if selected.get("sku") not in (None, "") else None,
             barcode=(str(selected["barcode"]).strip()
                      if selected.get("barcode") not in (None, "") else None),

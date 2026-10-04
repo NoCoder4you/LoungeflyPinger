@@ -154,6 +154,10 @@ class GeekCoreMonitor(RetailerMonitor):
             character=tagged("character:"),
             exclusive="geekcore exclusives" in lowered_tags,
             preorder=preorder,
+            variant_id=str(available_variant["id"]),
+            cart_url=urljoin(
+                self.base_url + "/", f'cart/{quote(str(available_variant["id"]))}:1'
+            ),
             sku=str(available_variant.get("sku")).strip() if available_variant.get("sku") else None,
             release=release,
         )

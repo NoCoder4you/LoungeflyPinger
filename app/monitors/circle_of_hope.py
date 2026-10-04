@@ -197,7 +197,9 @@ class CircleOfHopeMonitor(RetailerMonitor):
         vendor = raw.get("vendor")
         return Product(
             retailer="Circle Of Hope Boutique", retailer_product_id=product_id,
-            variant_id=variant_id, sku=str(sku).strip() if sku not in (None, "") else None,
+            variant_id=variant_id,
+            cart_url=urljoin(self.base_url + "/", f"cart/{quote(variant_id)}:1"),
+            sku=str(sku).strip() if sku not in (None, "") else None,
             name=title, url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,
             price=price, original_price=original_price, currency="USD", availability=availability,
             product_type="Mini Backpack", vendor=vendor.strip() if isinstance(vendor, str) else None,

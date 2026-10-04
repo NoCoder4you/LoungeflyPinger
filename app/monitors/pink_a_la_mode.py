@@ -179,6 +179,8 @@ class PinkALaModeMonitor(RetailerMonitor):
         exclusive = bool(re.search(r"\b(?:pink a la mode|palm) exclusive\b", evidence, re.I))
         sku = available_variant.get("sku")
         return Product(
+            variant_id=str(available_variant["id"]),
+            cart_url=urljoin(self.base_url + "/", f'cart/{quote(str(available_variant["id"]))}:1'),
             retailer="Pink a la Mode", retailer_product_id=product_id, name=title,
             url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,
             price=price, original_price=original_price, currency="USD", availability=availability,

@@ -185,6 +185,8 @@ class CoolMerchMonitor(RetailerMonitor):
             exclusive_retailer="Cool-Merch UK" if exclusive else None,
             preorder=preorder, sku=str(sku).strip() if sku not in (None, "") else None,
             variant_id=str(variant_id).strip() if variant_id not in (None, "") else None,
+            cart_url=(urljoin(self.base_url + "/", f"cart/{quote(str(variant_id).strip())}:1")
+                      if variant_id not in (None, "") else None),
             barcode=str(barcode).strip() if barcode not in (None, "") else None,
             vendor=str(raw.get("vendor")).strip() if raw.get("vendor") else None,
             tags=tuple(tags), listing_published_at=published_at, release=release,

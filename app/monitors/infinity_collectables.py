@@ -177,6 +177,7 @@ class InfinityCollectablesMonitor(RetailerMonitor):
         return Product(
             retailer="Infinity Collectables", retailer_product_id=product_id,
             variant_id=variant_id,
+            cart_url=urljoin(self.base_url + "/", f"cart/{quote(variant_id)}:1"),
             sku=str(selected["sku"]).strip() if selected.get("sku") not in (None, "") else None,
             name=title, url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,
             price=price, original_price=original_price, currency="GBP", availability=availability,

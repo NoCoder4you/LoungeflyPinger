@@ -86,6 +86,13 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
     assert fields["Previous Status"] == "🔴 Out Of Stock"
     assert fields["Exclusive"] == "⭐ Retailer Exclusive"
     assert fields["Quick Links"] == f"[View Product]({product.url})"
+    assert payload["components"] == [{
+        "type": 1,
+        "components": [{
+            "type": 2, "style": 5, "label": "Add to Cart",
+            "emoji": {"name": "🛒"}, "url": product.url,
+        }],
+    }]
     assert payload["content"] == "@everyone"
     assert payload["allowed_mentions"] == {"parse": ["everyone"]}
 
@@ -173,7 +180,32 @@ async def test_webhook_routing(tmp_path: Path, product: Product) -> None:
         notifier = DiscordNotifier(NotificationConfig("https://normal", "https://admin"), database, session=session)
         assert await notifier.send(Alert(AlertType.NEW_PRODUCT, product, new_state="new"))
         assert await notifier.send(Alert(AlertType.MONITOR_ERROR, message="Store unavailable", new_state="down"))
-        assert [call[0] for call in session.calls] == ["https://normal", "https://admin"]
+        assert [call[0] for call in session.calls] == [
+            "https://normal?with_components=true", "https://admin"
+        ]
+
+
+@pytest.mark.asyncio
+async def test_product_webhook_enables_components_and_preserves_query_parameters(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "components.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(
+                discord_webhook_url=(
+                    "https://discord.example/webhook?wait=true&thread_id=123&with_components=false"
+                )
+            ),
+            database,
+            session=session,
+        )
+
+        assert await notifier.send(Alert(AlertType.NEW_PRODUCT, product))
+
+        assert session.calls[0][0] == (
+            "https://discord.example/webhook?wait=true&thread_id=123&with_components=true"
+        )
 
 
 @pytest.mark.asyncio
@@ -362,6 +394,8 @@ def test_optional_cart_sku_and_exclusive_metadata(product):
     assert fields["SKU"] == "WDBK2380"
     assert fields["Exclusive"] == "⭐ GeekCore Exclusive"
     assert "[Add to Cart](https://shop.example/cart/123)" in fields["Quick Links"]
+    payload = build_discord_payload(Alert(AlertType.RESTOCK, enriched))
+    assert payload["components"][0]["components"][0]["url"] == enriched.cart_url
 
 
 def test_missing_optional_data_and_bad_image_are_omitted(product):
