@@ -12,6 +12,8 @@ from app.discord_control import (
     DiscordControlService,
     RetailerConfirmation,
 )
+from app.product_commands import CataloguePublishConfirmation
+from app.services.product_query_service import Page, ProductQuery
 from app.logging_config import _DiscordVoiceWarningFilter
 
 
@@ -49,6 +51,61 @@ def test_discord_control_registers_on_ready_event_and_expected_commands():
     alerts = service.tree.get_command("alerts", guild=discord.Object(id=123456789))
     assert isinstance(alerts, discord.app_commands.Group)
     assert {command.name for command in alerts.commands} == {"recent", "list", "enable", "disable"}
+    products = service.tree.get_command("product", guild=discord.Object(id=123456789))
+    assert isinstance(products, discord.app_commands.Group)
+    assert "publish" in {command.name for command in products.commands}
+
+
+@pytest.mark.asyncio
+async def test_catalogue_publish_confirmation_posts_every_active_product_page():
+    control = Mock()
+    control.require_authorized = AsyncMock(return_value=True)
+    query_service = Mock()
+    product = SimpleNamespace(
+        id=1, name="Test bag", retailer="Test shop", currency="USD", price=50,
+        availability="IN_STOCK", franchise="Test", product_type="Mini Backpack",
+        url="https://example.com/bag",
+    )
+    query_service.search = AsyncMock(side_effect=[
+        Page((product,) * 20, 1, 20, 21),
+        Page((product,), 2, 20, 21),
+    ])
+    view = CataloguePublishConfirmation(
+        control, query_service, 42, ProductQuery(order="available"), 21, None)
+    interaction = Mock()
+    interaction.user.id = 42
+    interaction.channel_id = 99
+    interaction.channel.send = AsyncMock()
+    interaction.response.edit_message = AsyncMock()
+    interaction.edit_original_response = AsyncMock()
+
+    assert await view.interaction_check(interaction)
+    await view.publish.callback(interaction)
+
+    assert query_service.search.await_count == 2
+    assert interaction.channel.send.await_count == 2
+    for call in interaction.channel.send.await_args_list:
+        mentions = call.kwargs["allowed_mentions"]
+        assert mentions.everyone is False
+        assert mentions.users is False
+        assert mentions.roles is False
+    interaction.edit_original_response.assert_awaited_once_with(
+        content="Published a fresh view of 21 product(s) in this channel.", view=None)
+
+
+@pytest.mark.asyncio
+async def test_catalogue_publish_confirmation_is_bound_to_requesting_user():
+    control = Mock()
+    view = CataloguePublishConfirmation(
+        control, Mock(), 42, ProductQuery(), 1, None)
+    interaction = Mock()
+    interaction.user.id = 7
+    interaction.response.send_message = AsyncMock()
+
+    assert not await view.interaction_check(interaction)
+    control.require_authorized.assert_not_called()
+    interaction.response.send_message.assert_awaited_once_with(
+        "Only the requesting user may confirm this publish.", ephemeral=True)
 
 
 @pytest.mark.asyncio
