@@ -173,6 +173,22 @@ async def test_scan_history_is_pruned_after_each_scan(manager_parts):
 
 
 @pytest.mark.asyncio
+async def test_scan_without_full_deadline_waits_for_completion(manager_parts):
+    manager, _, _, monitor, *_ = manager_parts
+    monitor.gate = asyncio.Event()
+    scan = asyncio.create_task(manager.scan("shop", "42"))
+
+    # The default configuration has no whole-scan deadline, so an incomplete
+    # adapter remains active until it can finish.
+    await asyncio.sleep(0.02)
+    assert not scan.done()
+
+    monitor.gate.set()
+    result = await asyncio.wait_for(scan, 0.5)
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
 async def test_manual_scan_timeout_records_failure_and_releases_lock(manager_parts):
     _, database, scheduler, monitor, config, registry = manager_parts
     monitor.gate = asyncio.Event()

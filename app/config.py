@@ -43,7 +43,10 @@ class MonitorConfig:
     failure_alert_threshold: int = 5
     retry_backoff_seconds: float = 1
     rate_limit_requests_per_second: float = 5
-    retailer_job_timeout_seconds: float = 120
+    # Full-scan deadlines are optional because a fixed wall-clock limit can
+    # cancel healthy retailers whose paginated requests are still progressing.
+    # Individual HTTP requests remain bounded independently.
+    retailer_job_timeout_seconds: float | None = None
     max_response_bytes: int = 10_485_760
 
 
@@ -151,9 +154,13 @@ def load_config(
             monitor_raw.get("rate_limit_requests_per_second", 5),
             "rate_limit_requests_per_second",
         ),
-        retailer_job_timeout_seconds=_positive(
-            monitor_raw.get("retailer_job_timeout_seconds", 120),
-            "retailer_job_timeout_seconds",
+        retailer_job_timeout_seconds=(
+            None
+            if monitor_raw.get("retailer_job_timeout_seconds") is None
+            else _positive(
+                monitor_raw["retailer_job_timeout_seconds"],
+                "retailer_job_timeout_seconds",
+            )
         ),
         max_response_bytes=_positive(
             monitor_raw.get("max_response_bytes", 10_485_760), "max_response_bytes", int

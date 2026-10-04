@@ -32,7 +32,24 @@ def test_load_config(tmp_path: Path) -> None:
     assert config.monitor.concurrency_limit == 2
     assert config.database_path == Path("custom.db")
     assert config.monitor.missing_scan_threshold == 3
+    assert config.monitor.retailer_job_timeout_seconds is None
     assert config.price_alerts.minimum_drop_percent == 10
+
+
+def test_optional_retailer_job_timeout_configuration(tmp_path: Path) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text(
+        "monitor:\n  retailer_job_timeout_seconds: 300\n",
+        encoding="utf-8",
+    )
+
+    assert load_config(path, tmp_path / ".env").monitor.retailer_job_timeout_seconds == 300
+
+    path.write_text(
+        "monitor:\n  retailer_job_timeout_seconds: null\n",
+        encoding="utf-8",
+    )
+    assert load_config(path, tmp_path / ".env").monitor.retailer_job_timeout_seconds is None
 
 
 def test_price_alert_configuration(tmp_path: Path) -> None:

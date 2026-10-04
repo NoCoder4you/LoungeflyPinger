@@ -10,7 +10,11 @@ monitor:
   failure_alert_threshold: 5
   retry_backoff_seconds: 1
   rate_limit_requests_per_second: 5
-  retailer_job_timeout_seconds: 120
+  # Leave the whole-scan deadline disabled. Each HTTP request is still bounded
+  # by request_timeout_seconds, so slow paginated catalogues can keep progressing
+  # without being cancelled at an arbitrary wall-clock boundary. Set a positive
+  # number to restore a hard deadline for every retailer scan.
+  retailer_job_timeout_seconds: null
 
 price_alerts:
   enabled: true
