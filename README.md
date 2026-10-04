@@ -110,6 +110,7 @@ systemd loads the same file with `EnvironmentFile`.
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
+| `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
 | `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
 | `DISCORD_ALERT_ROLE_ID` | In role mode | Positive role ID mentioned by product alerts |
 | `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
@@ -509,7 +510,8 @@ do not create false changes.
 Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The backward-compatible
 default is `everyone`; `role` additionally requires `DISCORD_ALERT_ROLE_ID`. Payloads explicitly
 allow only the selected mention type, so scraped product and retailer text cannot ping users or
-roles. Product-removal alerts never mention. Webhook URLs and role IDs belong only in `.env`.
+roles. Product-removal alerts never mention and can be suppressed entirely with
+`DISCORD_PRODUCT_REMOVED_ENABLED=false`. Webhook URLs and role IDs belong only in `.env`.
 
 Adapters may optionally populate `image_url`, `sku`, `variant_id`, `loungefly_product_code`,
 `exclusive` plus explicit exclusivity text, release/ETA metadata, and a validated `cart_url`.

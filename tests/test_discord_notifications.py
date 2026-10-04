@@ -185,6 +185,31 @@ async def test_missing_webhook_configuration_does_not_attempt_delivery(tmp_path:
 
 
 @pytest.mark.asyncio
+async def test_disabled_product_removed_alert_does_not_attempt_delivery(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "removed-disabled.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(
+                discord_webhook_url="https://normal", product_removed_enabled=False
+            ),
+            database,
+            session=session,
+        )
+
+        assert await notifier.send(Alert(AlertType.PRODUCT_REMOVED, product))
+        assert session.calls == []
+        deliveries = await (
+            await database.connection.execute("SELECT count(*) FROM notification_deliveries")
+        ).fetchone()
+        assert deliveries == (0,)
+
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert len(session.calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_duplicate_is_suppressed_across_notifier_instances(tmp_path: Path, product: Product) -> None:
     path = tmp_path / "dedup.db"
     alert = Alert(AlertType.RESTOCK, product, product_id=42, occurrence_id="restock-episode-1")
