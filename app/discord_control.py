@@ -17,6 +17,7 @@ from app.database import Database
 from app.services.watchlist_manager import StoredWatchRule, WatchlistManager
 from app.services.retailer_manager import RetailerManager, ScanAlreadyRunning
 from app.scheduler import Scheduler
+from app.services.notification_settings import NotificationSettingsService
 
 LOGGER = logging.getLogger("monitor.discord_control")
 
@@ -107,10 +108,12 @@ class DiscordControlService:
 
     def __init__(self, config: DiscordBotConfig, manager: WatchlistManager, database: Database,
                  app_config: AppConfig, retailers: RetailerManager | None = None,
-                 scheduler: Scheduler | None = None) -> None:
+                 scheduler: Scheduler | None = None,
+                 notification_settings: NotificationSettingsService | None = None) -> None:
         self.config, self.manager, self.database, self.app_config = config, manager, database, app_config
         self.started_at = time.monotonic()
         self.retailers, self.scheduler = retailers, scheduler
+        self.notification_settings = notification_settings
         self.client: discord.Client | None = None
         self.tree: app_commands.CommandTree | None = None
         self._task: asyncio.Task[None] | None = None
@@ -222,11 +225,31 @@ class DiscordControlService:
         elif action.startswith("product:"):
             await self.audit(interaction, f"denied:{action}", None, None, None, False)
             message = "You are not authorized to read the product catalogue."
+        elif action.startswith("notification:"):
+            await self.audit_notification(interaction, f"denied:{action}", None, None, None, False)
+            message = "You are not authorized to manage notifications."
         else:
             await self.audit(interaction, f"denied:{action}", None, None, None, False)
             message = "You are not authorized to manage watches."
         await interaction.response.send_message(message, ephemeral=True)
         return False
+
+    async def audit_notification(self, interaction: discord.Interaction, action: str,
+                                 alert_type: str | None, before: bool | None,
+                                 after: bool | None, success: bool) -> None:
+        if self.database.connection is None:
+            return
+        from datetime import UTC, datetime
+        async with self.database.write_lock:
+            await self.database.connection.execute("""INSERT INTO discord_audit_log
+                (timestamp,discord_user_id,guild_id,channel_id,action,resource_type,resource_id,before_state,after_state,success)
+                VALUES(?,?,?,?,?,'notification',?,?,?,?)""", (
+                datetime.now(UTC).isoformat(), str(interaction.user.id),
+                str(interaction.guild_id) if interaction.guild_id else None,
+                str(interaction.channel_id) if interaction.channel_id else None,
+                action, alert_type, json.dumps(before), json.dumps(after), success,
+            ))
+            await self.database.connection.commit()
 
     async def audit(self, interaction: discord.Interaction, action: str, resource_id: int | None,
                     before: StoredWatchRule | None, after: StoredWatchRule | None,

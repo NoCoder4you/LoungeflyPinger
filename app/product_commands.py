@@ -9,7 +9,7 @@ from typing import Awaitable, Callable
 import discord
 from discord import app_commands
 
-from app.models import Availability
+from app.models import AlertType, Availability
 from app.services.product_query_service import Page, ProductQuery, ProductQueryService
 
 LOGGER = logging.getLogger("monitor.discord_products")
@@ -235,4 +235,57 @@ def register_product_commands(control, guild: discord.Object | None) -> None:
             embed.add_field(name=f"{row['detected_at']} · {row['event_type']}",
                 value=f"#{row['product_id']} {row['name']} · {row['retailer']}\n{row['new_summary'] or row['availability'] or ''}"[:1024], inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @alerts.command(name="list", description="Show outbound notification settings")
+    async def alert_list(interaction: discord.Interaction) -> None:
+        if not await control.require_authorized(interaction, "product:read"): return
+        if control.notification_settings is None:
+            await interaction.response.send_message("Notification controls are unavailable.", ephemeral=True)
+            return
+        lines = [
+            f"{'✅' if enabled else '⏸️'} `{kind.value}`{' (override)' if overridden else ''}"
+            for kind, enabled, overridden in control.notification_settings.states()
+        ]
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+    async def set_alert(interaction: discord.Interaction, alert_type: str, enabled: bool) -> None:
+        if not await control.require_authorized(interaction, "notification:configure"): return
+        settings = control.notification_settings
+        if settings is None:
+            await interaction.response.send_message("Notification controls are unavailable.", ephemeral=True)
+            return
+        try:
+            kind = AlertType(alert_type.strip().upper())
+        except ValueError:
+            await interaction.response.send_message(
+                "Unknown alert type. Use `/alerts list` to see valid values.", ephemeral=True
+            )
+            return
+        before = settings.enabled(kind)
+        try:
+            await settings.set_enabled(kind, enabled, str(interaction.user.id))
+            await control.audit_notification(
+                interaction, "enable" if enabled else "disable", kind.value,
+                before, enabled, True
+            )
+        except Exception:
+            await control.audit_notification(
+                interaction, "enable" if enabled else "disable", kind.value,
+                before, None, False
+            )
+            LOGGER.exception("discord_notification_setting_failed", extra={"alert_type": kind.value})
+            await interaction.response.send_message("Update failed; see service logs.", ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"`{kind.value}` notifications are now {'enabled' if enabled else 'disabled'}.",
+            ephemeral=True,
+        )
+
+    @alerts.command(name="enable", description="Enable an outbound notification type")
+    async def alert_enable(interaction: discord.Interaction, alert_type: str) -> None:
+        await set_alert(interaction, alert_type, True)
+
+    @alerts.command(name="disable", description="Disable an outbound notification type")
+    async def alert_disable(interaction: discord.Interaction, alert_type: str) -> None:
+        await set_alert(interaction, alert_type, False)
     control.tree.add_command(alerts, guild=guild)

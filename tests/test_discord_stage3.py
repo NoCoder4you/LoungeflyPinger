@@ -46,6 +46,9 @@ def test_discord_control_registers_on_ready_event_and_expected_commands():
         for command in service.tree.get_commands(guild=discord.Object(id=123456789))
     }
     assert command_names == {"watch", "retailer", "product", "alerts", "status", "retailers"}
+    alerts = service.tree.get_command("alerts", guild=discord.Object(id=123456789))
+    assert isinstance(alerts, discord.app_commands.Group)
+    assert {command.name for command in alerts.commands} == {"recent", "list", "enable", "disable"}
 
 
 @pytest.mark.asyncio

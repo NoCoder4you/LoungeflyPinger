@@ -9,6 +9,7 @@ from app.config import NotificationConfig
 from app.database import Database
 from app.models import Alert, AlertType, Availability, Priority, Product, WatchMatch
 from app.notifications.discord import DiscordNotifier, build_discord_payload
+from app.services.notification_settings import NotificationSettingsService
 
 
 class FakeResponse:
@@ -182,6 +183,53 @@ async def test_missing_webhook_configuration_does_not_attempt_delivery(tmp_path:
         notifier = DiscordNotifier(NotificationConfig(), database, session=session)
         assert not await notifier.send(Alert(AlertType.RESTOCK, product))
         assert not session.calls
+
+
+@pytest.mark.asyncio
+async def test_disabled_product_removed_alert_does_not_attempt_delivery(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "removed-disabled.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(
+                discord_webhook_url="https://normal", product_removed_enabled=False
+            ),
+            database,
+            session=session,
+        )
+
+        assert await notifier.send(Alert(AlertType.PRODUCT_REMOVED, product))
+        assert session.calls == []
+        deliveries = await (
+            await database.connection.execute("SELECT count(*) FROM notification_deliveries")
+        ).fetchone()
+        assert deliveries == (0,)
+
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert len(session.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_settings_can_disable_any_alert_type(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "runtime-alerts.db") as database:
+        settings = NotificationSettingsService(database, NotificationConfig())
+        await settings.initialize()
+        await settings.set_enabled(AlertType.RESTOCK, False, "42")
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_webhook_url="https://normal"), database,
+            session=session, settings=settings
+        )
+
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert session.calls == []
+
+        await settings.set_enabled(AlertType.RESTOCK, True, "42")
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert len(session.calls) == 1
 
 
 @pytest.mark.asyncio
