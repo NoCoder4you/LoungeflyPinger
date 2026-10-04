@@ -86,6 +86,13 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
     assert fields["Previous Status"] == "🔴 Out Of Stock"
     assert fields["Exclusive"] == "⭐ Retailer Exclusive"
     assert fields["Quick Links"] == f"[View Product]({product.url})"
+    assert payload["components"] == [{
+        "type": 1,
+        "components": [{
+            "type": 2, "style": 5, "label": "Add to Cart",
+            "emoji": {"name": "🛒"}, "url": product.url,
+        }],
+    }]
     assert payload["content"] == "@everyone"
     assert payload["allowed_mentions"] == {"parse": ["everyone"]}
 
@@ -362,6 +369,8 @@ def test_optional_cart_sku_and_exclusive_metadata(product):
     assert fields["SKU"] == "WDBK2380"
     assert fields["Exclusive"] == "⭐ GeekCore Exclusive"
     assert "[Add to Cart](https://shop.example/cart/123)" in fields["Quick Links"]
+    payload = build_discord_payload(Alert(AlertType.RESTOCK, enriched))
+    assert payload["components"][0]["components"][0]["url"] == enriched.cart_url
 
 
 def test_missing_optional_data_and_bad_image_are_omitted(product):

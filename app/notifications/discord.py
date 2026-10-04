@@ -208,6 +208,22 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
         "username": "Loungefly Monitor",
         "embeds": [embed],
     }
+    if product:
+        # Webhooks support URL buttons without requiring a running Discord bot.
+        # Prefer a retailer-provided cart permalink, while retaining a useful
+        # purchase button for storefronts which only expose their product page.
+        purchase_url = product.cart_url if _valid_url(product.cart_url) else product.url
+        if _valid_url(purchase_url):
+            payload["components"] = [{
+                "type": 1,
+                "components": [{
+                    "type": 2,
+                    "style": 5,
+                    "label": "Add to Cart",
+                    "emoji": {"name": "🛒"},
+                    "url": purchase_url,
+                }],
+            }]
     # Operational notifications are deliberately non-mentioning and are routed
     # to the admin webhook. Product events retain the established policy.
     removed_or_operational = alert.alert_type in {

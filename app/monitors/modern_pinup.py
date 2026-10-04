@@ -164,6 +164,8 @@ class ModernPinUpMonitor(RetailerMonitor):
         )
         exclusive = "exclusives" in lowered_tags or "modern pinup exclusive" in lowered_tags
         return Product(
+            variant_id=str(available_variant["id"]),
+            cart_url=urljoin(self.base_url + "/", f'cart/{quote(str(available_variant["id"]))}:1'),
             retailer="Modern PinUp", retailer_product_id=product_id, name=title,
             url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,
             price=price, original_price=original_price, currency="USD", availability=availability,

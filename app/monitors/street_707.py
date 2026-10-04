@@ -173,6 +173,7 @@ class Street707Monitor(RetailerMonitor):
         exclusive = "exclusive" in {tag.casefold() for tag in tags} or "707 street exclusive" in title.casefold()
         return Product(
             retailer="707 Street", retailer_product_id=product_id, variant_id=str(selected["id"]),
+            cart_url=urljoin(self.base_url + "/", f'cart/{quote(str(selected["id"]))}:1'),
             sku=str(sku).strip() if sku not in (None, "") else None,
             barcode=str(barcode).strip() if barcode not in (None, "") else None,
             name=title, url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,

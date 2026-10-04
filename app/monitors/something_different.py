@@ -218,6 +218,7 @@ class SomethingDifferentMonitor(RetailerMonitor):
             name=title, url=urljoin(self.base_url + "/", f"products/{handle}"), image_url=image,
             price=price, original_price=original_price, currency="GBP", availability=availability,
             product_type="Mini Backpack", variant_id=variant_id,
+            cart_url=urljoin(self.base_url + "/", f"cart/{quote(variant_id)}:1"),
             sku=str(selected["sku"]).strip() if selected.get("sku") not in (None, "") else None,
             barcode=str(selected["barcode"]).strip() if selected.get("barcode") not in (None, "") else None,
             vendor=raw.get("vendor") if isinstance(raw.get("vendor"), str) else None,
