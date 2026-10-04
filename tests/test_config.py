@@ -25,6 +25,16 @@ def test_disney_mad_is_enabled_with_high_priority_interval(tmp_path: Path) -> No
     }
 
 
+def test_707_street_is_disabled_while_storefront_rate_limits_access(tmp_path: Path) -> None:
+    config = load_config(env_path=tmp_path / ".env")
+
+    assert config.retailers["street_707"] == {
+        "enabled": False,
+        "interval_minutes": 10,
+        "status": "BLOCKED_BY_RETAILER",
+    }
+
+
 def test_load_config(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 2\ndatabase:\n  path: custom.db\nretailers: {}\n", encoding="utf-8")

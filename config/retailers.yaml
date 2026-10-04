@@ -155,9 +155,12 @@ retailers:
     interval_minutes: 10
     status: WORKING
   street_707:
-    enabled: true
+    # The storefront returns HTTP 429 with Retry-After even for a single,
+    # ordinary request. Keep the adapter available, but do not repeatedly
+    # probe an access restriction from the production scheduler.
+    enabled: false
     interval_minutes: 10
-    status: WORKING
+    status: BLOCKED_BY_RETAILER
   cordys_corner:
     enabled: true
     interval_minutes: 10
