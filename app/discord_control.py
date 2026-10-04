@@ -120,6 +120,8 @@ class DiscordControlService:
         self._commands_synced = False
         self._commands_synced_count = 0
         self._command_sync_lock = asyncio.Lock()
+        self._presence_lock = asyncio.Lock()
+        self._active_scans: dict[str, str] = {}
         if config.enabled:
             intents = discord.Intents.none()
             intents.guilds = True
@@ -151,6 +153,36 @@ class DiscordControlService:
             })
 
         await self._sync_commands()
+        await self._update_presence()
+
+    async def update_scan_presence(self, key: str, display_name: str, active: bool) -> None:
+        """Reflect the most recently started active retailer scan in Discord."""
+        if active:
+            # Reinsert an existing key so it is treated as the newest scan.
+            self._active_scans.pop(key, None)
+            self._active_scans[key] = display_name
+        else:
+            self._active_scans.pop(key, None)
+        await self._update_presence()
+
+    async def _update_presence(self) -> None:
+        if self.client is None or not self.client.is_ready():
+            return
+        async with self._presence_lock:
+            if self._active_scans:
+                display_name = next(reversed(self._active_scans.values()))
+                status = discord.Status.online
+                activity = discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=display_name[:128],
+                )
+            else:
+                status = discord.Status.idle
+                activity = discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name="for retailer updates",
+                )
+            await self.client.change_presence(status=status, activity=activity)
 
     async def _sync_commands(self) -> None:
         """Synchronize once successfully, while allowing a failed attempt to retry."""

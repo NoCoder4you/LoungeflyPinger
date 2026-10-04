@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from app.config import AppConfig
 from app.database import Database
@@ -34,6 +35,7 @@ MAX_INTERVAL_MINUTES = 1440.0
 # This retains nearly three days at the shortest supported interval (and about
 # four weeks at ten minutes) while deterministically bounding DB backups.
 DEFAULT_SCAN_HISTORY_LIMIT = 4000
+LOGGER = logging.getLogger("monitor.retailer_manager")
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +133,26 @@ class RetailerManager:
         self._services: dict[str, MonitorService] = {}
         self._scan_locks = {key: asyncio.Lock() for key in self.registry}
         self._mutation_lock = asyncio.Lock()
+        self._scan_activity_callback: Callable[[str, str, bool], Awaitable[None]] | None = None
+
+    def set_scan_activity_callback(
+        self, callback: Callable[[str, str, bool], Awaitable[None]] | None
+    ) -> None:
+        """Set the observer notified when a retailer scan starts or finishes."""
+        self._scan_activity_callback = callback
+
+    async def _notify_scan_activity(self, key: str, active: bool) -> None:
+        callback = self._scan_activity_callback
+        if callback is None:
+            return
+        try:
+            await callback(key, self.registry[key].display_name, active)
+        except Exception:
+            # Presence and other operational observers must never affect scans.
+            LOGGER.exception(
+                "retailer_scan_activity_callback_failed",
+                extra={"retailer": key, "active": active},
+            )
 
     async def initialize(self) -> None:
         assert self.database.connection is not None
@@ -248,50 +270,54 @@ class RetailerManager:
         lock = self._scan_locks[key]
         if lock.locked(): raise ScanAlreadyRunning(f"{key} scan is already running")
         async with lock:
-            started_at = datetime.now(UTC); started = time.monotonic()
-            service = self._service(key)
-            timeout = self.config.monitor.retailer_job_timeout_seconds
-            # Per-request HTTP deadlines prevent stalled network operations. A
-            # full-scan deadline is opt-in because retailers with large,
-            # paginated catalogues can legitimately take longer while they
-            # continue making progress.
-            if timeout is None:
-                alerts = await service.synchronize()
-            else:
-                try:
-                    alerts = await asyncio.wait_for(service.synchronize(), timeout)
-                except TimeoutError:
-                    duration = time.monotonic() - started
-                    error = RetailerScanTimeoutError(
-                        f"scan exceeded configured timeout of {timeout:g} seconds"
-                    )
-                    alerts = await service.record_failure(error, duration)
-            duration = time.monotonic() - started
-            state = await self.get_state(key); success = state.last_failure is None or state.last_success is not None and state.last_success > state.last_failure
-            error = (state.last_error or "")[:500] or None
-            assert self.database.connection is not None
-            # A disable may happen while MonitorService is doing network I/O. Its
-            # health write must not make the intentionally disabled row healthy
-            # again when that in-flight scan finishes. Serialize this short
-            # reconciliation with configuration mutations, but never the scan.
-            async with self._mutation_lock:
-                enabled = self.effective(key).enabled
-                async with self.database.write_lock:
-                    await self.database.connection.execute("""INSERT INTO retailer_scan_history
-                        (retailer_key,started_at,completed_at,trigger_source,discord_user_id,success,alert_count,duration,http_status,error_summary)
-                        VALUES(?,?,?,?,?,?,?,?,?,?)""", (key, started_at.isoformat(), datetime.now(UTC).isoformat(), source, actor,
-                        success, len(alerts), duration, state.response_status, error))
-                    if not enabled:
-                        await self.database.connection.execute(
-                            "UPDATE retailers SET enabled=0, health='DISABLED' WHERE name=?",
-                            (state.display_name,),
+            await self._notify_scan_activity(key, True)
+            try:
+                started_at = datetime.now(UTC); started = time.monotonic()
+                service = self._service(key)
+                timeout = self.config.monitor.retailer_job_timeout_seconds
+                # Per-request HTTP deadlines prevent stalled network operations. A
+                # full-scan deadline is opt-in because retailers with large,
+                # paginated catalogues can legitimately take longer while they
+                # continue making progress.
+                if timeout is None:
+                    alerts = await service.synchronize()
+                else:
+                    try:
+                        alerts = await asyncio.wait_for(service.synchronize(), timeout)
+                    except TimeoutError:
+                        duration = time.monotonic() - started
+                        error = RetailerScanTimeoutError(
+                            f"scan exceeded configured timeout of {timeout:g} seconds"
                         )
-                    await self._prune_scan_history(key)
-                    await self.database.connection.commit()
-            if not enabled:
-                state = await self.get_state(key)
-            return {"retailer": key, "success": success, "duration": duration, "alert_count": len(alerts),
-                    "health": state.health, "error": error, "enabled": enabled}
+                        alerts = await service.record_failure(error, duration)
+                duration = time.monotonic() - started
+                state = await self.get_state(key); success = state.last_failure is None or state.last_success is not None and state.last_success > state.last_failure
+                error = (state.last_error or "")[:500] or None
+                assert self.database.connection is not None
+                # A disable may happen while MonitorService is doing network I/O. Its
+                # health write must not make the intentionally disabled row healthy
+                # again when that in-flight scan finishes. Serialize this short
+                # reconciliation with configuration mutations, but never the scan.
+                async with self._mutation_lock:
+                    enabled = self.effective(key).enabled
+                    async with self.database.write_lock:
+                        await self.database.connection.execute("""INSERT INTO retailer_scan_history
+                            (retailer_key,started_at,completed_at,trigger_source,discord_user_id,success,alert_count,duration,http_status,error_summary)
+                            VALUES(?,?,?,?,?,?,?,?,?,?)""", (key, started_at.isoformat(), datetime.now(UTC).isoformat(), source, actor,
+                            success, len(alerts), duration, state.response_status, error))
+                        if not enabled:
+                            await self.database.connection.execute(
+                                "UPDATE retailers SET enabled=0, health='DISABLED' WHERE name=?",
+                                (state.display_name,),
+                            )
+                        await self._prune_scan_history(key)
+                        await self.database.connection.commit()
+                if not enabled:
+                    state = await self.get_state(key)
+                return {"retailer": key, "success": success, "duration": duration, "alert_count": len(alerts),
+                        "health": state.health, "error": error, "enabled": enabled}
+            finally:
+                await self._notify_scan_activity(key, False)
 
     async def _prune_scan_history(self, key: str) -> None:
         """Keep only the newest configured number of scans for one retailer.
