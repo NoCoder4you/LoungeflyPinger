@@ -180,6 +180,22 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_product_sent ON alerts(product_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_type_sent ON alerts(alert_type, sent_at);
+CREATE TABLE IF NOT EXISTS product_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    detected_at TEXT NOT NULL,
+    previous_summary TEXT,
+    new_summary TEXT,
+    price TEXT,
+    currency TEXT,
+    availability TEXT,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_product_events_detected
+    ON product_events(detected_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_product_events_product_detected
+    ON product_events(product_id, detected_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS notification_deliveries (
     deduplication_key TEXT PRIMARY KEY,
     alert_type TEXT NOT NULL,
@@ -188,6 +204,60 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_sent_at
     ON notification_deliveries(sent_at);
+CREATE TABLE IF NOT EXISTS application_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS watch_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    priority TEXT NOT NULL,
+    rule_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    discord_user_id TEXT
+);
+CREATE TABLE IF NOT EXISTS discord_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    discord_user_id TEXT NOT NULL,
+    guild_id TEXT,
+    channel_id TEXT,
+    action TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT,
+    before_state TEXT,
+    after_state TEXT,
+    success INTEGER NOT NULL CHECK (success IN (0, 1))
+);
+CREATE INDEX IF NOT EXISTS idx_discord_audit_timestamp ON discord_audit_log(timestamp);
+CREATE TABLE IF NOT EXISTS retailer_runtime_overrides (
+    retailer_key TEXT PRIMARY KEY,
+    enabled INTEGER CHECK (enabled IS NULL OR enabled IN (0, 1)),
+    interval_minutes REAL CHECK (interval_minutes IS NULL OR interval_minutes > 0),
+    updated_at TEXT NOT NULL,
+    updated_by_discord_user_id TEXT
+);
+CREATE TABLE IF NOT EXISTS retailer_scan_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    retailer_key TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL,
+    trigger_source TEXT NOT NULL CHECK (trigger_source IN ('scheduled','manual')),
+    discord_user_id TEXT,
+    success INTEGER NOT NULL CHECK (success IN (0, 1)),
+    alert_count INTEGER NOT NULL DEFAULT 0,
+    duration REAL NOT NULL,
+    http_status INTEGER,
+    error_summary TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_key_completed
+    ON retailer_scan_history(retailer_key, completed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_key_id
+    ON retailer_scan_history(retailer_key, id DESC);
+CREATE INDEX IF NOT EXISTS idx_retailer_scan_history_failures
+    ON retailer_scan_history(retailer_key, success, id DESC);
 """
 
 
@@ -229,7 +299,7 @@ class Database:
             "bundle": "INTEGER NOT NULL DEFAULT 0", "included_items": "TEXT",
             "disney_parks": "INTEGER NOT NULL DEFAULT 0", "parks_origin": "TEXT",
             "exclusive_type": "TEXT", "series": "TEXT", "event_collection": "TEXT",
-            "loungefly_product_code": "TEXT", "canonical_key": "TEXT",
+            "loungefly_product_code": "TEXT", "canonical_key": "TEXT", "cart_url": "TEXT",
             "sale": "INTEGER NOT NULL DEFAULT 0", "clearance": "INTEGER NOT NULL DEFAULT 0",
             "last_chance": "INTEGER NOT NULL DEFAULT 0",
             "limited_edition": "INTEGER NOT NULL DEFAULT 0",
@@ -237,9 +307,13 @@ class Database:
             "collection_type": "TEXT", "vaulted": "INTEGER NOT NULL DEFAULT 0",
             "exclusivity_text": "TEXT",
         })
-        await self.connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_products_canonical_key ON products(canonical_key)"
-        )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS idx_products_canonical_key ON products(canonical_key)",
+            "CREATE INDEX IF NOT EXISTS idx_products_first_seen ON products(first_seen DESC, id DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_products_catalogue ON products(removed_at, product_type)",
+            "CREATE INDEX IF NOT EXISTS idx_product_states_availability_price ON product_states(availability, currency, price)",
+        ):
+            await self.connection.execute(statement)
         await self._add_missing_columns("retailers", {
             "release_sync_completed": "INTEGER NOT NULL DEFAULT 0",
             "last_error": "TEXT", "response_status": "INTEGER",

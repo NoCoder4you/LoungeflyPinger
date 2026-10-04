@@ -16,9 +16,16 @@ from app.notifications.base import NotificationProvider
 from app.services.product_service import ProductService
 from app.services.release_service import ReleaseService
 from app.services.stock_service import StockService
+from app.services.product_event_service import ProductEventService
 from app.watchlist import Watchlist, classify_product
+from typing import Protocol
 
 LOGGER = logging.getLogger("monitor.retailers")
+
+
+class WatchlistProvider(Protocol):
+    @property
+    def current(self) -> Watchlist: ...
 
 
 class MonitorService:
@@ -31,7 +38,7 @@ class MonitorService:
         notifier: NotificationProvider,
         *,
         retailer_name: str,
-        watchlist: Watchlist | None = None,
+        watchlist: Watchlist | WatchlistProvider | None = None,
         price_alerts: PriceAlertConfig | None = None,
         missing_scan_threshold: int = 3,
         release_alerts: ReleaseAlertConfig | None = None,
@@ -45,6 +52,7 @@ class MonitorService:
         self.retailer_name = retailer_name
         self.products = ProductService(database)
         self.stock = StockService(database)
+        self.events = ProductEventService(database)
         # None keeps backwards compatibility for programmatic users; an explicitly
         # empty configured watchlist intentionally sends no product alerts.
         self.watchlist = watchlist
@@ -65,11 +73,15 @@ class MonitorService:
     @staticmethod
     def _stock_alert(previous: Availability, product: Product) -> AlertType | None:
         current = product.availability
+        if previous == current:
+            return None
         if previous in {Availability.OUT_OF_STOCK, Availability.BACKORDER} and current == Availability.IN_STOCK:
             return AlertType.RESTOCK
         if current == Availability.LOW_STOCK and previous != Availability.LOW_STOCK:
             return AlertType.LOW_STOCK
         if previous == Availability.COMING_SOON and current == Availability.IN_STOCK:
+            return AlertType.AVAILABILITY
+        if previous == Availability.PREORDER and current == Availability.IN_STOCK:
             return AlertType.AVAILABILITY
         # ``preorder`` describes the product/listing, even when ordering is
         # currently unavailable.  Only the normalized PREORDER availability is
@@ -77,7 +89,15 @@ class MonitorService:
         if (previous in {Availability.COMING_SOON, Availability.OUT_OF_STOCK}
                 and current == Availability.PREORDER):
             return AlertType.PREORDER_OPEN
-        return None
+        if current in {Availability.OUT_OF_STOCK, Availability.UNAVAILABLE}:
+            return AlertType.OUT_OF_STOCK
+        if current == Availability.BACKORDER:
+            return AlertType.BACKORDER
+        if current == Availability.COMING_SOON:
+            return AlertType.COMING_SOON
+        if current == Availability.PREORDER:
+            return AlertType.PREORDER_OPEN
+        return AlertType.STATUS_CHANGE
 
     def _is_price_drop(self, previous: Decimal | None, product: Product, currency: str | None) -> bool:
         if not self.price_alerts.enabled or previous is None or product.price is None:
@@ -89,8 +109,14 @@ class MonitorService:
         return (drop >= Decimal(str(self.price_alerts.minimum_drop_value)) and
                 percent >= Decimal(str(self.price_alerts.minimum_drop_percent)))
 
+    def _is_price_increase(self, previous: Decimal | None, product: Product,
+                           currency: str | None) -> bool:
+        return bool(self.price_alerts.enabled and previous is not None and product.price is not None
+                    and currency == product.currency and product.price > previous)
+
     def _matches(self, product: Product):
-        return self.watchlist.match(product) if self.watchlist is not None else ()
+        watchlist = self.watchlist.current if hasattr(self.watchlist, "current") else self.watchlist
+        return watchlist.match(product) if watchlist is not None else ()
 
     @staticmethod
     def _release_key(info):
@@ -270,6 +296,14 @@ class MonitorService:
         await connection.commit()
         return [alert]
 
+    async def record_failure(self, exc: Exception, duration: float) -> list[Alert]:
+        """Record a coordinator-level failure through the canonical health path.
+
+        Scan coordinators use this when a deadline cancels discovery before
+        ``synchronize`` can handle an ordinary adapter exception itself.
+        """
+        return await self._record_failure(exc, duration)
+
     async def _synchronize_success(self, started: float, discovered: list[Product]) -> list[Alert]:
         connection = self.database.connection
         if connection is None:
@@ -286,7 +320,7 @@ class MonitorService:
         for product in discovered:
             product = classify_product(product)
             known_product = await (await connection.execute(
-                "SELECT id, removed_at FROM products WHERE retailer=? AND retailer_product_id=?",
+                "SELECT id, removed_at, first_seen FROM products WHERE retailer=? AND retailer_product_id=?",
                 (product.retailer, product.retailer_product_id),
             )).fetchone()
             was_removed = known_product is not None and known_product[1] is not None
@@ -319,6 +353,8 @@ class MonitorService:
                             alert_types.append(stock_alert)
                     if self._is_price_drop(prior_state.price, product, prior_state.currency):
                         alert_types.append(AlertType.PRICE_DROP)
+                    elif self._is_price_increase(prior_state.price, product, prior_state.currency):
+                        alert_types.append(AlertType.PRICE_INCREASE)
                     old_eta = prior_state.estimated_arrival_text or (
                         prior_state.estimated_arrival_date.isoformat()
                         if prior_state.estimated_arrival_date else None
@@ -343,12 +379,29 @@ class MonitorService:
                 if (self.release_alerts.enabled and release_alert is not None and
                         not is_new and (prior_release is not None or may_notify_found)):
                     alert_types.append(release_alert)
+                if known_product is None:
+                    await self.events.record(
+                        product_id, AlertType.NEW_PRODUCT, new_summary=product.availability.value,
+                        price=product.price, currency=product.currency,
+                        availability=product.availability,
+                    )
             for alert_type in alert_types:
+                if not (alert_type == AlertType.NEW_PRODUCT and known_product is None):
+                    await self.events.record(
+                        product_id, alert_type,
+                        previous_summary=previous.value if previous else None,
+                        new_summary=product.availability.value,
+                        price=product.price, currency=product.currency,
+                        availability=product.availability,
+                    )
                 alert = Alert(
                     alert_type, product, product_id,
-                    previous_price=prior_state.price if alert_type == AlertType.PRICE_DROP else None,
+                    previous_price=(prior_state.price if alert_type in {
+                        AlertType.PRICE_DROP, AlertType.PRICE_INCREASE
+                    } else None),
                     previous_availability=previous, watch_matches=self._matches(product),
                     previous_release=prior_release,
+                    first_seen=(datetime.fromisoformat(known_product[2]) if known_product else datetime.now(UTC)),
                 )
                 await self._send(alert, alerts)
             if (release_baselined and product.availability != Availability.ERROR and
@@ -398,6 +451,12 @@ class MonitorService:
                     currency=row[16], product_type=row[7], franchise=row[8], character=row[9],
                     exclusive=bool(row[10]), exclusive_retailer=row[11],
                     new_release=bool(row[12]), preorder=bool(row[17]), sku=row[6],
+                )
+                await self.events.record(
+                    row[0], AlertType.PRODUCT_REMOVED,
+                    previous_summary=row[14], new_summary="REMOVED",
+                    price=missing_product.price, currency=missing_product.currency,
+                    availability=missing_product.availability,
                 )
                 await self._send(Alert(
                     AlertType.PRODUCT_REMOVED, missing_product, row[0],

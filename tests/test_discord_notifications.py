@@ -75,16 +75,16 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
     ))
 
     embed = payload["embeds"][0]
-    assert embed["title"] == "🎒 LOUNGEFLY RESTOCK"
-    assert embed["description"] == product.name
+    assert embed["title"] == product.name
+    assert embed["description"] == "🟢 RESTOCK"
     assert embed["url"] == product.url
     assert embed["thumbnail"] == {"url": product.image_url}
     fields = {field["name"]: field["value"] for field in embed["fields"]}
-    assert fields == {
-        "Retailer": "GeekCore", "Price": "£79.99", "Previous Price": "£89.99",
-        "Status": "In Stock", "Previous Status": "Out Of Stock", "Franchise": "Disney",
-        "Character": "Stitch", "Exclusive": "Yes", "Preorder": "No",
-    }
+    assert fields["Price"] == "£89.99 → £79.99"
+    assert fields["Status"] == "🟢 In Stock"
+    assert fields["Previous Status"] == "🔴 Out Of Stock"
+    assert fields["Exclusive"] == "⭐ Retailer Exclusive"
+    assert fields["Quick Links"] == f"[View Product]({product.url})"
     assert payload["content"] == "@everyone"
     assert payload["allowed_mentions"] == {"parse": ["everyone"]}
 
@@ -118,7 +118,7 @@ def test_discord_payload_shows_watches_and_highest_priority(product: Product) ->
         watch_matches=(WatchMatch("Any Mini", Priority.LOW), WatchMatch("Stitch Backpacks", Priority.HIGH)),
     ))
     fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
-    assert fields["Matched Watch"] == "Any Mini\nStitch Backpacks"
+    assert fields["Matched"] == "Any Mini Stitch Backpacks"
     assert fields["Priority"] == "HIGH"
 
 
@@ -130,7 +130,7 @@ def test_discord_payload_shows_watches_and_highest_priority(product: Product) ->
 def test_each_supported_alert_has_a_readable_embed(alert_type: AlertType, product: Product) -> None:
     alert = Alert(alert_type, message="Health changed") if alert_type.name.startswith("MONITOR") else Alert(alert_type, product)
     embed = build_discord_payload(alert)["embeds"][0]
-    assert alert_type.value.replace("_", " ") in embed["title"]
+    assert alert_type.value.replace("_OPEN", "").replace("_", " ") in embed["description"]
     assert embed["timestamp"].endswith("+00:00")
 
 
@@ -241,3 +241,63 @@ async def test_cancelled_delivery_is_not_persisted_and_can_retry_after_restart(
         )
         assert await notifier.send(alert)
     assert len(retry_session.calls) == 1
+
+@pytest.mark.parametrize(("mode", "role_id", "content", "allowed"), [
+    ("none", None, None, {"parse": []}),
+    ("everyone", None, "@everyone", {"parse": ["everyone"]}),
+    ("role", 123456, "<@&123456>", {"parse": [], "roles": ["123456"]}),
+])
+def test_configurable_mentions_are_explicitly_allowlisted(product, mode, role_id, content, allowed):
+    config = NotificationConfig(discord_alert_mention_mode=mode, discord_alert_role_id=role_id)
+    payload = build_discord_payload(Alert(AlertType.NEW_PRODUCT, product), config)
+    assert payload.get("content") == content
+    assert payload["allowed_mentions"] == allowed
+
+
+def test_optional_cart_sku_and_exclusive_metadata(product):
+    enriched = Product(
+        retailer=product.retailer, retailer_product_id=product.retailer_product_id,
+        name=product.name, url=product.url, availability=product.availability,
+        price=product.price, currency=product.currency, sku="WDBK2380", exclusive=True,
+        exclusivity_text="GeekCore Exclusive", cart_url="https://shop.example/cart/123",
+    )
+    fields = {field["name"]: field["value"] for field in
+              build_discord_payload(Alert(AlertType.RESTOCK, enriched))["embeds"][0]["fields"]}
+    assert fields["SKU"] == "WDBK2380"
+    assert fields["Exclusive"] == "⭐ GeekCore Exclusive"
+    assert "[Add to Cart](https://shop.example/cart/123)" in fields["Quick Links"]
+
+
+def test_missing_optional_data_and_bad_image_are_omitted(product):
+    minimal = Product(retailer="Store", retailer_product_id="1", name="Bag",
+                      url="https://example.com/bag", availability=Availability.COMING_SOON)
+    object.__setattr__(minimal, "image_url", "javascript:alert(1)")
+    embed = build_discord_payload(Alert(AlertType.COMING_SOON, minimal))["embeds"][0]
+    assert "thumbnail" not in embed
+    assert {field["name"] for field in embed["fields"]} == {
+        "Retailer", "Status", "Product Type", "Quick Links"
+    }
+
+
+def test_price_change_uses_decimal_math(product):
+    cheaper = Product(retailer=product.retailer, retailer_product_id=product.retailer_product_id,
+                      name=product.name, url=product.url, availability=product.availability,
+                      price=Decimal("44.99"), currency="GBP")
+    fields = {field["name"]: field["value"] for field in build_discord_payload(Alert(
+        AlertType.PRICE_DROP, cheaper, previous_price=Decimal("59.99")))["embeds"][0]["fields"]}
+    assert fields["Price"] == "£59.99 → £44.99"
+    assert fields["Saving"] == "£15.00 (25.0%)"
+
+
+def test_long_adapter_data_stays_within_discord_limits(product):
+    long_product = Product(retailer="R" * 500, retailer_product_id="long", name="N" * 1000,
+                           url="https://example.com/product", availability=Availability.IN_STOCK,
+                           sku="S" * 2000)
+    embed = build_discord_payload(Alert(AlertType.NEW_PRODUCT, long_product))["embeds"][0]
+    assert len(embed["title"]) <= 256
+    assert len(embed["author"]["name"]) <= 256
+    assert len(embed["fields"]) <= 25
+    assert all(len(field["name"]) <= 256 and len(field["value"]) <= 1024
+               for field in embed["fields"])
+    assert sum(len(embed.get(key, "")) for key in ("title", "description")) + sum(
+        len(field["name"]) + len(field["value"]) for field in embed["fields"]) <= 6000

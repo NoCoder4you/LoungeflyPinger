@@ -15,7 +15,11 @@ restart retains the baseline and does not resend unchanged product notifications
 
 Important operational safeguards:
 
-- HTTP concurrency, rate, timeout, retries/backoff, response-body size, and per-retailer job runtime are bounded. Task timeouts protect asynchronous operations but cannot pre-empt arbitrary CPU-bound synchronous parser work; retailer tasks are isolated, not separate processes.
+- HTTP concurrency, rate, per-request timeout, retries/backoff, and response-body size are bounded.
+  An optional full-scan timeout is available for deployments that need it, but is disabled by
+  default to accommodate legitimately slow paginated catalogues. Task timeouts protect
+  asynchronous operations but cannot pre-empt arbitrary CPU-bound synchronous parser work;
+  retailer tasks are isolated, not separate processes.
 - `SIGINT`/`SIGTERM` requests shutdown; scheduler jobs are cancelled, then Discord/HTTP and SQLite
   are closed in order. Startup, ready, shutdown-requested, stopping, and stopped events are logged.
 - SQLite uses foreign keys, WAL mode, a 5-second busy timeout, serialized writes, schema upgrades,
@@ -106,6 +110,13 @@ systemd loads the same file with `EnvironmentFile`.
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
+| `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
+| `DISCORD_ALERT_ROLE_ID` | In role mode | Positive role ID mentioned by product alerts |
+| `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
+| `DISCORD_BOT_TOKEN` | When enabled | Bot token, kept only in the environment |
+| `DISCORD_BOT_GUILD_ID` | Recommended | Guild used for immediate, guild-scoped command registration |
+| `DISCORD_BOT_ALLOWED_USER_IDS` | For user authorization | Comma-separated Discord user IDs |
+| `DISCORD_BOT_ALLOWED_ROLE_IDS` | For role authorization | Comma-separated Discord role IDs |
 | `LOUNGEFLY_DATABASE_PATH` | No | `data/loungefly.db` |
 | `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
 | `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number between later backups |
@@ -140,6 +151,38 @@ rotate one in Discord immediately if it is exposed.
 Discord notifications mention `@everyone` so subscribers are alerted, except for product-removal
 notifications. The webhook's Discord channel permissions must allow everyone mentions for the
 mention to notify channel members.
+
+### Discord Control Bot
+
+The optional control bot runs on the monitor's asyncio loop and is separate from outbound webhook
+alerts. In the Discord Developer Portal, create an application and bot, keep its token in `.env`,
+and invite it with the `bot` and `applications.commands` scopes. It needs only **View Channels** and
+**Send Messages** (plus **Attach Files** for `/watch export`); Administrator and Message Content
+intent are not required. Set `DISCORD_BOT_GUILD_ID` for production so commands are registered only
+in that server and synchronize promptly. Leaving `DISCORD_BOT_ENABLED=false` makes no gateway
+connection and preserves the pre-bot operation.
+
+Mutation access is deny-by-default. A caller must have an ID in
+`DISCORD_BOT_ALLOWED_USER_IDS` or a role in `DISCORD_BOT_ALLOWED_ROLE_IDS`; server membership alone
+does not authorize changes. Denials and all attempted mutations are written to the SQLite audit
+log. Management replies are ephemeral, and deletion uses a one-minute confirmation restricted to
+its initiating user.
+
+Commands are `/watch list`, `/watch show`, `/watch add`, `/watch edit`, `/watch delete`,
+`/watch enable`, `/watch disable`, `/watch export`, `/status`, and read-only `/retailers`. On the
+first startup after upgrade, the validated `config/watchlist.yaml` rules are imported into SQLite
+and a durable migration marker is recorded. This happens exactly once—even if every rule is later
+deleted. SQLite is then authoritative; edits do not modify tracked YAML. Enabled rules are held in
+an immutable in-memory snapshot, replaced immediately after each committed mutation, and included
+in the existing online database backups. `/watch export` provides a secret-free YAML copy.
+
+If commands do not appear, verify the application was invited with `applications.commands`, the
+guild ID is correct, and inspect `sudo journalctl -u loungefly-monitor.service -f` for
+`discord_control_ready` or authentication errors. Guild commands normally synchronize as soon as
+the bot connects; global registration (blank guild ID) can take longer. A bot authentication or
+gateway failure is logged but does not stop retailer jobs. Disable it by setting
+`DISCORD_BOT_ENABLED=false` and restarting the existing service. No new daemon, root privilege, or
+systemd sandbox change is needed.
 
 ## Running
 
@@ -348,3 +391,129 @@ backup. Sensible future work is a small health/metrics exporter, per-host circui
 for low disk space/backup age, off-device encrypted backup replication, and extracting the verbose
 adapter registration into a declarative registry. These are deliberately not part of this
 production-hardening change.
+
+## Stage 2: live retailer and scan management
+
+The optional Discord control bot now manages retailer scheduling inside the existing
+`loungefly-monitor.service` process. All `/retailer` responses are ephemeral. The
+same deny-by-default user/role allow-list used by watch management protects
+configuration changes and manual scans; no systemd, shell, SQL, or filesystem
+permissions are granted to Discord.
+
+* `/retailer list` shows every trusted adapter's effective state, interval, and health.
+* `/retailer show geekcore` shows YAML defaults, runtime overrides, persisted health,
+  scan timing/status, and whether a scan is active.
+* `/retailer enable <key>` immediately enables and schedules an adapter.
+* `/retailer disable <key>` asks for a user-bound, 60-second confirmation, then
+  removes future executions. An already-running scan is allowed to finish.
+* `/retailer interval geekcore 8` safely reschedules the main scan lane.
+* `/retailer reset <key>` removes SQLite overrides and restores startup YAML defaults;
+  confirmation is required when the enabled state changes.
+* `/retailer scan geekcore` executes the normal `MonitorService.synchronize()` path.
+  It works while scheduled monitoring is disabled and does not enable it. A second
+  scan of the same retailer is rejected rather than queued, while other retailers
+  can continue concurrently. Individual network requests always use the configured
+  `request_timeout_seconds` deadline. The optional `retailer_job_timeout_seconds`
+  setting adds a shared hard deadline for manual and scheduled scans when set to a
+  positive number; it defaults to disabled so a healthy paginated scan is not
+  cancelled merely for exceeding a fixed wall-clock duration. Configured full-scan
+  timeouts update health and scan history as failures and always release the lock.
+* `/retailer failures <key>` displays bounded, durable recent failed-scan summaries.
+
+`config/retailers.yaml` is the deployment default and is read only at process startup.
+Discord overrides (enabled and the main interval) live in SQLite and survive restarts;
+the YAML file is never rewritten. Intervals are limited to **1–1440 minutes**.
+Specialized `amy_david_magic` lane intervals and Ozzie's `detail_batch_size` are shown
+read-only and retain their startup values; the command changes only the canonical
+main schedule. Every scheduled and manual scan records bounded metadata (never HTTP
+bodies, headers, tracebacks, or secrets), and retailer actions are audit logged. Scan
+history is capped at the newest 4,000 entries per retailer (nearly three days at the
+minimum interval, or about four weeks at ten minutes); the cap is also enforced during startup upgrades so
+the live database and its backups cannot grow indefinitely from scan history.
+
+For troubleshooting, use `/retailer show`, `/retailer failures`, `/status`, and inspect
+`journalctl -u loungefly-monitor.service` or `logs/loungefly-monitor.log`. Do not edit
+the database. Deployment remains `/home/pi/LoungeflyPinger` with its `.venv`: update
+the checkout and dependencies, run the tests, then restart the existing service once
+to deploy this release. No additional daemon or service permission is required.
+# Stage 3 product intelligence
+
+The monitor's SQLite observations now have a typed, read-only catalogue layer:
+Discord commands create immutable `ProductQuery` filters, `ProductQueryService`
+executes parameterized and bounded SQL, and the Discord adapter renders ephemeral
+embeds. Catalogue reads use the existing Discord user/role allow-list and are
+deny-by-default. Pages contain 12 products (hard maximum 25), use deterministic
+ordering, and navigation buttons are bound to the requester and expire after two
+minutes.
+
+Available means a non-removed listing whose normalized state is `IN_STOCK` or
+`LOW_STOCK`. `PREORDER` is included only with `include_preorders:true`;
+`COMING_SOON`, `OUT_OF_STOCK`, `ERROR`, and `UNAVAILABLE` are never considered
+available. Recent discovery uses `first_seen` (24 hours by default), not the most
+recent scan time.
+
+Commands include:
+
+* `/product available product_type:mini_backpack`
+* `/product search query:"Sorcerer's Apprentice"`
+* `/product search franchise:Disney character:Stitch`
+* `/product recent period:24h`
+* `/product show id:123`
+* `/product history id:123`
+* `/product offers id:123`
+* `/product releases franchise:Disney`
+* `/product preorders`, `/product sales`, and `/product exclusives`
+* `/alerts recent`
+
+State history is written only for the first observation or a change to
+availability, price, currency, or preorder state. Release history retains its
+existing distinct-release semantics. Detected product changes are stored in
+`product_events` independently of webhook delivery; retention is capped at 250
+events per product and 20,000 events globally. Notification delivery attempts
+remain separately recorded in `alerts`.
+
+Cross-retailer offers never merge listings. Matching is **HIGH** for a normalized
+barcode or Loungefly code, **MEDIUM** for a credible SKU plus matching normalized
+title and product type, and **POSSIBLE** for matching title, franchise, and type.
+Title-only similarity is not considered certain. Cheapest markers are calculated
+only among currently orderable offers in the same currency; Stage 3 performs no
+currency conversion. These matches are heuristics and should be verified using
+the retailer links.
+
+SQLite schema upgrades and indexes are applied automatically during normal
+startup. No extra service, port, root access, or change to the Raspberry Pi
+systemd deployment is required.
+
+## Rich Discord stock alerts
+
+Product webhooks use adaptive Discord embeds: the product name links to its retailer page, the
+primary image is shown as a thumbnail, and only metadata actually supplied by an adapter is shown.
+Status, normalized price, prior price/status, SKU or product ID, explicit exclusivity, release/ETA,
+watch-match context, first-seen/restock time, and optional adapter-supplied Add to Cart links fit
+within Discord's limits. Missing images and optional fields do not prevent delivery.
+
+Alert colours communicate intent: blue identifies new products, coming-soon and informational
+updates; green identifies restocks, availability and price drops; purple identifies preorders;
+orange identifies backorders, low stock, price increases and warnings; red identifies sold-out and
+monitor errors. Supported stock events include **NEW PRODUCT**, **RESTOCK**, **PREORDER**,
+**BACKORDER**, **COMING SOON**, **NOW AVAILABLE/RELEASED**, **PRICE DROP**, **PRICE INCREASE**,
+**STATUS CHANGE**, **PRODUCT UPDATED**, and **SOLD OUT**, plus existing release and monitor-health
+events. Price comparisons use normalized `Decimal` values, so currency symbols or trailing zeroes
+do not create false changes.
+
+Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The backward-compatible
+default is `everyone`; `role` additionally requires `DISCORD_ALERT_ROLE_ID`. Payloads explicitly
+allow only the selected mention type, so scraped product and retailer text cannot ping users or
+roles. Product-removal alerts never mention. Webhook URLs and role IDs belong only in `.env`.
+
+Adapters may optionally populate `image_url`, `sku`, `variant_id`, `loungefly_product_code`,
+`exclusive` plus explicit exclusivity text, release/ETA metadata, and a validated `cart_url`.
+Retailer display name, icon, homepage, currency, and country presentation can be extended in the
+central `app/retailers.py` catalogue without retailer branches in the renderer. No capability is
+inferred merely because a retailer sells an item.
+
+SQLite stock history remains a change log: unchanged scans update current observation time but do
+not append history or send notifications. Notification delivery identities are persisted in
+`notification_deliveries`, preventing the same event from being posted again after restart. The
+schema initializer only adds missing columns/tables and remains compatible with existing database
+files; it never recreates production data.

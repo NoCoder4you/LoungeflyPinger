@@ -5,8 +5,8 @@ import pytest
 from app.config import ConfigurationError, load_config
 
 
-def test_disney_store_uk_is_enabled_with_conservative_interval() -> None:
-    config = load_config()
+def test_disney_store_uk_is_enabled_with_conservative_interval(tmp_path: Path) -> None:
+    config = load_config(env_path=tmp_path / ".env")
 
     assert config.retailers["disney_store_uk"] == {
         "enabled": True,
@@ -15,8 +15,8 @@ def test_disney_store_uk_is_enabled_with_conservative_interval() -> None:
     }
 
 
-def test_disney_mad_is_enabled_with_high_priority_interval() -> None:
-    config = load_config()
+def test_disney_mad_is_enabled_with_high_priority_interval(tmp_path: Path) -> None:
+    config = load_config(env_path=tmp_path / ".env")
 
     assert config.retailers["disney_mad_uk"] == {
         "enabled": True,
@@ -28,11 +28,28 @@ def test_disney_mad_is_enabled_with_high_priority_interval() -> None:
 def test_load_config(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 2\ndatabase:\n  path: custom.db\nretailers: {}\n", encoding="utf-8")
-    config = load_config(path, tmp_path / ".env")
+    config = load_config(path, env_path=tmp_path / ".env")
     assert config.monitor.concurrency_limit == 2
     assert config.database_path == Path("custom.db")
     assert config.monitor.missing_scan_threshold == 3
+    assert config.monitor.retailer_job_timeout_seconds is None
     assert config.price_alerts.minimum_drop_percent == 10
+
+
+def test_optional_retailer_job_timeout_configuration(tmp_path: Path) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text(
+        "monitor:\n  retailer_job_timeout_seconds: 300\n",
+        encoding="utf-8",
+    )
+
+    assert load_config(path, tmp_path / ".env").monitor.retailer_job_timeout_seconds == 300
+
+    path.write_text(
+        "monitor:\n  retailer_job_timeout_seconds: null\n",
+        encoding="utf-8",
+    )
+    assert load_config(path, tmp_path / ".env").monitor.retailer_job_timeout_seconds is None
 
 
 def test_price_alert_configuration(tmp_path: Path) -> None:
@@ -117,3 +134,24 @@ def test_non_string_logging_level_is_rejected(
 
     with pytest.raises(ConfigurationError, match="logging level must be a string"):
         load_config(path, tmp_path / ".env")
+
+
+def test_discord_bot_defaults_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("DISCORD_BOT_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_BOT_GUILD_ID",
+                 "DISCORD_BOT_ALLOWED_USER_IDS", "DISCORD_BOT_ALLOWED_ROLE_IDS"):
+        monkeypatch.delenv(name, raising=False)
+    path = tmp_path / "settings.yaml"; path.write_text("{}", encoding="utf-8")
+    assert not load_config(path, tmp_path / ".env").discord_bot.enabled
+
+
+def test_discord_bot_configuration_parsing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "settings.yaml"; path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_BOT_ENABLED", "true")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "secret")
+    monkeypatch.setenv("DISCORD_BOT_GUILD_ID", "123")
+    monkeypatch.setenv("DISCORD_BOT_ALLOWED_USER_IDS", "1, 2")
+    monkeypatch.setenv("DISCORD_BOT_ALLOWED_ROLE_IDS", "3")
+    config = load_config(path, tmp_path / ".env").discord_bot
+    assert config.guild_id == 123
+    assert config.allowed_user_ids == frozenset({1, 2})
+    assert config.allowed_role_ids == frozenset({3})

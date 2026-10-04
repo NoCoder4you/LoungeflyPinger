@@ -43,7 +43,10 @@ class MonitorConfig:
     failure_alert_threshold: int = 5
     retry_backoff_seconds: float = 1
     rate_limit_requests_per_second: float = 5
-    retailer_job_timeout_seconds: float = 120
+    # Full-scan deadlines are optional because a fixed wall-clock limit can
+    # cancel healthy retailers whose paginated requests are still progressing.
+    # Individual HTTP requests remain bounded independently.
+    retailer_job_timeout_seconds: float | None = None
     max_response_bytes: int = 10_485_760
 
 
@@ -75,6 +78,17 @@ class NotificationConfig:
 
     discord_webhook_url: str | None = None
     discord_admin_webhook_url: str | None = None
+    discord_alert_mention_mode: str = "everyone"
+    discord_alert_role_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DiscordBotConfig:
+    enabled: bool = False
+    token: str | None = None
+    guild_id: int | None = None
+    allowed_user_ids: frozenset[int] = frozenset()
+    allowed_role_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +105,7 @@ class AppConfig:
     backup_interval_hours: float = 24
     backup_initial_delay_seconds: float = 30
     backup_count: int = 7
+    discord_bot: DiscordBotConfig = field(default_factory=DiscordBotConfig)
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -141,9 +156,13 @@ def load_config(
             monitor_raw.get("rate_limit_requests_per_second", 5),
             "rate_limit_requests_per_second",
         ),
-        retailer_job_timeout_seconds=_positive(
-            monitor_raw.get("retailer_job_timeout_seconds", 120),
-            "retailer_job_timeout_seconds",
+        retailer_job_timeout_seconds=(
+            None
+            if monitor_raw.get("retailer_job_timeout_seconds") is None
+            else _positive(
+                monitor_raw["retailer_job_timeout_seconds"],
+                "retailer_job_timeout_seconds",
+            )
         ),
         max_response_bytes=_positive(
             monitor_raw.get("max_response_bytes", 10_485_760), "max_response_bytes", int
@@ -215,10 +234,50 @@ def load_config(
                 _positive(settings[key], f"retailers.{retailer}.{key}")
         if "detail_batch_size" in settings:
             _positive(settings["detail_batch_size"], f"retailers.{retailer}.detail_batch_size", int)
+    mention_mode = os.getenv("DISCORD_ALERT_MENTION_MODE", "everyone").strip().casefold()
+    if mention_mode not in {"none", "role", "everyone"}:
+        raise ConfigurationError("DISCORD_ALERT_MENTION_MODE must be none, role, or everyone")
+    role_value = os.getenv("DISCORD_ALERT_ROLE_ID", "").strip()
+    if role_value and (not role_value.isdecimal() or int(role_value) <= 0):
+        raise ConfigurationError("DISCORD_ALERT_ROLE_ID must be a positive Discord ID")
+    role_id = int(role_value) if role_value else None
+    if mention_mode == "role" and role_id is None:
+        raise ConfigurationError("DISCORD_ALERT_ROLE_ID is required when mention mode is role")
     notifications = NotificationConfig(
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
+        discord_alert_mention_mode=mention_mode,
+        discord_alert_role_id=role_id,
     )
+    def discord_id(name: str) -> int | None:
+        raw_value = os.getenv(name, "").strip()
+        if not raw_value:
+            return None
+        if not raw_value.isdecimal() or int(raw_value) <= 0:
+            raise ConfigurationError(f"{name} must be a positive Discord ID")
+        return int(raw_value)
+
+    def discord_ids(name: str) -> frozenset[int]:
+        raw_value = os.getenv(name, "").strip()
+        if not raw_value:
+            return frozenset()
+        values = [part.strip() for part in raw_value.split(",")]
+        if any(not part.isdecimal() or int(part) <= 0 for part in values):
+            raise ConfigurationError(f"{name} must be comma-separated positive Discord IDs")
+        return frozenset(map(int, values))
+
+    enabled_value = os.getenv("DISCORD_BOT_ENABLED", "false").strip().casefold()
+    if enabled_value not in {"true", "false"}:
+        raise ConfigurationError("DISCORD_BOT_ENABLED must be true or false")
+    discord_bot = DiscordBotConfig(
+        enabled=enabled_value == "true",
+        token=os.getenv("DISCORD_BOT_TOKEN") or None,
+        guild_id=discord_id("DISCORD_BOT_GUILD_ID"),
+        allowed_user_ids=discord_ids("DISCORD_BOT_ALLOWED_USER_IDS"),
+        allowed_role_ids=discord_ids("DISCORD_BOT_ALLOWED_ROLE_IDS"),
+    )
+    if discord_bot.enabled and not discord_bot.token:
+        raise ConfigurationError("DISCORD_BOT_TOKEN is required when the bot is enabled")
     # Local import avoids coupling the configuration dataclasses to matching internals.
     from app.watchlist import load_watchlist
     watchlist = load_watchlist(watchlist_path)
@@ -259,5 +318,5 @@ def load_config(
     return AppConfig(
         monitor, database_path, logging_config, notifications, retailers, watchlist, price_alerts,
         release_alerts, backup_directory, backup_interval_hours, backup_initial_delay_seconds,
-        backup_count,
+        backup_count, discord_bot,
     )

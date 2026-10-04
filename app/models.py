@@ -25,6 +25,12 @@ class AlertType(StrEnum):
     RESTOCK = "RESTOCK"
     PREORDER_OPEN = "PREORDER_OPEN"
     PRICE_DROP = "PRICE_DROP"
+    PRICE_INCREASE = "PRICE_INCREASE"
+    OUT_OF_STOCK = "OUT_OF_STOCK"
+    BACKORDER = "BACKORDER"
+    COMING_SOON = "COMING_SOON"
+    STATUS_CHANGE = "STATUS_CHANGE"
+    PRODUCT_UPDATED = "PRODUCT_UPDATED"
     LOW_STOCK = "LOW_STOCK"
     PRODUCT_REMOVED = "PRODUCT_REMOVED"
     AVAILABILITY = "AVAILABILITY"
@@ -170,6 +176,7 @@ class Product:
     series: str | None = None
     event_collection: str | None = None
     loungefly_product_code: str | None = None
+    cart_url: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -179,6 +186,7 @@ class Product:
             object.__setattr__(self, field_name, value.strip())
         self._validate_url("url", self.url, required=True)
         self._validate_url("image_url", self.image_url, required=False)
+        self._validate_url("cart_url", self.cart_url, required=False)
         try:
             availability = Availability(self.availability)
         except ValueError as exc:
@@ -296,6 +304,9 @@ class Alert:
     watch_matches: tuple[WatchMatch, ...] = ()
     previous_release: ReleaseInfo | None = None
     reminder_seconds: int | None = None
+    first_seen: datetime | None = None
+    last_seen_in_stock: datetime | None = None
+    last_seen_out_of_stock: datetime | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alert_type", AlertType(self.alert_type))
@@ -311,6 +322,10 @@ class Alert:
         object.__setattr__(self, "occurrence_id", self.occurrence_id.strip())
         if self.timestamp.tzinfo is None:
             raise ValueError("timestamp must be timezone-aware")
+        for field_name in ("first_seen", "last_seen_in_stock", "last_seen_out_of_stock"):
+            value = getattr(self, field_name)
+            if value is not None and value.tzinfo is None:
+                raise ValueError(f"{field_name} must be timezone-aware")
         object.__setattr__(self, "watch_matches", tuple(self.watch_matches))
 
     @property
