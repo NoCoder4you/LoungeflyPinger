@@ -109,6 +109,35 @@ async def test_manual_disabled_scan_and_overlap_rejection(manager_parts):
 
 
 @pytest.mark.asyncio
+async def test_scan_activity_callback_wraps_scan(manager_parts):
+    manager, _, _, monitor, *_ = manager_parts
+    gate = asyncio.Event(); monitor.gate = gate
+    callback = AsyncMock()
+    manager.set_scan_activity_callback(callback)
+
+    scan = asyncio.create_task(manager.scan("shop", "42"))
+    await asyncio.sleep(0)
+    callback.assert_awaited_once_with("shop", "Shop", True)
+
+    gate.set()
+    await scan
+    assert callback.await_args_list == [
+        (("shop", "Shop", True), {}),
+        (("shop", "Shop", False), {}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_scan_activity_callback_failure_does_not_break_scan(manager_parts):
+    manager, *_ = manager_parts
+    manager.set_scan_activity_callback(AsyncMock(side_effect=RuntimeError("Discord failed")))
+
+    result = await manager.scan("shop", "42")
+
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
 async def test_disable_during_scan_preserves_disabled_health(manager_parts):
     manager, database, _, monitor, *_ = manager_parts
     gate = asyncio.Event(); monitor.gate = gate

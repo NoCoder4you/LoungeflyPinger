@@ -167,6 +167,40 @@ async def test_ready_warns_when_configured_guild_is_not_visible(caplog):
     assert "discord_configured_guild_not_found" in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_presence_tracks_current_retailer_and_restores_concurrent_scan():
+    service = make_control()
+    client = Mock()
+    client.is_ready.return_value = True
+    client.change_presence = AsyncMock()
+    service.client = client
+
+    await service.update_scan_presence("shop_a", "Shop A", True)
+    await service.update_scan_presence("shop_b", "Shop B", True)
+    await service.update_scan_presence("shop_b", "Shop B", False)
+    await service.update_scan_presence("shop_a", "Shop A", False)
+
+    presences = client.change_presence.await_args_list
+    assert [call.kwargs["activity"].name for call in presences] == [
+        "Shop A", "Shop B", "Shop A", "for retailer updates",
+    ]
+    assert presences[0].kwargs["activity"].type is discord.ActivityType.watching
+    assert presences[0].kwargs["status"] is discord.Status.online
+    assert presences[-1].kwargs["status"] is discord.Status.idle
+
+
+@pytest.mark.asyncio
+async def test_presence_updates_are_deferred_until_discord_is_ready():
+    service = make_control()
+    assert service.client is not None
+    service.client.change_presence = AsyncMock()
+
+    await service.update_scan_presence("shop", "Shop", True)
+
+    service.client.change_presence.assert_not_awaited()
+    assert service._active_scans == {"shop": "Shop"}
+
+
 def test_discord_voice_warning_filter_is_narrowly_scoped():
     warning_filter = _DiscordVoiceWarningFilter()
     pynacl_warning = logging.LogRecord(

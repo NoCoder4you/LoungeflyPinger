@@ -45,6 +45,9 @@ class Application:
             config.discord_bot, self.watchlists, self.database, config, self.retailers,
             self.scheduler, self.notification_settings
         )
+        self.retailers.set_scan_activity_callback(
+            self.discord_control.update_scan_presence
+        )
         self.stop_event = asyncio.Event()
         self._close_lock = asyncio.Lock()
         self._closed = False
