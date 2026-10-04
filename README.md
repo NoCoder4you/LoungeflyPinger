@@ -15,7 +15,11 @@ restart retains the baseline and does not resend unchanged product notifications
 
 Important operational safeguards:
 
-- HTTP concurrency, rate, timeout, retries/backoff, response-body size, and per-retailer job runtime are bounded. Task timeouts protect asynchronous operations but cannot pre-empt arbitrary CPU-bound synchronous parser work; retailer tasks are isolated, not separate processes.
+- HTTP concurrency, rate, per-request timeout, retries/backoff, and response-body size are bounded.
+  An optional full-scan timeout is available for deployments that need it, but is disabled by
+  default to accommodate legitimately slow paginated catalogues. Task timeouts protect
+  asynchronous operations but cannot pre-empt arbitrary CPU-bound synchronous parser work;
+  retailer tasks are isolated, not separate processes.
 - `SIGINT`/`SIGTERM` requests shutdown; scheduler jobs are cancelled, then Discord/HTTP and SQLite
   are closed in order. Startup, ready, shutdown-requested, stopping, and stopped events are logged.
 - SQLite uses foreign keys, WAL mode, a 5-second busy timeout, serialized writes, schema upgrades,
@@ -402,9 +406,12 @@ permissions are granted to Discord.
 * `/retailer scan geekcore` executes the normal `MonitorService.synchronize()` path.
   It works while scheduled monitoring is disabled and does not enable it. A second
   scan of the same retailer is rejected rather than queued, while other retailers
-  can continue concurrently. Manual and scheduled scans share the configured
-  `retailer_job_timeout_seconds` deadline; timeouts update health and scan history
-  as failures and always release the retailer scan lock.
+  can continue concurrently. Individual network requests always use the configured
+  `request_timeout_seconds` deadline. The optional `retailer_job_timeout_seconds`
+  setting adds a shared hard deadline for manual and scheduled scans when set to a
+  positive number; it defaults to disabled so a healthy paginated scan is not
+  cancelled merely for exceeding a fixed wall-clock duration. Configured full-scan
+  timeouts update health and scan history as failures and always release the lock.
 * `/retailer failures <key>` displays bounded, durable recent failed-scan summaries.
 
 `config/retailers.yaml` is the deployment default and is read only at process startup.

@@ -245,16 +245,21 @@ class RetailerManager:
             started_at = datetime.now(UTC); started = time.monotonic()
             service = self._service(key)
             timeout = self.config.monitor.retailer_job_timeout_seconds
-            try:
-                # The manager owns the common deadline so scheduled and manual
-                # scans have identical cancellation, health, and history behavior.
-                alerts = await asyncio.wait_for(service.synchronize(), timeout)
-            except TimeoutError:
-                duration = time.monotonic() - started
-                error = RetailerScanTimeoutError(
-                    f"scan exceeded configured timeout of {timeout:g} seconds"
-                )
-                alerts = await service.record_failure(error, duration)
+            # Per-request HTTP deadlines prevent stalled network operations. A
+            # full-scan deadline is opt-in because retailers with large,
+            # paginated catalogues can legitimately take longer while they
+            # continue making progress.
+            if timeout is None:
+                alerts = await service.synchronize()
+            else:
+                try:
+                    alerts = await asyncio.wait_for(service.synchronize(), timeout)
+                except TimeoutError:
+                    duration = time.monotonic() - started
+                    error = RetailerScanTimeoutError(
+                        f"scan exceeded configured timeout of {timeout:g} seconds"
+                    )
+                    alerts = await service.record_failure(error, duration)
             duration = time.monotonic() - started
             state = await self.get_state(key); success = state.last_failure is None or state.last_success is not None and state.last_success > state.last_failure
             error = (state.last_error or "")[:500] or None
