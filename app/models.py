@@ -119,6 +119,38 @@ class WatchMatch:
 
 
 @dataclass(frozen=True, slots=True)
+class RegionalOffer:
+    """One regional storefront offer attached to a consolidated product."""
+
+    region: str
+    retailer: str
+    url: str
+    availability: Availability
+    price: Decimal | None = None
+    currency: str = "EUR"
+
+    def __post_init__(self) -> None:
+        for field_name in ("region", "retailer"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} must be a non-empty string")
+            object.__setattr__(self, field_name, value.strip())
+        parsed = urlparse(self.url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("regional offer url must be an absolute HTTP(S) URL")
+        object.__setattr__(self, "availability", Availability(self.availability))
+        if self.price is not None:
+            price = Decimal(str(self.price))
+            if not price.is_finite() or price < 0:
+                raise ValueError("regional offer price must be finite and non-negative")
+            object.__setattr__(self, "price", price)
+        currency = self.currency.strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("regional offer currency must be a three-letter code")
+        object.__setattr__(self, "currency", currency)
+
+
+@dataclass(frozen=True, slots=True)
 class Product:
     retailer: str
     retailer_product_id: str
@@ -177,6 +209,7 @@ class Product:
     event_collection: str | None = None
     loungefly_product_code: str | None = None
     cart_url: str | None = None
+    regional_offers: tuple[RegionalOffer, ...] = ()
 
     def __post_init__(self) -> None:
         for field_name in ("retailer", "retailer_product_id", "name"):
@@ -220,6 +253,13 @@ class Product:
         if len(currency) != 3 or not currency.isalpha():
             raise ValueError("currency must be a three-letter ISO-style code")
         object.__setattr__(self, "currency", currency)
+        if not isinstance(self.regional_offers, tuple) or not all(
+            isinstance(offer, RegionalOffer) for offer in self.regional_offers
+        ):
+            raise ValueError("regional_offers must be a tuple of RegionalOffer values")
+        regions = [offer.region.casefold() for offer in self.regional_offers]
+        if len(regions) != len(set(regions)):
+            raise ValueError("regional_offers cannot contain duplicate regions")
         if self.sku is not None:
             if not isinstance(self.sku, str) or not self.sku.strip():
                 raise ValueError("sku must be a non-empty string when provided")

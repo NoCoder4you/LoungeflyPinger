@@ -22,7 +22,7 @@ class ConfigurationError(ValueError):
 SUPPORTED_RETAILERS = frozenset({
     "amy_david_magic", "bag_dude", "boxlunch", "circle_of_hope", "cm_pop_uk",
     "cool_merch_uk", "cordys_corner", "damaged_society_uk", "disney_mad_uk",
-    "disney_store_uk", "disney_store_us", "emp_de", "emp_es", "emp_fr", "emp_it",
+    "disney_store_uk", "disney_store_us", "emp_international",
     "entertainment_earth", "forbidden_planet_uk", "geek_garage_uk", "geekcore",
     "get_ready_comics_uk", "gwens_mermaid_cove", "hot_topic_us", "infinity_collectables",
     "koolaz_uk", "large_nl", "lf_lovers", "loungefly_canada", "loungefly_uk",

@@ -18,6 +18,7 @@ RETAILER_BRANDS: dict[str, RetailerBrand] = {
     "Loungefly UK": RetailerBrand("Loungefly UK", homepage="https://loungefly.co.uk", currency="GBP", country="GB"),
     "Disney Store UK": RetailerBrand("Disney Store UK", homepage="https://www.disneystore.co.uk", currency="GBP", country="GB"),
     "BoxLunch": RetailerBrand("BoxLunch", homepage="https://www.boxlunch.com", currency="USD", country="US"),
+    "EMP International": RetailerBrand("EMP International", homepage="https://www.emp.de", currency="EUR", country="EU"),
     "GeekCore": RetailerBrand("GeekCore", homepage="https://www.geekcore.co.uk", currency="GBP", country="GB"),
 }
 

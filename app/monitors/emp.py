@@ -10,7 +10,7 @@ from html.parser import HTMLParser
 from urllib.parse import urlencode, urljoin, urlparse
 
 from app.http import AsyncHttpClient, HttpClientError
-from app.models import Availability, Product, ReleaseInfo, ReleasePrecision
+from app.models import Availability, Product, RegionalOffer, ReleaseInfo, ReleasePrecision
 from app.monitors.base import RetailerMonitor
 
 
@@ -38,6 +38,9 @@ EMP_REGIONS = {
         mini_backpack_terms=("mini rugzak",), verify_product_type=True,
     ),
 }
+EMP_INTERNATIONAL_REGIONS = tuple(
+    region for code, region in EMP_REGIONS.items() if code != "nl"
+)
 PAGE_SIZE, MAX_PAGES = 120, 20
 
 
@@ -229,3 +232,50 @@ class EMPMonitor(RetailerMonitor):
                        name=name, url=url, image_url=image_url, price=prices[0],
                        original_price=original, currency=currency, availability=availability,
                        preorder=preorder, product_type="Mini Backpack", release=release)
+
+
+class EMPInternationalMonitor(RetailerMonitor):
+    """Combine identical bags from EMP's non-UK international storefronts."""
+
+    retailer_name = "EMP International"
+
+    def __init__(self, http: AsyncHttpClient) -> None:
+        self.http = http
+        self.monitors = tuple(EMPMonitor(http, region) for region in EMP_INTERNATIONAL_REGIONS)
+
+    async def discover_products(self) -> list[Product]:
+        grouped: dict[str, list[Product]] = {}
+        for monitor in self.monitors:
+            for product in await monitor.discover_products():
+                grouped.setdefault(product.retailer_product_id, []).append(product)
+        return [self._combine(products) for products in grouped.values()]
+
+    async def check_product(self, product: Product) -> Product:
+        # Discovery is authoritative for this aggregate adapter; retained for the
+        # common monitor interface and callers which explicitly request a check.
+        products = await self.discover_products()
+        return next((item for item in products if item.retailer_product_id == product.retailer_product_id),
+                    replace(product, availability=Availability.ERROR))
+
+    async def health_check(self) -> bool:
+        return all([await monitor.health_check() for monitor in self.monitors])
+
+    @classmethod
+    def _combine(cls, products: list[Product]) -> Product:
+        if not products:
+            raise ValueError("EMP products cannot be empty")
+        rank = {
+            Availability.IN_STOCK: 0, Availability.LOW_STOCK: 1,
+            Availability.PREORDER: 2, Availability.COMING_SOON: 3,
+            Availability.BACKORDER: 4, Availability.OUT_OF_STOCK: 5,
+            Availability.UNAVAILABLE: 6, Availability.ERROR: 7,
+            Availability.UNKNOWN: 8,
+        }
+        primary = min(products, key=lambda item: rank[item.availability])
+        offers = tuple(RegionalOffer(
+            region=next(region.code.upper() for region in EMP_INTERNATIONAL_REGIONS
+                        if region.name == item.retailer),
+            retailer=item.retailer, url=item.url, availability=item.availability,
+            price=item.price, currency=item.currency,
+        ) for item in products)
+        return replace(primary, retailer=cls.retailer_name, regional_offers=offers)

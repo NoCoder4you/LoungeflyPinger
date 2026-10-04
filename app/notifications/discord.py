@@ -135,7 +135,8 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
     fields: list[dict[str, Any]] = embed["fields"]
     used = len(embed["title"]) + len(embed["description"])
 
-    def add(name: str, value: object, *, inline: bool = True) -> None:
+    def add(name: str, value: object, *, inline: bool = True,
+            preserve_lines: bool = False) -> None:
         nonlocal used
         if value is None or not str(value).strip() or len(fields) >= DISCORD_LIMITS["fields"]:
             return
@@ -143,7 +144,10 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
         remaining = DISCORD_LIMITS["embed"] - used - len(safe_name)
         if remaining <= 0:
             return
-        safe_value = truncate(value, min(DISCORD_LIMITS["field_value"], remaining))
+        safe_value = truncate(
+            value, min(DISCORD_LIMITS["field_value"], remaining),
+            preserve_lines=preserve_lines,
+        )
         fields.append({"name": safe_name, "value": safe_value, "inline": inline})
         used += len(safe_name) + len(safe_value)
 
@@ -198,6 +202,14 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
                 add("New Release", format_release(product.release))
             else:
                 add("Release", format_release(product.release))
+        if product.regional_offers:
+            offer_lines = []
+            for offer in product.regional_offers:
+                price = _money(offer.price, offer.currency) if offer.price is not None else "Price unavailable"
+                offer_lines.append(
+                    f"[{offer.region}]({offer.url}) — {price} — {_status(offer.availability)}"
+                )
+            add("EMP Regional Stores", "\n".join(offer_lines), inline=False, preserve_lines=True)
         if product.estimated_arrival_text or product.estimated_arrival_date:
             add("Retailer ETA", product.estimated_arrival_text or product.estimated_arrival_date.isoformat())
         if alert.watch_matches:

@@ -13,7 +13,7 @@ from .disney_store_uk import DisneyStoreUKMonitor, DisneyStoreUSMonitor
 from .disney_mad import DisneyMadMonitor
 from .entertainment_earth import EntertainmentEarthMonitor
 from .forbidden_planet import ForbiddenPlanetMonitor
-from .emp import EMPMonitor, EMPRegion, EMP_REGIONS
+from .emp import EMPInternationalMonitor, EMPMonitor, EMPRegion, EMP_REGIONS
 from .geekcore import GeekCoreMonitor
 from .geek_garage import GeekGarageMonitor
 from .get_ready_comics import GetReadyComicsMonitor
@@ -38,7 +38,7 @@ from .world_1_1_games import World11GamesMonitor
 
 __all__ = [
     "AmyDavidMagicMonitor", "BagDudeMonitor", "BoxLunchMonitor", "CircleOfHopeMonitor", "CMPopMonitor", "CoolMerchMonitor", "CordysCornerMonitor", "DamagedSocietyMonitor", "DisneyMadMonitor", "DisneyStoreUKMonitor", "DisneyStoreUSMonitor",
-    "EntertainmentEarthMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "GetReadyComicsMonitor", "HotTopicUSMonitor",
+    "EntertainmentEarthMonitor", "EMPInternationalMonitor", "EMPMonitor", "EMPRegion", "EMP_REGIONS", "ForbiddenPlanetMonitor", "GeekCoreMonitor", "GeekGarageMonitor", "GetReadyComicsMonitor", "HotTopicUSMonitor",
     "InfinityCollectablesMonitor", "KoolazMonitor", "LFLoversMonitor",
     "LoungeflyCanadaMonitor", "LoungeflyUKMonitor",
     "LoungeflyUSMonitor", "MagicMadhouseMonitor", "MerchoidUKMonitor", "ModernPinUpMonitor", "OzzieCollectablesMonitor", "PinkALaModeMonitor", "PopcultchaMonitor", "RetailerMonitor",

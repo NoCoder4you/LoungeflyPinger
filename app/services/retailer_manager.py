@@ -14,7 +14,7 @@ from app.http import AsyncHttpClient
 from app.monitors import (
     AmyDavidMagicMonitor, BagDudeMonitor, BoxLunchMonitor, CircleOfHopeMonitor,
     CMPopMonitor, CoolMerchMonitor, CordysCornerMonitor, DamagedSocietyMonitor,
-    DisneyMadMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EMPMonitor,
+    DisneyMadMonitor, DisneyStoreUKMonitor, DisneyStoreUSMonitor, EMPInternationalMonitor, EMPMonitor,
     EMP_REGIONS, EntertainmentEarthMonitor, ForbiddenPlanetMonitor,
     GeekCoreMonitor, GeekGarageMonitor, GetReadyComicsMonitor,
     GwensMermaidCoveMonitor, HotTopicUSMonitor, InfinityCollectablesMonitor,
@@ -97,7 +97,13 @@ def build_retailer_registry() -> dict[str, RetailerDefinition]:
     registry["ozzie_collectables"] = RetailerDefinition("ozzie_collectables", "Ozzie Collectables",
         lambda http, settings: OzzieCollectablesMonitor(http, detail_batch_size=int(settings.get("detail_batch_size", 20))),
         specialized_settings=("detail_batch_size",))
+    registry["emp_international"] = RetailerDefinition(
+        "emp_international", "EMP International",
+        lambda http, settings: EMPInternationalMonitor(http), region="EU",
+    )
     for code, region in EMP_REGIONS.items():
+        if code != "nl":
+            continue
         key = "large_nl" if code == "nl" else f"emp_{code}"
         registry[key] = RetailerDefinition(key, region.name,
             lambda http, settings, selected=region: EMPMonitor(http, selected), region=code.upper())
