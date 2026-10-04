@@ -101,10 +101,13 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
     config = config or NotificationConfig()
     product = alert.product
     headline = TITLES[alert.alert_type]
+    # Product alerts use the product name as their title, so the event headline
+    # belongs in the description. Operational alerts already use that headline
+    # as their title and should not repeat it in the body.
+    description = f"{headline}\n{alert.message}" if product and alert.message else alert.message or headline
     embed: dict[str, Any] = {
         "title": truncate(product.name if product else headline, DISCORD_LIMITS["title"]),
-        "description": truncate(f"{headline}\n{alert.message}", DISCORD_LIMITS["description"])
-        if alert.message else headline,
+        "description": truncate(description, DISCORD_LIMITS["description"]),
         "color": COLORS[alert.alert_type], "timestamp": alert.timestamp.astimezone(UTC).isoformat(),
         "fields": [],
     }

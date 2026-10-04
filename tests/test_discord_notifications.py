@@ -96,6 +96,20 @@ def test_discord_payload_does_not_mention_everyone_for_removed_product(product: 
     assert payload["allowed_mentions"] == {"parse": []}
 
 
+def test_operational_alert_does_not_repeat_headline_in_description() -> None:
+    payload = build_discord_payload(Alert(
+        AlertType.MONITOR_RECOVERED,
+        message="Retailer: Cool-Merch UK\nThe retailer monitor is responding normally again.",
+        new_state="HEALTHY",
+    ))
+
+    embed = payload["embeds"][0]
+    assert embed["title"] == "🟢 MONITOR RECOVERED"
+    assert embed["description"] == (
+        "Retailer: Cool-Merch UK The retailer monitor is responding normally again."
+    )
+
+
 @pytest.mark.parametrize("alert_type", list(AlertType))
 def test_every_alert_type_obeys_everyone_mention_policy(
     alert_type: AlertType, product: Product
@@ -130,7 +144,8 @@ def test_discord_payload_shows_watches_and_highest_priority(product: Product) ->
 def test_each_supported_alert_has_a_readable_embed(alert_type: AlertType, product: Product) -> None:
     alert = Alert(alert_type, message="Health changed") if alert_type.name.startswith("MONITOR") else Alert(alert_type, product)
     embed = build_discord_payload(alert)["embeds"][0]
-    assert alert_type.value.replace("_OPEN", "").replace("_", " ") in embed["description"]
+    rendered_text = f'{embed["title"]}\n{embed["description"]}'
+    assert alert_type.value.replace("_OPEN", "").replace("_", " ") in rendered_text
     assert embed["timestamp"].endswith("+00:00")
 
 
