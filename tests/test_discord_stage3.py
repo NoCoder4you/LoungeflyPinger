@@ -1,9 +1,45 @@
+import logging
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.discord_control import DeleteConfirmation, RetailerConfirmation
+from app.config import AppConfig, DiscordBotConfig, LoggingConfig, MonitorConfig
+from app.discord_control import (
+    DeleteConfirmation,
+    DiscordControlService,
+    RetailerConfirmation,
+)
+from app.logging_config import _DiscordVoiceWarningFilter
+
+
+def test_discord_control_uses_only_required_gateway_intents():
+    config = DiscordBotConfig(enabled=True, token="test-token")
+    app_config = AppConfig(MonitorConfig(), Path("test.db"), LoggingConfig())
+
+    service = DiscordControlService(config, Mock(), Mock(), app_config)
+
+    assert service.client is not None
+    assert service.client.intents.guilds is True
+    assert service.client.intents.message_content is False
+    assert service.client.intents.members is False
+    assert service.client.intents.presences is False
+
+
+def test_discord_voice_warning_filter_is_narrowly_scoped():
+    warning_filter = _DiscordVoiceWarningFilter()
+    pynacl_warning = logging.LogRecord(
+        "discord.client", logging.WARNING, "", 0,
+        "PyNaCl is not installed, voice will NOT be supported", (), None,
+    )
+    other_warning = logging.LogRecord(
+        "discord.client", logging.WARNING, "", 0,
+        "Discord gateway connection failed", (), None,
+    )
+
+    assert warning_filter.filter(pynacl_warning) is False
+    assert warning_filter.filter(other_warning) is True
 
 
 @pytest.mark.asyncio

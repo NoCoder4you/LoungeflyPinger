@@ -2,3 +2,6 @@
 pythonpath = ["."]
 asyncio_mode = "strict"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:'audioop' is deprecated and slated for removal in Python 3.13:DeprecationWarning:discord\\.player",
+]
