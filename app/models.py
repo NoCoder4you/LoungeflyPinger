@@ -53,6 +53,7 @@ class RetailerHealth(StrEnum):
     DEGRADED = "DEGRADED"
     FAILED = "FAILED"
     DISABLED = "DISABLED"
+    BLOCKED_BY_RETAILER = "BLOCKED_BY_RETAILER"
 
 
 class ReleasePrecision(StrEnum):

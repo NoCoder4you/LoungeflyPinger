@@ -194,16 +194,18 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
             embed["thumbnail"] = {"url": product.image_url}
     elif alert.new_state:
         add("Status", _display(alert.new_state))
-
-    footer_retailer = retailer.display_name if retailer else "System"
-    embed["footer"] = {"text": truncate(
-        f"LoungeflyPinger • {footer_retailer} • {alert.alert_type.value.replace('_', ' ')}", 2048
-    )}
-    content, allowed = _mention(config, removed=alert.alert_type is AlertType.PRODUCT_REMOVED)
-    payload: dict[str, Any] = {"username": "LoungeflyPinger", "allowed_mentions": allowed,
-                               "embeds": [embed]}
-    if content:
-        payload["content"] = content
+    payload: dict[str, Any] = {
+        "username": "Loungefly Monitor",
+        "allowed_mentions": {"parse": []},
+        "embeds": [embed],
+    }
+    # Operational notifications are deliberately non-mentioning and are routed
+    # to the admin webhook. Product events retain the established policy.
+    if alert.alert_type not in {
+        AlertType.PRODUCT_REMOVED, AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED,
+    }:
+        payload["content"] = "@everyone"
+        payload["allowed_mentions"] = {"parse": ["everyone"]}
     return payload
 
 

@@ -238,6 +238,8 @@ retailers:
     interval_minutes: 10
     status: WORKING
   large_nl:
-    enabled: true
+    # Ordinary requests from the production host receive a persistent 403 from
+    # the SFCC storefront. Do not evade that access control or repeatedly retry.
+    enabled: false
     interval_minutes: 10
-    status: WORKING
+    status: BLOCKED_BY_RETAILER

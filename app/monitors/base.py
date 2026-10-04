@@ -5,7 +5,15 @@ from abc import ABC, abstractmethod
 from app.models import Product
 
 
+class IncompleteScanError(RuntimeError):
+    """A response was reachable but cannot safely be used for reconciliation."""
+
+
 class RetailerMonitor(ABC):
+    # Retail catalogue adapters are expected to have products once baselined.
+    # Tests and specialist integrations may explicitly opt out where an empty
+    # result is a documented complete representation.
+    reject_unexpected_empty = True
     @abstractmethod
     async def discover_products(self) -> list[Product]:
         """Return normalized products found at the retailer."""

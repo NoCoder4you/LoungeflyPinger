@@ -244,10 +244,14 @@ the strongest date-only support. No adapter exists for retailers absent from thi
 **unsupported** until implemented and tested. Retailer HTML/API changes remain an inherent external
 dependency.
 
-Magic Madhouse UK, Popcultcha, and Entertainment Earth adapters remain implemented and tested but
+Magic Madhouse UK, Popcultcha, Entertainment Earth, and Large Netherlands adapters remain implemented and tested but
 are disabled by default because those storefronts currently return HTTP 403 to the production
 monitor. Re-enable an entry only after confirming that ordinary, policy-compliant HTTP access is
 available from the deployment host; the monitor does not attempt to evade storefront access controls.
+
+Use `.venv/bin/python -m app.tools.retailer_health --failed` for sanitized persisted diagnostics.
+The endpoint audit, circuit behavior, request-pressure estimates, and more production commands are
+documented in [`docs/retailer-resilience.md`](docs/retailer-resilience.md).
 
 ## Adding a retailer
 

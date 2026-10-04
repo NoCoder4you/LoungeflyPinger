@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS retailers (
     request_duration REAL,
     health TEXT NOT NULL DEFAULT 'HEALTHY',
     failure_alert_sent INTEGER NOT NULL DEFAULT 0 CHECK (failure_alert_sent IN (0, 1))
+    ,error_category TEXT,
+    error_hostname TEXT,
+    error_method TEXT,
+    retry_attempts INTEGER,
+    retry_after_supplied INTEGER NOT NULL DEFAULT 0,
+    incident_started_at TEXT,
+    circuit_state TEXT NOT NULL DEFAULT 'CLOSED',
+    circuit_open_until TEXT,
+    circuit_open_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY,
@@ -310,6 +319,10 @@ class Database:
             "last_error": "TEXT", "response_status": "INTEGER",
             "request_duration": "REAL", "health": "TEXT NOT NULL DEFAULT 'HEALTHY'",
             "failure_alert_sent": "INTEGER NOT NULL DEFAULT 0",
+            "error_category": "TEXT", "error_hostname": "TEXT", "error_method": "TEXT",
+            "retry_attempts": "INTEGER", "retry_after_supplied": "INTEGER NOT NULL DEFAULT 0",
+            "incident_started_at": "TEXT", "circuit_state": "TEXT NOT NULL DEFAULT 'CLOSED'",
+            "circuit_open_until": "TEXT", "circuit_open_count": "INTEGER NOT NULL DEFAULT 0",
         })
         await self._add_missing_columns("product_states", {
             "previous_price": "TEXT", "lowest_price": "TEXT", "highest_price": "TEXT",
