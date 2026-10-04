@@ -20,13 +20,21 @@ def _price(item) -> str:
 
 
 def page_embed(page: Page, title: str) -> discord.Embed:
-    embed = discord.Embed(title=title, description=f"Page {page.page}/{page.pages} · {page.total} result(s)")
+    safe_title = title[:256]
+    description = f"Page {page.page}/{page.pages} · {page.total} result(s)"
+    embed = discord.Embed(title=safe_title, description=description)
+    # Discord applies a 6,000-character aggregate limit to an embed, not merely
+    # its per-field limits. Share the remaining budget so large pages are valid.
+    item_budget = max(2, (5900 - len(safe_title) - len(description)) // max(1, len(page.items)))
     for item in page.items:
         detail = f"**{item.retailer}** · {_price(item)} · {item.availability or 'UNKNOWN'}"
         classifications = " · ".join(filter(None, (item.franchise, item.product_type)))
         if classifications: detail += f"\n{classifications}"
         detail += f"\n[View product]({item.url})"
-        embed.add_field(name=f"#{item.id} {item.name}"[:256], value=detail[:1024], inline=False)
+        name_limit = min(200, max(1, item_budget // 3))
+        value_limit = min(1024, max(1, item_budget - name_limit))
+        embed.add_field(name=f"#{item.id} {item.name}"[:name_limit],
+                        value=detail[:value_limit], inline=False)
     if not page.items:
         embed.description += "\nNo matching products."
     return embed
@@ -68,6 +76,83 @@ class ProductPagination(discord.ui.View):
     @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
     async def next(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         await self._move(interaction, self.page.page + 1)
+
+
+class CataloguePublishConfirmation(discord.ui.View):
+    """User-bound confirmation before publishing a fresh catalogue snapshot."""
+
+    def __init__(self, control, service: ProductQueryService, user_id: int,
+                 query: ProductQuery, total: int, retailer: str | None) -> None:
+        super().__init__(timeout=60)
+        self.control, self.service, self.user_id = control, service, user_id
+        self.query, self.total, self.retailer = query, total, retailer
+        self._publishing = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "Only the requesting user may confirm this publish.", ephemeral=True)
+            return False
+        if not await self.control.require_authorized(interaction, "product:publish"):
+            return False
+        return True
+
+    @discord.ui.button(label="Publish catalogue", style=discord.ButtonStyle.primary)
+    async def publish(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        if self._publishing:
+            await interaction.response.send_message("This catalogue publish is already running.", ephemeral=True)
+            return
+        channel = interaction.channel
+        if channel is None or not hasattr(channel, "send"):
+            await interaction.response.send_message("This channel cannot receive catalogue posts.", ephemeral=True)
+            return
+
+        self._publishing = True
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(
+            content=f"Publishing {self.total} product(s)…", view=self)
+        published = 0
+        try:
+            page_number = 1
+            while True:
+                page = await self.service.search(self.query, page=page_number, page_size=20)
+                if not page.items:
+                    break
+                title = "Fresh catalogue"
+                if self.retailer:
+                    title += f" · {self.retailer}"
+                await channel.send(embed=page_embed(page, title),
+                                   allowed_mentions=discord.AllowedMentions.none())
+                published += len(page.items)
+                if page_number >= page.pages:
+                    break
+                page_number += 1
+            await interaction.edit_original_response(
+                content=f"Published a fresh view of {published} product(s) in this channel.", view=None)
+            LOGGER.info("catalogue_publish_complete", extra={
+                "discord_user_id": interaction.user.id,
+                "channel_id": interaction.channel_id,
+                "retailer": self.retailer,
+                "products": published,
+            })
+        except Exception:
+            LOGGER.exception("catalogue_publish_failed", extra={
+                "discord_user_id": interaction.user.id,
+                "channel_id": interaction.channel_id,
+                "retailer": self.retailer,
+                "products_published": published,
+            })
+            await interaction.edit_original_response(
+                content=(f"Catalogue publishing stopped after {published} product(s); "
+                         "see service logs."), view=None)
+        finally:
+            self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        await interaction.response.edit_message(content="Catalogue publishing cancelled.", view=None)
+        self.stop()
 
 
 async def _respond(interaction, title: str, loader: Callable[[int], Awaitable[Page]]) -> None:
@@ -166,6 +251,35 @@ def register_product_commands(control, guild: discord.Object | None) -> None:
         if item.image_url: embed.set_thumbnail(url=item.image_url)
         view = discord.ui.View(); view.add_item(discord.ui.Button(label="View Product", url=item.url))
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    @group.command(name="publish", description="Publish a fresh view of all active products")
+    async def publish(interaction: discord.Interaction, retailer: str = "") -> None:
+        """Publish bounded catalogue pages after an explicit, authorized confirmation."""
+        if not await control.require_authorized(interaction, "product:publish"): return
+        selected_retailer = retailer.strip() or None
+        query = ProductQuery(retailer=selected_retailer, order="available")
+        try:
+            first_page = await service.search(query, page=1, page_size=20)
+        except Exception:
+            LOGGER.exception("catalogue_publish_preview_failed")
+            await interaction.response.send_message(
+                "The catalogue could not be loaded safely.", ephemeral=True)
+            return
+        if first_page.total == 0:
+            await interaction.response.send_message(
+                "No active products match that retailer.", ephemeral=True)
+            return
+        scope = f" for **{selected_retailer}**" if selected_retailer else ""
+        view = CataloguePublishConfirmation(
+            control, service, interaction.user.id, query, first_page.total, selected_retailer)
+        await interaction.response.send_message(
+            f"Publish **{first_page.total}** active product(s){scope} into this channel? "
+            "This creates one message per 20 products and does not send mentions.",
+            view=view, ephemeral=True)
+
+    @publish.autocomplete("retailer")
+    async def publish_retailer_autocomplete(interaction: discord.Interaction, current: str):
+        return await autocomplete("retailer", interaction, current)
 
     @group.command(name="history", description="Show meaningful product changes")
     async def history(interaction: discord.Interaction, id: int) -> None:
