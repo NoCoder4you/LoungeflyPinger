@@ -47,8 +47,8 @@ class ProductService:
                 edition, style, incoming_status, event_exclusive, event_name, event_year,
                 discovery_sources, bundle, included_items, disney_parks, parks_origin,
                 exclusive_type, series, event_collection, loungefly_product_code, canonical_key,
-                first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cart_url, first_seen, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(retailer, retailer_product_id) DO UPDATE SET
                  name=excluded.name, url=excluded.url, image_url=excluded.image_url,
                  sku=COALESCE(excluded.sku, products.sku),
@@ -77,6 +77,7 @@ class ProductService:
                  exclusive_type=excluded.exclusive_type, series=excluded.series,
                  event_collection=excluded.event_collection,
                  loungefly_product_code=COALESCE(excluded.loungefly_product_code, products.loungefly_product_code),
+                 cart_url=excluded.cart_url,
                  canonical_key=excluded.canonical_key,
                  last_seen=excluded.last_seen, missing_scans=0, removed_at=NULL""",
             (product.retailer, product.retailer_product_id, product.name, product.url,
@@ -97,7 +98,7 @@ class ProductService:
              product.bundle, json.dumps(product.included_items), product.disney_parks,
              product.parks_origin, product.exclusive_type, product.series,
              product.event_collection, product.loungefly_product_code,
-             self.canonical_key(product), now, now),
+             self.canonical_key(product), product.cart_url, now, now),
         )
         cursor = await connection.execute(
             "SELECT id FROM products WHERE retailer=? AND retailer_product_id=?",

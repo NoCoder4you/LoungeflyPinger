@@ -309,6 +309,7 @@ class ShopifyRetailerMonitor(RetailerMonitor):
             price=price, original_price=compare if compare and compare > price else None,
             compare_at_price=compare, currency=self.currency, availability=availability,
             product_type=product_type, preorder=preorder, variant_id=variant_id,
+            cart_url=urljoin(self.base_url + "/", f"cart/{quote(variant_id)}:1"),
             sku=str(sku).strip() if sku not in (None, "") else None,
             barcode=str(barcode).strip() if barcode not in (None, "") else None,
             vendor=vendor.strip() if isinstance(vendor, str) and vendor.strip() else None,
