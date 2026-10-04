@@ -5,8 +5,8 @@ import pytest
 from app.config import ConfigurationError, load_config
 
 
-def test_disney_store_uk_is_enabled_with_conservative_interval() -> None:
-    config = load_config()
+def test_disney_store_uk_is_enabled_with_conservative_interval(tmp_path: Path) -> None:
+    config = load_config(env_path=tmp_path / ".env")
 
     assert config.retailers["disney_store_uk"] == {
         "enabled": True,
@@ -15,8 +15,8 @@ def test_disney_store_uk_is_enabled_with_conservative_interval() -> None:
     }
 
 
-def test_disney_mad_is_enabled_with_high_priority_interval() -> None:
-    config = load_config()
+def test_disney_mad_is_enabled_with_high_priority_interval(tmp_path: Path) -> None:
+    config = load_config(env_path=tmp_path / ".env")
 
     assert config.retailers["disney_mad_uk"] == {
         "enabled": True,
@@ -28,7 +28,7 @@ def test_disney_mad_is_enabled_with_high_priority_interval() -> None:
 def test_load_config(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 2\ndatabase:\n  path: custom.db\nretailers: {}\n", encoding="utf-8")
-    config = load_config(path, tmp_path / ".env")
+    config = load_config(path, env_path=tmp_path / ".env")
     assert config.monitor.concurrency_limit == 2
     assert config.database_path == Path("custom.db")
     assert config.monitor.missing_scan_threshold == 3

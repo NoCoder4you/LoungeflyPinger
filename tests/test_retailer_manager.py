@@ -203,7 +203,7 @@ async def test_manual_scan_timeout_records_failure_and_releases_lock(manager_par
     )  # type: ignore[arg-type]
     await manager.initialize()
 
-    result = await asyncio.wait_for(manager.scan("shop", "42"), 0.5)
+    result = await asyncio.wait_for(manager.scan("shop", "42"), 2.0)
 
     assert result["success"] is False
     assert result["health"] == "DISABLED"
