@@ -115,7 +115,9 @@ class DiscordControlService:
         self.tree: app_commands.CommandTree | None = None
         self._task: asyncio.Task[None] | None = None
         if config.enabled:
-            self.client = discord.Client(intents=discord.Intents.none())
+            intents = discord.Intents.none()
+            intents.guilds = True
+            self.client = discord.Client(intents=intents)
             self.tree = app_commands.CommandTree(self.client)
             self._register_commands()
             self.client.event(self._on_ready)
