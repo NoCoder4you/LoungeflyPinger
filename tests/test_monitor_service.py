@@ -224,7 +224,9 @@ async def test_price_drop_thresholds(tmp_path: Path, old, new, expected):
         await service.synchronize()
         monitor.products = [replace(product(), price=Decimal(new))]
         alerts = await service.synchronize()
-        assert [a.alert_type for a in alerts] == ([AlertType.PRICE_DROP] if expected else [])
+        expected_types = ([AlertType.PRICE_DROP] if expected else
+                              [AlertType.PRICE_INCREASE] if Decimal(new) > Decimal(old) else [])
+        assert [a.alert_type for a in alerts] == expected_types
         if expected:
             assert alerts[0].previous_price == Decimal(old)
 

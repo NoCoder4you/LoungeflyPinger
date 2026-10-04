@@ -66,11 +66,15 @@ class MonitorService:
     @staticmethod
     def _stock_alert(previous: Availability, product: Product) -> AlertType | None:
         current = product.availability
+        if previous == current:
+            return None
         if previous in {Availability.OUT_OF_STOCK, Availability.BACKORDER} and current == Availability.IN_STOCK:
             return AlertType.RESTOCK
         if current == Availability.LOW_STOCK and previous != Availability.LOW_STOCK:
             return AlertType.LOW_STOCK
         if previous == Availability.COMING_SOON and current == Availability.IN_STOCK:
+            return AlertType.AVAILABILITY
+        if previous == Availability.PREORDER and current == Availability.IN_STOCK:
             return AlertType.AVAILABILITY
         # ``preorder`` describes the product/listing, even when ordering is
         # currently unavailable.  Only the normalized PREORDER availability is
@@ -78,7 +82,15 @@ class MonitorService:
         if (previous in {Availability.COMING_SOON, Availability.OUT_OF_STOCK}
                 and current == Availability.PREORDER):
             return AlertType.PREORDER_OPEN
-        return None
+        if current in {Availability.OUT_OF_STOCK, Availability.UNAVAILABLE}:
+            return AlertType.OUT_OF_STOCK
+        if current == Availability.BACKORDER:
+            return AlertType.BACKORDER
+        if current == Availability.COMING_SOON:
+            return AlertType.COMING_SOON
+        if current == Availability.PREORDER:
+            return AlertType.PREORDER_OPEN
+        return AlertType.STATUS_CHANGE
 
     def _is_price_drop(self, previous: Decimal | None, product: Product, currency: str | None) -> bool:
         if not self.price_alerts.enabled or previous is None or product.price is None:
@@ -89,6 +101,11 @@ class MonitorService:
         percent = drop * Decimal("100") / previous
         return (drop >= Decimal(str(self.price_alerts.minimum_drop_value)) and
                 percent >= Decimal(str(self.price_alerts.minimum_drop_percent)))
+
+    def _is_price_increase(self, previous: Decimal | None, product: Product,
+                           currency: str | None) -> bool:
+        return bool(self.price_alerts.enabled and previous is not None and product.price is not None
+                    and currency == product.currency and product.price > previous)
 
     def _matches(self, product: Product):
         watchlist = self.watchlist.current if hasattr(self.watchlist, "current") else self.watchlist
@@ -233,7 +250,7 @@ class MonitorService:
         for product in discovered:
             product = classify_product(product)
             known_product = await (await connection.execute(
-                "SELECT id, removed_at FROM products WHERE retailer=? AND retailer_product_id=?",
+                "SELECT id, removed_at, first_seen FROM products WHERE retailer=? AND retailer_product_id=?",
                 (product.retailer, product.retailer_product_id),
             )).fetchone()
             was_removed = known_product is not None and known_product[1] is not None
@@ -266,6 +283,8 @@ class MonitorService:
                             alert_types.append(stock_alert)
                     if self._is_price_drop(prior_state.price, product, prior_state.currency):
                         alert_types.append(AlertType.PRICE_DROP)
+                    elif self._is_price_increase(prior_state.price, product, prior_state.currency):
+                        alert_types.append(AlertType.PRICE_INCREASE)
                     old_eta = prior_state.estimated_arrival_text or (
                         prior_state.estimated_arrival_date.isoformat()
                         if prior_state.estimated_arrival_date else None
@@ -307,9 +326,12 @@ class MonitorService:
                     )
                 alert = Alert(
                     alert_type, product, product_id,
-                    previous_price=prior_state.price if alert_type == AlertType.PRICE_DROP else None,
+                    previous_price=(prior_state.price if alert_type in {
+                        AlertType.PRICE_DROP, AlertType.PRICE_INCREASE
+                    } else None),
                     previous_availability=previous, watch_matches=self._matches(product),
                     previous_release=prior_release,
+                    first_seen=(datetime.fromisoformat(known_product[2]) if known_product else datetime.now(UTC)),
                 )
                 await self._send(alert, alerts)
             if (release_baselined and product.availability != Availability.ERROR and

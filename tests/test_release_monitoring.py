@@ -232,7 +232,7 @@ async def test_released_requires_retailer_stock_evidence_and_known_release(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("initial", "expected"), [
     (Availability.COMING_SOON, AlertType.AVAILABILITY),
-    (Availability.PREORDER, None),
+    (Availability.PREORDER, AlertType.AVAILABILITY),
 ])
 async def test_disabled_release_alerts_restore_stock_transition_behavior(
     tmp_path: Path, initial: Availability, expected: AlertType | None
