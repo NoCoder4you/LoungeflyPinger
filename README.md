@@ -158,9 +158,10 @@ The optional control bot runs on the monitor's asyncio loop and is separate from
 alerts. In the Discord Developer Portal, create an application and bot, keep its token in `.env`,
 and invite it with the `bot` and `applications.commands` scopes. It needs only **View Channels** and
 **Send Messages** (plus **Attach Files** for `/watch export`); Administrator and Message Content
-intent are not required. Set `DISCORD_BOT_GUILD_ID` for production so commands are registered only
-in that server and synchronize promptly. Leaving `DISCORD_BOT_ENABLED=false` makes no gateway
-connection and preserves the pre-bot operation.
+intent and other privileged intents are not required. Set `DISCORD_BOT_GUILD_ID=<server id>` for
+production so commands are registered only in that server and synchronize promptly. Leaving the
+guild ID blank registers global application commands, which can take longer to appear. Leaving
+`DISCORD_BOT_ENABLED=false` makes no gateway connection and preserves the pre-bot operation.
 
 Mutation access is deny-by-default. A caller must have an ID in
 `DISCORD_BOT_ALLOWED_USER_IDS` or a role in `DISCORD_BOT_ALLOWED_ROLE_IDS`; server membership alone
@@ -176,11 +177,15 @@ deleted. SQLite is then authoritative; edits do not modify tracked YAML. Enabled
 an immutable in-memory snapshot, replaced immediately after each committed mutation, and included
 in the existing online database backups. `/watch export` provides a secret-free YAML copy.
 
-If commands do not appear, verify the application was invited with `applications.commands`, the
-guild ID is correct, and inspect `sudo journalctl -u loungefly-monitor.service -f` for
-`discord_control_ready` or authentication errors. Guild commands normally synchronize as soon as
-the bot connects; global registration (blank guild ID) can take longer. A bot authentication or
-gateway failure is logged but does not stop retailer jobs. Disable it by setting
+If commands do not appear, verify the application was invited with both the `bot` and
+`applications.commands` scopes, the guild ID is correct, and inspect
+`sudo journalctl -u loungefly-monitor.service -f`. A healthy startup reports
+`discord_control_starting`, `discord_control_ready`, `discord_command_sync_started`, and
+`discord_command_sync_complete`. Look for `discord_configured_guild_not_found` when the configured
+server is not visible to the bot, or `discord_command_sync_failed` when Discord rejects the sync.
+Guild commands normally synchronize as soon as the bot connects; global registration (blank guild
+ID) can take longer. A bot authentication, gateway, or synchronization failure is logged but does
+not stop retailer jobs. Disable it by setting
 `DISCORD_BOT_ENABLED=false` and restarting the existing service. No new daemon, root privilege, or
 systemd sandbox change is needed.
 

@@ -114,26 +114,81 @@ class DiscordControlService:
         self.client: discord.Client | None = None
         self.tree: app_commands.CommandTree | None = None
         self._task: asyncio.Task[None] | None = None
+        self._commands_synced = False
+        self._commands_synced_count = 0
+        self._command_sync_lock = asyncio.Lock()
         if config.enabled:
             intents = discord.Intents.none()
             intents.guilds = True
             self.client = discord.Client(intents=intents)
             self.tree = app_commands.CommandTree(self.client)
             self._register_commands()
-            self.client.event(self._on_ready)
+            self.client.event(self.on_ready)
 
-    async def _on_ready(self) -> None:
+    async def on_ready(self) -> None:
+        """Report a successful gateway login and synchronize application commands."""
+        assert self.client is not None
+        guild_scoped = self.config.guild_id is not None
+        user = self.client.user
+        ready_context = {
+            "bot_user_id": user.id if user is not None else None,
+            "bot_username": getattr(user, "name", None),
+            "bot_display_name": getattr(user, "display_name", None),
+            "guild_id": self.config.guild_id,
+            "guild_scoped": guild_scoped,
+        }
+        LOGGER.info("discord_control_ready", extra={
+            **ready_context,
+            "commands_synced": self._commands_synced_count,
+        })
+
+        if self.config.guild_id is not None and self.client.get_guild(self.config.guild_id) is None:
+            LOGGER.warning("discord_configured_guild_not_found", extra={
+                "guild_id": self.config.guild_id,
+            })
+
+        await self._sync_commands()
+
+    async def _sync_commands(self) -> None:
+        """Synchronize once successfully, while allowing a failed attempt to retry."""
         assert self.tree is not None
-        if self.config.guild_id:
-            await self.tree.sync(guild=discord.Object(id=self.config.guild_id))
-        else:
-            await self.tree.sync()
-        LOGGER.info("discord_control_ready", extra={"guild_scoped": bool(self.config.guild_id)})
+        async with self._command_sync_lock:
+            if self._commands_synced:
+                return
+
+            guild_scoped = self.config.guild_id is not None
+            context = {
+                "guild_id": self.config.guild_id,
+                "guild_scoped": guild_scoped,
+            }
+            LOGGER.info("discord_command_sync_started", extra=context)
+            try:
+                if self.config.guild_id is not None:
+                    commands = await self.tree.sync(
+                        guild=discord.Object(id=self.config.guild_id)
+                    )
+                else:
+                    commands = await self.tree.sync()
+            except Exception:
+                LOGGER.exception("discord_command_sync_failed", extra=context)
+                return
+
+            self._commands_synced_count = len(commands)
+            self._commands_synced = True
+            LOGGER.info("discord_command_sync_complete", extra={
+                **context,
+                "commands_synced": self._commands_synced_count,
+            })
 
     async def start(self) -> None:
         if not self.config.enabled:
+            LOGGER.info("discord_control_disabled")
             return
         assert self.client is not None and self.config.token is not None
+        LOGGER.info("discord_control_starting", extra={
+            "guild_id": self.config.guild_id,
+            "guild_scoped": self.config.guild_id is not None,
+        })
         self._task = asyncio.create_task(self.client.start(self.config.token), name="discord-control")
         self._task.add_done_callback(self._finished)
 
