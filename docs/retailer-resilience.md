@@ -20,7 +20,10 @@ Salesforce Commerce Cloud catalogue endpoints. EMP Germany/France/Spain/Italy an
 share the SFCC implementation but have independent health. Large Netherlands is quarantined:
 ordinary access from the deployment network returned persistent HTTP 403. Its endpoint remains
 `https://www.large.nl`, but it is disabled until a low-volume check from the Pi succeeds without
-bypassing access controls. Existing product rows are retained while disabled.
+bypassing access controls. 707 Street is likewise disabled: on 2026-10-04 its Shopify catalogue
+returned HTTP 429 with `Retry-After: 60` for isolated ordinary requests, including after the
+transport honoured every retry delay. Existing product rows are retained while retailers are
+disabled.
 
 ## Request pressure
 
