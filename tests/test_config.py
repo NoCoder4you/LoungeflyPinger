@@ -97,6 +97,27 @@ def test_invalid_product_removed_notification_toggle_is_rejected(
         load_config(path, tmp_path / ".env")
 
 
+def test_sold_out_notifications_can_be_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_SOLD_OUT_ENABLED", "false")
+
+    assert not load_config(path, tmp_path / ".env").notifications.sold_out_enabled
+
+
+def test_invalid_sold_out_notification_toggle_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_SOLD_OUT_ENABLED", "yes")
+
+    with pytest.raises(ConfigurationError, match="DISCORD_SOLD_OUT_ENABLED"):
+        load_config(path, tmp_path / ".env")
+
+
 def test_invalid_config_is_rejected(tmp_path: Path) -> None:
     path = tmp_path / "settings.yaml"
     path.write_text("monitor:\n  concurrency_limit: 0\n", encoding="utf-8")

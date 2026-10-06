@@ -304,9 +304,14 @@ class DiscordNotifier(NotificationProvider):
         await self._database.connection.commit()
 
     async def send(self, alert: Alert) -> bool:
-        enabled = (self._settings.enabled(alert.alert_type) if self._settings else
-                   alert.alert_type is not AlertType.PRODUCT_REMOVED or
-                   self._config.product_removed_enabled)
+        if self._settings:
+            enabled = self._settings.enabled(alert.alert_type)
+        elif alert.alert_type is AlertType.PRODUCT_REMOVED:
+            enabled = self._config.product_removed_enabled
+        elif alert.alert_type is AlertType.OUT_OF_STOCK:
+            enabled = self._config.sold_out_enabled
+        else:
+            enabled = True
         if not enabled:
             LOGGER.info("Discord alert type is disabled", extra={
                 "retailer": alert.product.retailer if alert.product else None,

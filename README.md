@@ -111,6 +111,7 @@ systemd loads the same file with `EnvironmentFile`.
 | `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
 | `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
+| `DISCORD_SOLD_OUT_ENABLED` | No | `true`; set to `false` to suppress sold-out embeds |
 | `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
 | `DISCORD_ALERT_ROLE_ID` | In role mode | Positive role ID mentioned by product alerts |
 | `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
@@ -512,13 +513,15 @@ Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The 
 default is `everyone`; `role` additionally requires `DISCORD_ALERT_ROLE_ID`. Payloads explicitly
 allow only the selected mention type, so scraped product and retailer text cannot ping users or
 roles. Product-removal alerts never mention and can be suppressed entirely with
-`DISCORD_PRODUCT_REMOVED_ENABLED=false`. Webhook URLs and role IDs belong only in `.env`.
+`DISCORD_PRODUCT_REMOVED_ENABLED=false`. Set `DISCORD_SOLD_OUT_ENABLED=false` to suppress
+**SOLD OUT** (`OUT_OF_STOCK`) webhook alerts while continuing to monitor and record stock changes.
+Webhook URLs and role IDs belong only in `.env`.
 
 Authorized bot operators can inspect and change every outbound event category at runtime with
 `/alerts list`, `/alerts enable <alert_type>`, and `/alerts disable <alert_type>`. These overrides
-are stored in SQLite, take effect immediately, and survive restarts. The environment setting above
-is the startup default for `PRODUCT_REMOVED` until a bot override is created. Disabling delivery
-does not disable monitoring or product-event history.
+are stored in SQLite, take effect immediately, and survive restarts. The environment settings above
+are the startup defaults for `PRODUCT_REMOVED` and `OUT_OF_STOCK` until a bot override is created.
+Disabling delivery does not disable monitoring or product-event history.
 
 Adapters may optionally populate `image_url`, `sku`, `variant_id`, `loungefly_product_code`,
 `exclusive` plus explicit exclusivity text, release/ETA metadata, and a validated `cart_url`.

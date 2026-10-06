@@ -33,6 +33,8 @@ class NotificationSettingsService:
     def default_enabled(self, alert_type: AlertType) -> bool:
         if alert_type is AlertType.PRODUCT_REMOVED:
             return self.config.product_removed_enabled
+        if alert_type is AlertType.OUT_OF_STOCK:
+            return self.config.sold_out_enabled
         return True
 
     def enabled(self, alert_type: AlertType) -> bool:

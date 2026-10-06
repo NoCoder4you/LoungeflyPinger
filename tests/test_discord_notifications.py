@@ -243,6 +243,31 @@ async def test_disabled_product_removed_alert_does_not_attempt_delivery(
 
 
 @pytest.mark.asyncio
+async def test_disabled_sold_out_alert_does_not_attempt_delivery(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "sold-out-disabled.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(
+                discord_webhook_url="https://normal", sold_out_enabled=False
+            ),
+            database,
+            session=session,
+        )
+
+        assert await notifier.send(Alert(AlertType.OUT_OF_STOCK, product))
+        assert session.calls == []
+        deliveries = await (
+            await database.connection.execute("SELECT count(*) FROM notification_deliveries")
+        ).fetchone()
+        assert deliveries == (0,)
+
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert len(session.calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_runtime_settings_can_disable_any_alert_type(
     tmp_path: Path, product: Product
 ) -> None:
