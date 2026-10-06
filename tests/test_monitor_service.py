@@ -6,6 +6,7 @@ import pytest
 
 from app.database import Database
 from app.config import PriceAlertConfig
+from app.http import HttpClientError, HttpErrorKind
 from app.models import AlertType, Availability, Product
 from app.services.monitor_service import MonitorService
 from app.watchlist import WatchRule, Watchlist
@@ -103,6 +104,29 @@ async def test_failure_alert_is_once_and_recovery_survives_restart(tmp_path: Pat
             "SELECT consecutive_failures, last_error, health, failure_alert_sent FROM retailers"
         )).fetchone()
         assert row == (0, None, "HEALTHY", 0)
+
+
+@pytest.mark.asyncio
+async def test_failure_reason_is_written_to_monitor_log(caplog, tmp_path: Path):
+    error = HttpClientError(
+        HttpErrorKind.FORBIDDEN,
+        "Request forbidden",
+        403,
+        hostname="shop.example.com",
+        attempts=4,
+    )
+    async with Database(tmp_path / "failure-log.db") as database:
+        service = MonitorService(
+            BrokenMonitor(error), database, Notifier(), retailer_name="Blocked Shop"
+        )
+        with caplog.at_level("ERROR", logger="monitor.retailers"):
+            await service.synchronize()
+
+    message = caplog.messages[-1]
+    assert "scan_failed retailer=Blocked Shop failures=1 health=BLOCKED_BY_RETAILER" in message
+    assert "status=403 category=forbidden" in message
+    assert "reason=Request forbidden" in message
+    assert "host=shop.example.com" in message
 
 
 @pytest.mark.asyncio

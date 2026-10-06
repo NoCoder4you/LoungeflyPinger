@@ -123,9 +123,9 @@ retailers:
     interval_minutes: 15
     status: WORKING
   entertainment_earth:
-    # Cloudflare currently rejects this service's ordinary HTTP client. Keep the
-    # adapter available, but do not generate permanent failure noise or bypass it.
-    enabled: false
+    # Keep scanning so failures remain observable while retailer access is restored.
+    # The monitor records access-control responses without attempting to bypass them.
+    enabled: true
     interval_minutes: 15
     status: BLOCKED_BY_RETAILER
   modern_pinup:
@@ -145,9 +145,9 @@ retailers:
     status: WORKING
   # Structured search is restricted to the Loungefly brand and Mini Backpack query.
   magic_madhouse_uk:
-    # The production host is denied by the storefront even though the public
-    # search remains parseable from permitted networks.
-    enabled: false
+    # Keep the monitor active even when the production host denies a scan; the
+    # failure diagnostics are retained in monitor.log and retailer health.
+    enabled: true
     interval_minutes: 10
     status: BLOCKED_BY_RETAILER
   pink_a_la_mode:
@@ -175,9 +175,9 @@ retailers:
     interval_minutes: 10
     status: WORKING
   popcultcha:
-    # Cloudflare currently challenges all catalogue endpoints used by the
-    # server-side monitor; access controls are deliberately not bypassed.
-    enabled: false
+    # Keep reporting Cloudflare challenges as failures rather than disabling the
+    # monitor; access controls are deliberately not bypassed.
+    enabled: true
     interval_minutes: 10
     status: BLOCKED_BY_RETAILER
   # Public Shopify collection provides complete catalogue scans; a small rotating
@@ -226,8 +226,8 @@ retailers:
     interval_minutes: 10
     status: WORKING
   large_nl:
-    # Ordinary requests from the production host receive a persistent 403 from
-    # the SFCC storefront. Do not evade that access control or repeatedly retry.
-    enabled: false
+    # Continue scheduled checks and report any SFCC 403 response as a diagnosed
+    # failure. Do not evade the storefront's access controls.
+    enabled: true
     interval_minutes: 10
     status: BLOCKED_BY_RETAILER
