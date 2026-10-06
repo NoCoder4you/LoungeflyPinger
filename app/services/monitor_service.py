@@ -271,8 +271,21 @@ class MonitorService:
                  self.retailer_name),
             )
             await connection.commit()
-        LOGGER.error("scan_failed", extra={"retailer": self.retailer_name, "failures": failures,
-                                           "status": status, "error": error})
+        # Include the diagnostic in the formatted message rather than only in
+        # ``extra``.  The standard text formatter used by monitor.log does not
+        # render arbitrary LogRecord attributes, which previously left operators
+        # with a bare ``scan_failed`` entry and no actionable cause.
+        LOGGER.error(
+            "scan_failed retailer=%s failures=%d health=%s status=%s "
+            "category=%s duration=%.3fs reason=%s",
+            self.retailer_name,
+            failures,
+            health.value,
+            status if status is not None else "none",
+            http_error.kind.value if isinstance(http_error, HttpClientError) else "adapter_failure",
+            duration,
+            error,
+        )
         if health not in {RetailerHealth.FAILED, RetailerHealth.BLOCKED_BY_RETAILER} or alert_sent:
             return []
         last_success = await (await connection.execute(
