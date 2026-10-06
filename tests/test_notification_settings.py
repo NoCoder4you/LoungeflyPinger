@@ -13,11 +13,14 @@ async def test_notification_settings_persist_and_preserve_defaults(tmp_path: Pat
     path = tmp_path / "settings.db"
     async with Database(path) as database:
         settings = NotificationSettingsService(
-            database, NotificationConfig(product_removed_enabled=False)
+            database, NotificationConfig(
+                product_removed_enabled=False, sold_out_enabled=False
+            )
         )
         await settings.initialize()
         assert not settings.enabled(AlertType.PRODUCT_REMOVED)
         assert settings.enabled(AlertType.RESTOCK)
+        assert not settings.enabled(AlertType.OUT_OF_STOCK)
 
         await settings.set_enabled(AlertType.PRODUCT_REMOVED, True, "42")
         await settings.set_enabled(AlertType.RESTOCK, False, "42")
