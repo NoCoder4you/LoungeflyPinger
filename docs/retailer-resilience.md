@@ -17,10 +17,11 @@ reconciled. Schema and variant availability are validated before a scan succeeds
 
 The other enabled adapters use bounded public HTML, JSON search, WooCommerce Store API, or
 Salesforce Commerce Cloud catalogue endpoints. EMP Germany/France/Spain/Italy and Large Netherlands
-share the SFCC implementation but have independent health. Large Netherlands is quarantined:
-ordinary access from the deployment network returned persistent HTTP 403. Its endpoint remains
-`https://www.large.nl`, but it is disabled until a low-volume check from the Pi succeeds without
-bypassing access controls. Existing product rows are retained while disabled.
+share the SFCC implementation but have independent health. Large Netherlands remains enabled for
+observability even though ordinary access from the deployment network has returned persistent HTTP
+403. Its endpoint remains `https://www.large.nl`; a 403 marks it `BLOCKED_BY_RETAILER` and opens its
+persisted circuit so subsequent traffic is limited to cooldown probes. Existing product rows are
+retained while access is blocked.
 
 ## Request pressure
 
@@ -40,9 +41,10 @@ sqlite3 data/loungefly.db "SELECT name,health,circuit_state,error_category,respo
 journalctl -u loungefly-monitor.service --since '30 minutes ago' --no-pager
 ```
 
-Never re-enable a blocked retailer until an ordinary request from the Pi succeeds and its contract
-tests pass. Never use browser impersonation, proxy rotation, CAPTCHA solving, cookies, or credentials
-to evade a retailer restriction.
+Blocked retailers remain scheduled by default, but the persisted circuit suppresses repeated scans
+and permits only a half-open probe after the cooldown. Use the health command and monitor log to
+review each probe's sanitized failure reason. Never use browser impersonation, proxy rotation,
+CAPTCHA solving, cookies, or credentials to evade a retailer restriction.
 
 ## 2026-10-02 low-volume verification
 
@@ -53,7 +55,8 @@ time. This is direct evidence of shared source-network/storefront throttling rat
 failures. Their adapters remain enabled because 429 is transient and now retains its own category,
 honours `Retry-After`, and opens a persisted circuit after repeated scans. The configured Large
 Netherlands `/search` endpoint returned HTML HTTP 200 from this network, while the production Pi
-evidence remains HTTP 403; that deployment-specific restriction is why it remains disabled.
+evidence remains HTTP 403. It remains enabled so cooldown probes and their diagnosed outcomes stay
+visible without repeatedly contacting the restricted storefront.
 
 The prior generic error erased whether each production response was 429 or 5xx, so a more specific
 historical root cause cannot be claimed. The new persisted fields preserve that evidence for the
