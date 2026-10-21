@@ -296,6 +296,7 @@ so a supervised candidate restart does not launch a nested update.
 
 ```bash
 cd /home/pi/LoungeflyPinger
+sudo install -d -o root -g root -m 0755 /usr/local/libexec
 sudo install -o root -g root -m 0755 deploy/loungefly-discord-update-supervisor.sh /usr/local/libexec/loungefly-discord-update
 sudo install -o root -g root -m 0644 deploy/loungefly-update.service /etc/systemd/system/
 sudo install -o root -g root -m 0644 deploy/loungefly-discord-update.path /etc/systemd/system/
