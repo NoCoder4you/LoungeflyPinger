@@ -12,6 +12,8 @@ from typing import Any, Awaitable, Callable
 import discord
 from discord import app_commands
 
+from app.services.system_update_service import UpdateRequestService, UpdateUnavailable
+
 from app.config import AppConfig, DiscordBotConfig
 from app.database import Database
 from app.services.watchlist_manager import StoredWatchRule, WatchlistManager
@@ -119,6 +121,7 @@ class DiscordControlService:
         self.retailers, self.scheduler = retailers, scheduler
         self.notification_settings = notification_settings
         self.notifier = notifier
+        self._system_updates = UpdateRequestService()
         self._channel_setup_lock = asyncio.Lock()
         self.client: discord.Client | None = None
         self.tree: app_commands.CommandTree | None = None
@@ -574,6 +577,55 @@ class DiscordControlService:
                 await interaction.response.send_message(text[:1900], ephemeral=True)
 
             self.tree.add_command(retailer_group, guild=guild)
+
+        @self.tree.command(
+            name="update", description="Update from GitHub and restart the entire monitor", guild=guild
+        )
+        async def update(interaction: discord.Interaction) -> None:
+            # System maintenance requires an explicit user-ID allowlist and an
+            # exact guild match. General operator/role authorization is not enough.
+            if (self.config.guild_id is None or interaction.guild_id != self.config.guild_id
+                    or interaction.user.id not in self.config.update_user_ids):
+                await interaction.response.send_message(
+                    "You are not authorized to run system updates.", ephemeral=True
+                )
+                return
+            if not await self._system_updates.available():
+                await interaction.response.send_message(
+                    "The update listener is not active. Install and enable "
+                    "loungefly-discord-update.path on the Raspberry Pi first.",
+                    ephemeral=True,
+                )
+                return
+            if self._system_updates.pending():
+                await interaction.response.send_message(
+                    "An update is already queued.", ephemeral=True
+                )
+                return
+            try:
+                queued = self._system_updates.queue(interaction.user.id)
+            except UpdateUnavailable:
+                LOGGER.exception("discord_system_update_request_failed")
+                await interaction.response.send_message(
+                    "Unable to request the update. Check the monitor logs and permissions.",
+                    ephemeral=True,
+                )
+                return
+            if not queued:
+                await interaction.response.send_message(
+                    "An update is already queued.", ephemeral=True
+                )
+                return
+            LOGGER.warning("discord_system_update_requested", extra={
+                "discord_user_id": interaction.user.id, "guild_id": interaction.guild_id,
+            })
+            await interaction.response.send_message(
+                "Update requested. The updater will check GitHub, validate and install "
+                "any changes, and restart the full monitor (even if already up to date). "
+                "I'll disconnect briefly; this confirms the request, not its final result. "
+                "Review logs with: `sudo journalctl -u loungefly-discord-update.service -n 50`.",
+                ephemeral=True,
+            )
 
         @self.tree.command(name="status", description="Show monitor status", guild=guild)
         async def status(interaction: discord.Interaction) -> None:
