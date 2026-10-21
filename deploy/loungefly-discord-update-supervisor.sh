@@ -119,8 +119,7 @@ case "$state" in
             CHILD=""
             RESTART_REQUIRED=0
             log "Discord update committed after healthy startup."
-            ;;
-        *)
+        else
             log "Candidate startup verification failed. Stopping it before rollback."
             "$SYSTEMCTL" stop "$SERVICE" || true
             if is_active; then
@@ -134,8 +133,8 @@ case "$state" in
             health_check || { log "Restored monitor failed startup checks."; exit 1; }
             RESTART_REQUIRED=0
             exit 1
-            ;;
-    esac
+        fi
+        ;;
     no_change)
         log "Already up to date; restarting the current monitor."
         if ! wait "$CHILD"; then
