@@ -162,7 +162,7 @@ class DiscordControlService:
         await self._update_presence()
 
     async def _configure_alert_channels(self) -> None:
-        if self.notifier is None or not self.config.auto_create_alert_channels:
+        if self.notifier is None:
             return
         assert self.client is not None
         if self.config.guild_id is None:
@@ -173,8 +173,27 @@ class DiscordControlService:
             # Only provision and deliver within the explicitly configured guild.
             return
         async with self._channel_setup_lock:
+            store = self.app_config.channel_store
             try:
-                routes = await ensure_alert_channels(guild)
+                if store is not None:
+                    store.load_or_create()
+                    self.notifier.set_routing(
+                        product_webhook=store.fallback_product_webhook,
+                        admin_webhook=store.fallback_admin_webhook,
+                        type_webhooks=store.type_webhooks,
+                    )
+                routes = await ensure_alert_channels(
+                    guild,
+                    existing_ids=store.channel_ids if store is not None else None,
+                    category_name=store.category_name if store is not None else "Loungefly Alerts",
+                    create_missing=self.config.auto_create_alert_channels,
+                )
+                if store is not None:
+                    from app.notifications.channel_setup import CHANNEL_ALERT_TYPES
+                    store.save_discovered_ids({
+                        name: routes[types[0]].id for name, types in CHANNEL_ALERT_TYPES.items()
+                        if types[0] in routes
+                    })
             except Exception:
                 LOGGER.exception("discord_alert_channel_setup_failed")
                 return

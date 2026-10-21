@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
@@ -278,6 +279,15 @@ class DiscordNotifier(NotificationProvider):
     def set_auto_channels(self, channels: dict[AlertType, discord.TextChannel]) -> None:
         """Atomically publish the currently available bot-managed alert channels."""
         self._auto_channels = dict(channels)
+
+    def set_routing(self, *, product_webhook: str | None, admin_webhook: str | None,
+                    type_webhooks: dict[AlertType, str]) -> None:
+        """Refresh destinations after reloading a manually edited JSON file."""
+        self._config = replace(
+            self._config, discord_webhook_url=product_webhook,
+            discord_admin_webhook_url=admin_webhook,
+            discord_type_webhooks=dict(type_webhooks),
+        )
 
     async def _send_to_channel(self, alert: Alert, channel: discord.TextChannel) -> None:
         payload = build_discord_payload(alert, self._config)
