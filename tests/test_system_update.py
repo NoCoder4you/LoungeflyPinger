@@ -23,6 +23,17 @@ def test_request_marker_is_exclusive_and_private(tmp_path: Path) -> None:
     assert marker.read_text() == "discord_user_id=42\n"
 
 
+def test_update_request_is_busy_during_startup_verification(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    listener = UpdateRequestService(data / ".discord-update-request")
+    assert listener.pending() is False
+    (data / ".discord-update-in-progress").write_text("active\n")
+    assert listener.pending() is True
+    (data / ".discord-update-in-progress").unlink()
+    assert listener.pending() is False
+
+
 def test_missing_request_directory_fails_closed(tmp_path: Path) -> None:
     service = UpdateRequestService(tmp_path / "missing" / "request")
     with pytest.raises(UpdateUnavailable):
