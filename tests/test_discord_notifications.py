@@ -478,3 +478,61 @@ def test_long_adapter_data_stays_within_discord_limits(product):
                for field in embed["fields"])
     assert sum(len(embed.get(key, "")) for key in ("title", "description")) + sum(
         len(field["name"]) + len(field["value"]) for field in embed["fields"]) <= 6000
+
+@pytest.mark.asyncio
+async def test_event_type_webhooks_and_admin_fallback(tmp_path: Path, product: Product) -> None:
+    async with Database(tmp_path / "event-routes.db") as database:
+        session = FakeSession()
+        config = NotificationConfig(
+            discord_webhook_url="https://discord.example/products",
+            discord_admin_webhook_url="https://discord.example/admin",
+            discord_type_webhooks={
+                AlertType.NEW_PRODUCT: "https://discord.example/new",
+                AlertType.RESTOCK: "https://discord.example/restocks",
+                AlertType.MONITOR_ERROR: "https://discord.example/errors",
+            },
+        )
+        notifier = DiscordNotifier(config, database, session=session)
+        events = [
+            Alert(AlertType.NEW_PRODUCT, product),
+            Alert(AlertType.RESTOCK, product),
+            Alert(AlertType.PRICE_DROP, product),
+            Alert(AlertType.MONITOR_ERROR, message="Failure"),
+            Alert(AlertType.MONITOR_RECOVERED, message="Recovered"),
+        ]
+        for event in events:
+            assert await notifier.send(event)
+        assert [url for url, _ in session.calls] == [
+            "https://discord.example/new?with_components=true",
+            "https://discord.example/restocks?with_components=true",
+            "https://discord.example/products?with_components=true",
+            "https://discord.example/errors",
+            "https://discord.example/admin",
+        ]
+        rows = await (await database.connection.execute(
+            "SELECT destination FROM notification_deliveries ORDER BY rowid"
+        )).fetchall()
+        assert [row[0] for row in rows] == [
+            "discord_new_product", "discord_restock", "discord",
+            "discord_monitor_error", "discord_admin",
+        ]
+
+
+@pytest.mark.asyncio
+async def test_type_webhook_without_default_still_deduplicates(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "typed-only.db") as database:
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_type_webhooks={
+                AlertType.RESTOCK: "https://discord.example/restocks"
+            }), database, session=session
+        )
+        alert = Alert(AlertType.RESTOCK, product, occurrence_id="typed-restock")
+        assert await notifier.send(alert)
+        assert await notifier.send(alert)
+        assert not await notifier.send(Alert(AlertType.NEW_PRODUCT, product))
+        assert [url for url, _ in session.calls] == [
+            "https://discord.example/restocks?with_components=true"
+        ]

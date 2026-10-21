@@ -7,9 +7,12 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 import yaml
 from dotenv import load_dotenv
+
+from app.models import AlertType
 
 if TYPE_CHECKING:
     from app.watchlist import Watchlist
@@ -82,6 +85,8 @@ class NotificationConfig:
     discord_alert_role_id: int | None = None
     product_removed_enabled: bool = True
     sold_out_enabled: bool = True
+    # Explicit event-type webhooks override the existing product/admin fallbacks.
+    discord_type_webhooks: dict[AlertType, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,6 +258,21 @@ def load_config(
     sold_out_value = os.getenv("DISCORD_SOLD_OUT_ENABLED", "true").strip().casefold()
     if sold_out_value not in {"true", "false"}:
         raise ConfigurationError("DISCORD_SOLD_OUT_ENABLED must be true or false")
+    type_webhooks: dict[AlertType, str] = {}
+    for alert_type in AlertType:
+        env_name = f"DISCORD_WEBHOOK_{alert_type.value}_URL"
+        webhook = os.getenv(env_name, "").strip()
+        if not webhook:
+            continue
+        try:
+            parsed = urlsplit(webhook)
+            valid = parsed.scheme == "https" and bool(parsed.hostname)
+        except ValueError:
+            valid = False
+        if not valid:
+            # Never echo webhook tokens or URLs in configuration errors.
+            raise ConfigurationError(f"{env_name} must be an HTTPS webhook URL")
+        type_webhooks[alert_type] = webhook
     notifications = NotificationConfig(
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
         discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
@@ -260,6 +280,7 @@ def load_config(
         discord_alert_role_id=role_id,
         product_removed_enabled=product_removed_value == "true",
         sold_out_enabled=sold_out_value == "true",
+        discord_type_webhooks=type_webhooks,
     )
     def discord_id(name: str) -> int | None:
         raw_value = os.getenv(name, "").strip()

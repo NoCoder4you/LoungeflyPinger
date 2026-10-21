@@ -273,8 +273,14 @@ class DiscordNotifier(NotificationProvider):
         self._owns_session = session is None
         self._delivery_lock = asyncio.Lock()
 
-    def _webhook(self, alert: Alert) -> str | None:
-        return self._config.discord_admin_webhook_url if alert.is_admin else self._config.discord_webhook_url
+    def _webhook(self, alert: Alert) -> tuple[str | None, str]:
+        # No override: keep existing product/admin delivery destinations.
+        override = self._config.discord_type_webhooks.get(alert.alert_type)
+        if override:
+            return override, f"discord_{alert.alert_type.value.lower()}"
+        if alert.is_admin:
+            return self._config.discord_admin_webhook_url, "discord_admin"
+        return self._config.discord_webhook_url, "discord"
 
     @staticmethod
     def deduplication_key(alert: Alert) -> str:
@@ -319,7 +325,7 @@ class DiscordNotifier(NotificationProvider):
                 "event_type": alert.alert_type.value,
             })
             return True
-        webhook = self._webhook(alert)
+        webhook, destination = self._webhook(alert)
         context = {"retailer": alert.product.retailer if alert.product else None,
                    "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,
                    "product_url": alert.product.url if alert.product else None,
@@ -327,7 +333,6 @@ class DiscordNotifier(NotificationProvider):
         if not webhook:
             LOGGER.warning("Discord webhook is not configured", extra=context)
             return False
-        destination = "discord_admin" if alert.is_admin else "discord"
         async with self._delivery_lock:
             if await self._was_delivered(alert):
                 LOGGER.info("Suppressing duplicate Discord alert", extra=context)

@@ -110,6 +110,7 @@ systemd loads the same file with `EnvironmentFile`.
 | --- | --- | --- |
 | `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
 | `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
+| `DISCORD_WEBHOOK_<ALERT_TYPE>_URL` | No | Optional webhook for a particular event type, e.g. `DISCORD_WEBHOOK_RESTOCK_URL` |
 | `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
 | `DISCORD_SOLD_OUT_ENABLED` | No | `true`; set to `false` to suppress sold-out embeds |
 | `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
@@ -138,6 +139,44 @@ both installed systemd units; relative paths are resolved from the application w
 watch are ANDed, list values match any entry, and separate watches are ORed. Supported constraints
 include URL/product ID/SKU/name, required or excluded keywords, franchise, character, retailers,
 product types, exclusivity, preorder, and maximum price.
+
+### Separate Discord channels by alert type
+
+Create the channels in Discord, then for each go to **Edit Channel → Integrations →
+Webhooks → New Webhook** and copy its webhook URL into the private `.env` file.
+For example, use these variables for different channels:
+
+```dotenv
+DISCORD_WEBHOOK_NEW_PRODUCT_URL=
+DISCORD_WEBHOOK_RESTOCK_URL=
+DISCORD_WEBHOOK_PREORDER_OPEN_URL=
+DISCORD_WEBHOOK_PRICE_DROP_URL=
+DISCORD_WEBHOOK_OUT_OF_STOCK_URL=
+DISCORD_WEBHOOK_RELEASE_DATE_FOUND_URL=
+DISCORD_WEBHOOK_MONITOR_ERROR_URL=
+```
+
+Fill in each desired variable with its actual Discord webhook URL (do not commit
+those URLs). Any of the alert types listed in `app/models.py` can be configured
+with `DISCORD_WEBHOOK_<ALERT_TYPE>_URL`, for example
+`DISCORD_WEBHOOK_RELEASING_SOON_URL`. You can point multiple types at one webhook
+to group them into a shared channel.
+
+For each event, its specific webhook takes precedence. If none is set, product
+alerts use `DISCORD_WEBHOOK_URL` and monitor error/recovery alerts use
+`DISCORD_ADMIN_WEBHOOK_URL`, exactly as before. No configuration changes are
+required for existing installations. Mention and enable/disable settings still
+apply. Notifications are not duplicated between channels; previously delivered
+events are not replayed when routing changes.
+
+After saving `.env`, restart the monitor, then verify each configured channel
+using the `--alert-type` test flag:
+
+```bash
+.venv/bin/python -m app.tools.test_notification --alert-type NEW_PRODUCT
+.venv/bin/python -m app.tools.test_notification --alert-type RESTOCK
+.venv/bin/python -m app.tools.test_notification --alert-type MONITOR_ERROR
+```
 
 ### Discord webhook test
 

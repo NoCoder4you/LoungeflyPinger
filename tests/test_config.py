@@ -197,3 +197,34 @@ def test_discord_bot_configuration_parsing(tmp_path: Path, monkeypatch: pytest.M
     assert config.guild_id == 123
     assert config.allowed_user_ids == frozenset({1, 2})
     assert config.allowed_role_ids == frozenset({3})
+
+def test_event_specific_webhooks_load_without_changing_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_WEBHOOK_RESTOCK_URL", "https://discord.example/restocks")
+    monkeypatch.setenv("DISCORD_WEBHOOK_PRICE_DROP_URL", "https://discord.example/prices")
+    monkeypatch.setenv("DISCORD_WEBHOOK_MONITOR_ERROR_URL", "https://discord.example/errors")
+    monkeypatch.setenv("DISCORD_WEBHOOK_NEW_PRODUCT_URL", "  ")
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/default")
+    from app.models import AlertType
+    cfg = load_config(path, tmp_path / ".env").notifications
+    assert cfg.discord_webhook_url == "https://discord.example/default"
+    assert cfg.discord_type_webhooks == {
+        AlertType.RESTOCK: "https://discord.example/restocks",
+        AlertType.PRICE_DROP: "https://discord.example/prices",
+        AlertType.MONITOR_ERROR: "https://discord.example/errors",
+    }
+
+
+@pytest.mark.parametrize("url", ["http://discord.example", "not-a-url", "https://"])
+def test_invalid_type_webhook_is_rejected_without_leaking_secret(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("DISCORD_WEBHOOK_RESTOCK_URL", url)
+    with pytest.raises(ConfigurationError, match="DISCORD_WEBHOOK_RESTOCK_URL") as exc:
+        load_config(path, tmp_path / ".env")
+    assert url not in str(exc.value)
