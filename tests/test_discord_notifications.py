@@ -1,4 +1,6 @@
 import asyncio
+from dataclasses import replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -83,7 +85,8 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
     fields = {field["name"]: field["value"] for field in embed["fields"]}
     assert fields["Price"] == "£89.99 → £79.99"
     assert fields["Status"] == "🟢 In Stock"
-    assert fields["Previous Status"] == "🔴 Out Of Stock"
+    assert fields["Currency"] == "GBP"
+    assert "Previous Status" not in fields
     assert fields["Exclusive"] == "⭐ Retailer Exclusive"
     assert fields["Quick Links"] == f"[View Product]({product.url})"
     assert payload["components"] == [{
@@ -150,14 +153,16 @@ def test_no_alert_type_pings_everyone_by_default(
         assert payload["allowed_mentions"] == {"parse": []}
 
 
-def test_discord_payload_shows_watches_and_highest_priority(product: Product) -> None:
-    payload = build_discord_payload(Alert(
+def test_discord_payload_hides_watch_metadata_without_changing_priority(product: Product) -> None:
+    alert = Alert(
         AlertType.NEW_PRODUCT, product=product,
         watch_matches=(WatchMatch("Any Mini", Priority.LOW), WatchMatch("Stitch Backpacks", Priority.HIGH)),
-    ))
+        first_seen=datetime.now(UTC),
+    )
+    payload = build_discord_payload(alert)
     fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
-    assert fields["Matched"] == "Any Mini Stitch Backpacks"
-    assert fields["Priority"] == "HIGH"
+    assert alert.priority == Priority.HIGH
+    assert not {"Previous Status", "Matched", "Priority", "First Seen"} & fields.keys()
 
 
 @pytest.mark.parametrize("alert_type", [
@@ -440,8 +445,8 @@ def test_emp_regional_offers_are_collected_in_one_embed(product):
               build_discord_payload(Alert(AlertType.NEW_PRODUCT, combined))["embeds"][0]["fields"]}
 
     assert fields["EMP Regional Stores"] == (
-        "[DE](https://www.emp.de/p/60001) — €59.99 — 🟢 In Stock\n"
-        "[FR](https://www.emp-online.fr/p/60001) — €64.99 — 🔴 Out Of Stock"
+        "[DE](https://www.emp.de/p/60001) — €59.99 (EUR) — 🟢 In Stock\n"
+        "[FR](https://www.emp-online.fr/p/60001) — €64.99 (EUR) — 🔴 Out Of Stock"
     )
 
 
@@ -452,7 +457,7 @@ def test_missing_optional_data_and_bad_image_are_omitted(product):
     embed = build_discord_payload(Alert(AlertType.COMING_SOON, minimal))["embeds"][0]
     assert "thumbnail" not in embed
     assert {field["name"] for field in embed["fields"]} == {
-        "Retailer", "Status", "Product Type", "Quick Links"
+        "Retailer", "Status", "Currency", "Product Type", "Quick Links"
     }
 
 
@@ -693,3 +698,41 @@ def test_legacy_everyone_setting_can_only_mention_category_role(product: Product
     assert targeted["allowed_mentions"] == {"parse": [], "roles": ["1234"]}
     assert "everyone" not in targeted["allowed_mentions"]["parse"]
 
+
+@pytest.mark.parametrize(("currency", "expected_price"), [
+    ("GBP", "£79.99"),
+    ("USD", "$79.99"),
+    ("EUR", "€79.99"),
+    ("AUD", "A$79.99"),
+    ("CAD", "C$79.99"),
+    ("JPY", "JPY 79.99"),
+])
+def test_product_embed_identifies_original_currency(
+    product: Product, currency: str, expected_price: str
+) -> None:
+    converted_label_only = replace(product, currency=currency)
+    fields = {field["name"]: field["value"] for field in build_discord_payload(
+        Alert(AlertType.NEW_PRODUCT, converted_label_only)
+    )["embeds"][0]["fields"]}
+    assert fields["Price"] == expected_price
+    assert fields["Currency"] == currency
+
+
+def test_currency_field_is_shown_even_without_price(product: Product) -> None:
+    fields = {field["name"]: field["value"] for field in build_discord_payload(
+        Alert(AlertType.COMING_SOON, replace(product, price=None, currency="AUD"))
+    )["embeds"][0]["fields"]}
+    assert fields["Currency"] == "AUD"
+    assert "Price" not in fields
+
+
+def test_removed_metadata_does_not_appear_for_restock(product: Product) -> None:
+    alert = Alert(
+        AlertType.RESTOCK, product,
+        previous_availability=Availability.OUT_OF_STOCK,
+        first_seen=datetime.now(UTC),
+        watch_matches=(WatchMatch("Any Mini", Priority.HIGH),),
+    )
+    fields = {field["name"] for field in build_discord_payload(alert)["embeds"][0]["fields"]}
+    assert not {"Previous Status", "Matched", "Priority", "First Seen"} & fields
+    assert {"Status", "Price", "Currency", "Restocked"} <= fields
