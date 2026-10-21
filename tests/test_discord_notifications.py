@@ -457,7 +457,7 @@ def test_missing_optional_data_and_bad_image_are_omitted(product):
     embed = build_discord_payload(Alert(AlertType.COMING_SOON, minimal))["embeds"][0]
     assert "thumbnail" not in embed
     assert {field["name"] for field in embed["fields"]} == {
-        "Retailer", "Status", "Product Type", "Quick Links"
+        "Retailer", "Status", "Currency", "Product Type", "Quick Links"
     }
 
 
