@@ -181,7 +181,7 @@ async def test_webhook_routing(tmp_path: Path, product: Product) -> None:
         assert await notifier.send(Alert(AlertType.NEW_PRODUCT, product, new_state="new"))
         assert await notifier.send(Alert(AlertType.MONITOR_ERROR, message="Store unavailable", new_state="down"))
         assert [call[0] for call in session.calls] == [
-            "https://normal?with_components=true", "https://admin"
+            "https://normal?with_components=true&wait=true", "https://admin"
         ]
 
 
@@ -204,7 +204,7 @@ async def test_product_webhook_enables_components_and_preserves_query_parameters
         assert await notifier.send(Alert(AlertType.NEW_PRODUCT, product))
 
         assert session.calls[0][0] == (
-            "https://discord.example/webhook?wait=true&thread_id=123&with_components=true"
+            "https://discord.example/webhook?thread_id=123&with_components=true&wait=true"
         )
 
 
@@ -503,9 +503,9 @@ async def test_event_type_webhooks_and_admin_fallback(tmp_path: Path, product: P
         for event in events:
             assert await notifier.send(event)
         assert [url for url, _ in session.calls] == [
-            "https://discord.example/new?with_components=true",
-            "https://discord.example/restocks?with_components=true",
-            "https://discord.example/products?with_components=true",
+            "https://discord.example/new?with_components=true&wait=true",
+            "https://discord.example/restocks?with_components=true&wait=true",
+            "https://discord.example/products?with_components=true&wait=true",
             "https://discord.example/errors",
             "https://discord.example/admin",
         ]
@@ -534,7 +534,7 @@ async def test_type_webhook_without_default_still_deduplicates(
         assert await notifier.send(alert)
         assert not await notifier.send(Alert(AlertType.NEW_PRODUCT, product))
         assert [url for url, _ in session.calls] == [
-            "https://discord.example/restocks?with_components=true"
+            "https://discord.example/restocks?with_components=true&wait=true"
         ]
 
 class FakeAlertChannel:
@@ -590,7 +590,7 @@ async def test_explicit_type_webhook_overrides_bot_channel(tmp_path: Path, produ
         notifier.set_auto_channels({AlertType.RESTOCK: channel})
         assert await notifier.send(Alert(AlertType.RESTOCK, product))
         assert not channel.messages
-        assert session.calls[0][0] == "https://discord.example/special?with_components=true"
+        assert session.calls[0][0] == "https://discord.example/special?with_components=true&wait=true"
 
 
 @pytest.mark.asyncio
@@ -605,7 +605,7 @@ async def test_bot_channel_send_failure_falls_back_to_webhook(tmp_path: Path, pr
         )
         notifier.set_auto_channels({AlertType.RESTOCK: channel})
         assert await notifier.send(Alert(AlertType.RESTOCK, product))
-        assert session.calls[0][0] == "https://discord.example/fallback?with_components=true"
+        assert session.calls[0][0] == "https://discord.example/fallback?with_components=true&wait=true"
 
 
 @pytest.mark.asyncio

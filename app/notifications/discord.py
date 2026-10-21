@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlsplit, urlunsplit
 
 import aiohttp
 import discord
@@ -17,6 +17,7 @@ from app.config import NotificationConfig
 from app.database import Database
 from app.models import Alert, AlertType, Availability
 from app.notifications.base import NotificationProvider
+from app.notifications.grouping import GroupedAlertStore, combined_payload, group_key, offer_for
 from app.release import format_release
 from app.retailers import retailer_brand
 from app.services.notification_settings import NotificationSettingsService
@@ -77,18 +78,28 @@ def _valid_url(value: object) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc) and len(value) <= 2048
 
 
-def _component_webhook_url(webhook: str, *, enabled: bool) -> str:
-    """Enable webhook components without discarding configured query parameters."""
-    if not enabled:
-        return webhook
+def _component_webhook_url(webhook: str, *, enabled: bool, wait: bool = False) -> str:
+    """Enable URL buttons and ask Discord for the posted message ID."""
     parsed = urlsplit(webhook)
     query = [
         (name, value)
         for name, value in parse_qsl(parsed.query, keep_blank_values=True)
-        if name != "with_components"
+        if name not in {"with_components", "wait"}
     ]
-    query.append(("with_components", "true"))
+    if enabled:
+        query.append(("with_components", "true"))
+    if wait:
+        query.append(("wait", "true"))
     return urlunsplit(parsed._replace(query=urlencode(query)))
+
+
+def _edit_webhook_url(webhook: str, message_id: str) -> str:
+    """PATCH the message using its owning webhook (retain forum thread_id)."""
+    parsed = urlsplit(webhook)
+    query = [(name, value) for name, value in parse_qsl(parsed.query)
+             if name == "thread_id"]
+    path = parsed.path.rstrip("/") + "/messages/" + quote(message_id, safe="")
+    return urlunsplit(parsed._replace(path=path, query=urlencode(query)))
 
 
 def _display(value: str) -> str:
@@ -284,6 +295,7 @@ class DiscordNotifier(NotificationProvider):
         self._settings = settings
         self._owns_session = session is None
         self._delivery_lock = asyncio.Lock()
+        self._groups = GroupedAlertStore(database)
         self._auto_channels: dict[AlertType, discord.TextChannel] = {}
         self._auto_roles: dict[AlertType, int] = {}
 
@@ -307,6 +319,35 @@ class DiscordNotifier(NotificationProvider):
         payload = build_discord_payload(
             alert, self._config, category_role_id=self._auto_roles.get(alert.alert_type)
         )
+        destination_key = f"channel:{channel.id}"
+        group = await self._groups.find(alert, destination_key)
+        if group is not None and group.message_id.isdigit():
+            offers = [*group.offers, offer_for(alert)]
+            merged = combined_payload(group.base_payload, offers)
+            if merged is not None:
+                try:
+                    message = await channel.fetch_message(int(group.message_id))
+                    await message.edit(
+                        embed=discord.Embed.from_dict(merged["embeds"][0]), view=None,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    LOGGER.warning("Unable to edit grouped bot alert, posting separately: %s",
+                                   type(exc).__name__)
+                else:
+                    try:
+                        await self._groups.save(
+                            alert, destination_key, group.message_id,
+                            group.base_payload, offers, created_at=group.created_at,
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        LOGGER.exception("Could not persist updated grouped bot alert")
+                    return
+
         mentions = payload["allowed_mentions"]
         allowed_mentions = discord.AllowedMentions(
             everyone="everyone" in mentions.get("parse", []),
@@ -325,12 +366,21 @@ class DiscordNotifier(NotificationProvider):
                         url=button["url"],
                         emoji=button.get("emoji", {}).get("name"),
                     ))
-        await channel.send(
+        message = await channel.send(
             content=payload.get("content"),
             embed=discord.Embed.from_dict(payload["embeds"][0]),
             allowed_mentions=allowed_mentions,
             view=view,
         )
+        if group_key(alert) is not None and getattr(message, "id", None) is not None:
+            try:
+                await self._groups.save(
+                    alert, destination_key, str(message.id), payload, [offer_for(alert)],
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                LOGGER.exception("Could not persist grouped bot alert")
 
     def _webhook(self, alert: Alert) -> tuple[str | None, str]:
         # No override: keep existing product/admin delivery destinations.
@@ -439,22 +489,74 @@ class DiscordNotifier(NotificationProvider):
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
             self._owns_session = True
+        destination_key = "webhook:" + hashlib.sha256(webhook.encode("utf-8")).hexdigest()
+        payload = build_discord_payload(
+            alert, self._config, category_role_id=self._auto_roles.get(alert.alert_type)
+        )
         try:
-            request_url = _component_webhook_url(webhook, enabled=alert.product is not None)
-            response = await self._session.post(
-                request_url,
-                json=build_discord_payload(
-                    alert, self._config,
-                    category_role_id=self._auto_roles.get(alert.alert_type),
-                ),
+            group = await self._groups.find(alert, destination_key)
+            if group is not None and group.message_id.isdigit():
+                offers = [*group.offers, offer_for(alert)]
+                merged = combined_payload(group.base_payload, offers)
+                if merged is not None:
+                    try:
+                        response = await self._session.patch(
+                            _edit_webhook_url(webhook, group.message_id),
+                            json={"embeds": merged["embeds"], "components": []},
+                        )
+                        try:
+                            if 200 <= response.status < 300:
+                                await self._record_delivery(alert, destination)
+                                try:
+                                    await self._groups.save(
+                                        alert, destination_key, group.message_id,
+                                        group.base_payload, offers,
+                                        created_at=group.created_at,
+                                    )
+                                except Exception:
+                                    LOGGER.exception("Could not persist grouped webhook edit")
+                                return True
+                            LOGGER.warning("Could not edit grouped webhook (status %s), posting separately",
+                                           response.status, extra=context)
+                        finally:
+                            response.release()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        LOGGER.warning("Grouped webhook edit failed (%s), posting separately",
+                                       type(exc).__name__, extra=context)
+
+            request_url = _component_webhook_url(
+                webhook, enabled=alert.product is not None,
+                wait=group_key(alert) is not None,
             )
+            response = await self._session.post(request_url, json=payload)
             try:
                 if not 200 <= response.status < 300:
                     LOGGER.error("Discord webhook rejected notification", extra={
                         **context, "status": response.status,
                     })
                     return False
+                # wait=true returns an ID. Old webhook mocks and proxies returning
+                # 204 still deliver normally, but cannot support future edits.
+                message_id = None
+                if group_key(alert) is not None and response.status != 204 and hasattr(response, "json"):
+                    try:
+                        posted = await response.json()
+                        if isinstance(posted, dict) and str(posted.get("id", "")).isdigit():
+                            message_id = str(posted["id"])
+                    except (ValueError, TypeError, aiohttp.ContentTypeError):
+                        LOGGER.warning("Discord webhook message ID unavailable; grouping skipped")
                 await self._record_delivery(alert, destination)
+                if message_id is not None:
+                    try:
+                        await self._groups.save(
+                            alert, destination_key, message_id, payload, [offer_for(alert)],
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        LOGGER.exception("Could not persist grouped webhook")
                 return True
             finally:
                 response.release()

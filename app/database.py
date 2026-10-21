@@ -204,6 +204,18 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_sent_at
     ON notification_deliveries(sent_at);
+CREATE TABLE IF NOT EXISTS discord_grouped_alerts (
+    destination_key TEXT NOT NULL,
+    alert_type TEXT NOT NULL,
+    bag_key TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    base_payload TEXT NOT NULL,
+    offers TEXT NOT NULL,
+    PRIMARY KEY (destination_key, alert_type, bag_key)
+);
+CREATE INDEX IF NOT EXISTS idx_discord_grouped_alerts_created
+    ON discord_grouped_alerts(created_at);
 CREATE TABLE IF NOT EXISTS notification_runtime_overrides (
     alert_type TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
