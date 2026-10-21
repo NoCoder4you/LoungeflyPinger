@@ -59,10 +59,21 @@ def test_systemd_units_use_fixed_bounded_commands_not_shell() -> None:
     service = (root / "deploy/loungefly-discord-update.service").read_text()
     path = (root / "deploy/loungefly-discord-update.path").read_text()
     assert "PathExists=/home/pi/LoungeflyPinger/data/.discord-update-request" in path
-    assert "ExecStartPre=/usr/bin/systemctl stop loungefly-monitor.service" in service
-    assert "ExecStart=/usr/sbin/runuser -u pi -- /home/pi/LoungeflyPinger/update.sh" in service
-    assert "ExecStopPost=/usr/bin/systemctl start --no-block loungefly-monitor.service" in service
-    assert "TimeoutStartSec=20min" in service
+    assert "ExecStart=/usr/local/libexec/loungefly-discord-update" in service
+    assert "ExecStopPost=" not in service
+    assert "ExecStart=/usr/sbin/runuser" not in service
+    assert "TimeoutStartSec=30min" in service
+    script = (root / "deploy/loungefly-discord-update-supervisor.sh").read_text()
+    assert '"$RUNUSER" -u "$UPDATER_USER" -- /usr/bin/env' in script
+    assert '"$SYSTEMCTL" stop "$SERVICE"' in script
+    assert '"$SYSTEMCTL" start "$SERVICE"' in script
+    assert "candidate_ready|no_change|failed" in script
+    assert "printf 'healthy\\n' >\"$SESSION/ack\"" in script
+    assert "printf 'failed\\n' >\"$SESSION/ack\"" in script
+    assert 'wait "$CHILD"' in script
+    assert "chown \"$UPDATER_USER:$UPDATER_USER\"" in script
+    normal_updater = (root / "deploy/loungefly-update.service").read_text()
+    assert "ConditionPathExists=!/home/pi/LoungeflyPinger/data/.discord-update-in-progress" in normal_updater
     assert "NoNewPrivileges=true" in service
     assert "ProtectSystem=strict" in service
     assert "/bin/sh -c" not in service
@@ -73,3 +84,16 @@ def test_deploy_does_not_expand_monitor_sandbox_write_permissions() -> None:
     root = Path(__file__).parents[1]
     service = (root / "deploy/loungefly-monitor.service").read_text()
     assert "ReadWritePaths=/home/pi/LoungeflyPinger/data /home/pi/LoungeflyPinger/logs" in service
+
+
+def test_updater_defers_commit_and_rollback_cleanup_to_health_ack() -> None:
+    root = Path(__file__).parents[1]
+    script = (root / "update.sh").read_text()
+    assert "LOUNGEFLY_EXTERNAL_READY_FILE" in script
+    assert "LOUNGEFLY_EXTERNAL_ACK_FILE" in script
+    assert "printf 'candidate_ready\\n' >\"$EXTERNAL_READY_FILE\"" in script
+    assert 'if [[ "$EXTERNAL_ACK_RESULT" != "healthy" ]]; then' in script
+    assert script.index('if [[ "$EXTERNAL_ACK_RESULT" != "healthy" ]]; then') < script.index('ROLLBACK_NEEDED=0', script.index("# ---------- commit success ----------"))
+    assert 'if (( EXTERNAL_HEALTH == 1 )) && service_is_active; then' in script
+    assert 'restore_database "$STATE_BACKUP/loungefly.db" "$DB_PATH"' in script
+    assert 'if (( EXTERNAL_HEALTH == 1 )); then' in script
