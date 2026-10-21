@@ -24,7 +24,7 @@ _RETAILER_FIELDS = {
     "Retailer", "Status", "Price", "Saving", "Previous Status",
     "Quick Links", "EMP Regional Stores", "Retailer ETA",
     "SKU", "Product ID", "Exclusive", "Exclusive Retailer", "Exclusive Region",
-    "First Seen", "Restocked",
+    "First Seen", "Matched", "Priority", "Currency", "Restocked",
 }
 
 
@@ -93,12 +93,13 @@ def _link_line(offer: dict[str, str | None]) -> str:
     name = (offer["name"] or offer["retailer"] or "Retailer").replace("[", "").replace("]", "")
     url = offer["url"]
     line = f"[{name}]({url})"
+    currency = offer.get("currency") or ""
     if offer.get("price"):
-        currency = offer.get("currency") or ""
-        price = (f"£{offer['price']}" if currency == "GBP"
-                 else f"${offer['price']}" if currency == "USD"
-                 else f"{currency} {offer['price']}")
-        line += f" — {price}"
+        symbol = {"GBP": "£", "USD": "$", "EUR": "€", "AUD": "A$", "CAD": "C$"}.get(currency, "")
+        price = f"{symbol}{offer['price']}"
+        line += f" — {price} ({currency})" if currency else f" — {price}"
+    elif currency:
+        line += f" — {currency}"
     if offer.get("availability"):
         line += f" — {offer['availability'].replace('_', ' ').title()}"
     if offer.get("cart_url") and offer["cart_url"] != url:
