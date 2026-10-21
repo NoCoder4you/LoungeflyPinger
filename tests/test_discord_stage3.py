@@ -47,7 +47,7 @@ def test_discord_control_registers_on_ready_event_and_expected_commands():
         command.name
         for command in service.tree.get_commands(guild=discord.Object(id=123456789))
     }
-    assert command_names == {"watch", "retailer", "product", "alerts", "status", "retailers"}
+    assert command_names == {"watch", "retailer", "product", "alerts", "status", "retailers", "update"}
     alerts = service.tree.get_command("alerts", guild=discord.Object(id=123456789))
     assert isinstance(alerts, discord.app_commands.Group)
     assert {command.name for command in alerts.commands} == {"recent", "list", "enable", "disable"}
@@ -239,3 +239,85 @@ async def test_watch_deletion_confirmation_rechecks_current_authorization():
 
     assert await view.interaction_check(interaction) is False
     service.audit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_command_is_owner_only_and_guild_restricted(tmp_path: Path) -> None:
+    from dataclasses import replace
+    service = make_control(guild_id=123456789)
+    service.config = replace(
+        service.config,
+        allowed_user_ids=frozenset({22}),
+        allowed_role_ids=frozenset({123}),
+        update_user_ids=frozenset({42}),
+    )
+    assert service.tree is not None
+    command = service.tree.get_command("update", guild=discord.Object(id=123456789))
+    update = service._system_updates
+    update.available = AsyncMock(return_value=True)
+    update.pending = Mock(return_value=False)
+    update.queue = Mock(return_value=True)
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=22, roles=[SimpleNamespace(id=123)]),
+        guild_id=123456789,
+        response=SimpleNamespace(send_message=AsyncMock()),
+    )
+    await command.callback(interaction)
+    update.available.assert_not_awaited()
+    update.queue.assert_not_called()
+    assert "not authorized" in interaction.response.send_message.await_args.args[0]
+
+    interaction.user.id = 42
+    interaction.guild_id = 9999
+    await command.callback(interaction)
+    update.queue.assert_not_called()
+
+    interaction.guild_id = 123456789
+    await command.callback(interaction)
+    update.available.assert_awaited_once()
+    update.queue.assert_called_once_with(42)
+    assert "not its final result" in interaction.response.send_message.await_args.args[0]
+    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
+
+
+@pytest.mark.asyncio
+async def test_update_command_refuses_uninstalled_and_pending_listener() -> None:
+    from dataclasses import replace
+    service = make_control(guild_id=123456789)
+    service.config = replace(service.config, update_user_ids=frozenset({42}))
+    command = service.tree.get_command("update", guild=discord.Object(id=123456789))
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=42), guild_id=123456789,
+        response=SimpleNamespace(send_message=AsyncMock()),
+    )
+    service._system_updates.available = AsyncMock(return_value=False)
+    service._system_updates.pending = Mock(return_value=False)
+    service._system_updates.queue = Mock()
+    await command.callback(interaction)
+    assert "not active" in interaction.response.send_message.await_args.args[0]
+    service._system_updates.queue.assert_not_called()
+
+    service._system_updates.available.return_value = True
+    service._system_updates.pending.return_value = True
+    await command.callback(interaction)
+    assert "already queued" in interaction.response.send_message.await_args.args[0]
+    service._system_updates.queue.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_command_handles_request_creation_failure() -> None:
+    from dataclasses import replace
+    from app.services.system_update_service import UpdateUnavailable
+    service = make_control(guild_id=123456789)
+    service.config = replace(service.config, update_user_ids=frozenset({42}))
+    command = service.tree.get_command("update", guild=discord.Object(id=123456789))
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=42), guild_id=123456789,
+        response=SimpleNamespace(send_message=AsyncMock()),
+    )
+    service._system_updates.available = AsyncMock(return_value=True)
+    service._system_updates.pending = Mock(return_value=False)
+    service._system_updates.queue = Mock(side_effect=UpdateUnavailable("private details"))
+    await command.callback(interaction)
+    assert "Unable to request" in interaction.response.send_message.await_args.args[0]
+    assert "private details" not in interaction.response.send_message.await_args.args[0]
