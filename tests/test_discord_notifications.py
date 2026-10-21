@@ -679,3 +679,17 @@ def test_role_mentions_are_targeted_and_respect_none_and_silent_removals(
         Alert(AlertType.PRODUCT_REMOVED, product), config, category_role_id=1234
     )
     assert "content" not in removed
+
+def test_legacy_everyone_setting_can_only_mention_category_role(product: Product) -> None:
+    config = NotificationConfig(discord_alert_mention_mode="everyone")
+    silent = build_discord_payload(Alert(AlertType.NEW_PRODUCT, product), config)
+    assert "content" not in silent
+    assert silent["allowed_mentions"] == {"parse": []}
+
+    targeted = build_discord_payload(
+        Alert(AlertType.NEW_PRODUCT, product), config, category_role_id=1234
+    )
+    assert targeted["content"] == "<@&1234>"
+    assert targeted["allowed_mentions"] == {"parse": [], "roles": ["1234"]}
+    assert "everyone" not in targeted["allowed_mentions"]["parse"]
+
