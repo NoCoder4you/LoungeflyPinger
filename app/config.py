@@ -81,7 +81,7 @@ class NotificationConfig:
 
     discord_webhook_url: str | None = None
     discord_admin_webhook_url: str | None = None
-    discord_alert_mention_mode: str = "everyone"
+    discord_alert_mention_mode: str = "category"
     discord_alert_role_id: int | None = None
     product_removed_enabled: bool = True
     sold_out_enabled: bool = True
@@ -243,9 +243,9 @@ def load_config(
                 _positive(settings[key], f"retailers.{retailer}.{key}")
         if "detail_batch_size" in settings:
             _positive(settings["detail_batch_size"], f"retailers.{retailer}.detail_batch_size", int)
-    mention_mode = os.getenv("DISCORD_ALERT_MENTION_MODE", "everyone").strip().casefold()
-    if mention_mode not in {"none", "role", "everyone"}:
-        raise ConfigurationError("DISCORD_ALERT_MENTION_MODE must be none, role, or everyone")
+    mention_mode = os.getenv("DISCORD_ALERT_MENTION_MODE", "category").strip().casefold()
+    if mention_mode not in {"none", "category", "role", "everyone"}:
+        raise ConfigurationError("DISCORD_ALERT_MENTION_MODE must be none, category, role, or everyone")
     role_value = os.getenv("DISCORD_ALERT_ROLE_ID", "").strip()
     if role_value and (not role_value.isdecimal() or int(role_value) <= 0):
         raise ConfigurationError("DISCORD_ALERT_ROLE_ID must be a positive Discord ID")

@@ -254,3 +254,16 @@ def test_auto_channel_setup_defaults_on_and_can_be_disabled(
     monkeypatch.setenv("DISCORD_AUTO_CREATE_ALERT_CHANNELS", "invalid")
     with pytest.raises(ConfigurationError, match="DISCORD_AUTO_CREATE_ALERT_CHANNELS"):
         load_config(path, tmp_path / ".env")
+
+def test_mention_defaults_to_category_role_without_everyone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DISCORD_ALERT_MENTION_MODE", raising=False)
+    monkeypatch.delenv("DISCORD_ALERT_ROLE_ID", raising=False)
+    config = load_config(env_path=tmp_path / ".env")
+    assert config.notifications.discord_alert_mention_mode == "category"
+    assert config.notifications.discord_alert_role_id is None
+
+
+def test_explicit_none_mention_mode_remains_supported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DISCORD_ALERT_MENTION_MODE", "none")
+    config = load_config(env_path=tmp_path / ".env")
+    assert config.notifications.discord_alert_mention_mode == "none"

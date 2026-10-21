@@ -93,8 +93,8 @@ def test_discord_payload_contains_formatted_product_details(product: Product) ->
             "emoji": {"name": "🛒"}, "url": product.url,
         }],
     }]
-    assert payload["content"] == "@everyone"
-    assert payload["allowed_mentions"] == {"parse": ["everyone"]}
+    assert "content" not in payload
+    assert payload["allowed_mentions"] == {"parse": []}
 
 
 def test_discord_payload_does_not_mention_everyone_for_removed_product(product: Product) -> None:
@@ -135,7 +135,7 @@ def test_operational_alert_preserves_diagnostic_line_breaks() -> None:
 
 
 @pytest.mark.parametrize("alert_type", list(AlertType))
-def test_every_alert_type_obeys_everyone_mention_policy(
+def test_no_alert_type_pings_everyone_by_default(
     alert_type: AlertType, product: Product
 ) -> None:
     alert = (Alert(alert_type, message="Retailer state changed")
@@ -146,8 +146,8 @@ def test_every_alert_type_obeys_everyone_mention_policy(
         assert "content" not in payload
         assert payload["allowed_mentions"] == {"parse": []}
     else:
-        assert payload["content"] == "@everyone"
-        assert payload["allowed_mentions"] == {"parse": ["everyone"]}
+        assert "content" not in payload
+        assert payload["allowed_mentions"] == {"parse": []}
 
 
 def test_discord_payload_shows_watches_and_highest_priority(product: Product) -> None:
@@ -380,7 +380,7 @@ async def test_cancelled_delivery_is_not_persisted_and_can_retry_after_restart(
 
 @pytest.mark.parametrize(("mode", "role_id", "content", "allowed"), [
     ("none", None, None, {"parse": []}),
-    ("everyone", None, "@everyone", {"parse": ["everyone"]}),
+    ("everyone", None, None, {"parse": []}),
     ("role", 123456, "<@&123456>", {"parse": [], "roles": ["123456"]}),
 ])
 def test_configurable_mentions_are_explicitly_allowlisted(product, mode, role_id, content, allowed):
@@ -567,10 +567,10 @@ async def test_bot_managed_channel_delivery_keeps_embed_buttons_mentions_and_ded
         assert not session.calls
         assert len(channel.messages) == 1
         sent = channel.messages[0]
-        assert sent["content"] == "@everyone"
+        assert sent["content"] is None
         assert sent["embed"].title == product.name
         assert sent["view"].children[0].url == product.url
-        assert sent["allowed_mentions"].everyone is True
+        assert sent["allowed_mentions"].everyone is False
         row = await (await database.connection.execute(
             "SELECT destination FROM notification_deliveries"
         )).fetchone()
@@ -679,3 +679,17 @@ def test_role_mentions_are_targeted_and_respect_none_and_silent_removals(
         Alert(AlertType.PRODUCT_REMOVED, product), config, category_role_id=1234
     )
     assert "content" not in removed
+
+def test_legacy_everyone_setting_can_only_mention_category_role(product: Product) -> None:
+    config = NotificationConfig(discord_alert_mention_mode="everyone")
+    silent = build_discord_payload(Alert(AlertType.NEW_PRODUCT, product), config)
+    assert "content" not in silent
+    assert silent["allowed_mentions"] == {"parse": []}
+
+    targeted = build_discord_payload(
+        Alert(AlertType.NEW_PRODUCT, product), config, category_role_id=1234
+    )
+    assert targeted["content"] == "<@&1234>"
+    assert targeted["allowed_mentions"] == {"parse": [], "roles": ["1234"]}
+    assert "everyone" not in targeted["allowed_mentions"]["parse"]
+

@@ -122,12 +122,13 @@ def _status(availability: Availability) -> str:
 
 
 def _mention(config: NotificationConfig, *, removed: bool) -> tuple[str | None, dict[str, Any]]:
-    if removed or config.discord_alert_mention_mode == "none":
-        return None, {"parse": []}
-    if config.discord_alert_mention_mode == "role" and config.discord_alert_role_id:
+    """Never ping everyone; fall back to a configured role or no mention."""
+    if not removed and config.discord_alert_mention_mode == "role" and config.discord_alert_role_id:
         role = str(config.discord_alert_role_id)
         return f"<@&{role}>", {"parse": [], "roles": [role]}
-    return "@everyone", {"parse": ["everyone"]}
+    # Includes legacy "everyone" settings, category mode with no available role,
+    # disabled mentions, and operational alerts.
+    return None, {"parse": []}
 
 
 def build_discord_payload(
@@ -271,8 +272,8 @@ def build_discord_payload(
     removed_or_operational = alert.alert_type in {
         AlertType.PRODUCT_REMOVED, AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED,
     }
-    # Prefer a targeted opt-in category role over @everyone, but preserve
-    # explicit "none" and the legacy no-mention policy for removals/recovery.
+    # Mention only the matching alert-category role (if enabled), otherwise
+    # fall back to an explicitly configured role or send without a mention.
     if (category_role_id is not None and config.discord_alert_mention_mode != "none"
             and alert.alert_type not in {AlertType.PRODUCT_REMOVED, AlertType.MONITOR_RECOVERED}):
         role_text = str(category_role_id)
@@ -350,7 +351,7 @@ class DiscordNotifier(NotificationProvider):
 
         mentions = payload["allowed_mentions"]
         allowed_mentions = discord.AllowedMentions(
-            everyone="everyone" in mentions.get("parse", []),
+            everyone=False,
             users=False,
             roles=[discord.Object(id=int(role_id)) for role_id in mentions.get("roles", [])],
             replied_user=False,
