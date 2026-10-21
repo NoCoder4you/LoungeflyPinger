@@ -259,7 +259,8 @@ its initiating user.
 
 Commands include `/watch list`, `/watch show`, `/watch add`, `/watch edit`, `/watch delete`,
 `/watch enable`, `/watch disable`, `/watch export`, `/alerts list`, `/alerts enable`,
-`/alerts disable`, `/status`, and read-only `/retailers`. On the
+`/alerts disable`, `/status`, read-only `/retailers`, and an explicitly enabled
+`/update` maintenance command. On the
 first startup after upgrade, the validated `config/watchlist.yaml` rules are imported into SQLite
 and a durable migration marker is recorded. This happens exactly once—even if every rule is later
 deleted. SQLite is then authoritative; edits do not modify tracked YAML. Enabled rules are held in
@@ -277,6 +278,70 @@ ID) can take longer. A bot authentication, gateway, or synchronization failure i
 not stop retailer jobs. Disable it by setting
 `DISCORD_BOT_ENABLED=false` and restarting the existing service. No new daemon, root privilege, or
 systemd sandbox change is needed.
+
+### Discord full update/restart command
+
+Use `/update` in the configured Discord server to request the existing
+production updater and a complete monitor restart. The updater checks `origin/main`,
+validates tests, backs up data and rolls back if activation fails; the systemd
+worker restarts the monitor even if no new commit is available. The slash command
+acknowledges **the request**, not the outcome; see the update service logs to
+confirm success or failure.
+
+**One-time installation on the Raspberry Pi (requires administrator access):**
+
+The update supervisor must be installed **outside the pi-writable repository**
+as a root-owned executable. Install the updated startup updater unit as well,
+so a supervised candidate restart does not launch a nested update.
+
+```bash
+cd /home/pi/LoungeflyPinger
+sudo install -d -o root -g root -m 0755 /usr/local/libexec
+sudo install -o root -g root -m 0755 deploy/loungefly-discord-update-supervisor.sh /usr/local/libexec/loungefly-discord-update
+sudo install -o root -g root -m 0644 deploy/loungefly-update.service /etc/systemd/system/
+sudo install -o root -g root -m 0644 deploy/loungefly-discord-update.path /etc/systemd/system/
+sudo install -o root -g root -m 0644 deploy/loungefly-discord-update.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now loungefly-discord-update.path
+sudo systemctl is-active loungefly-discord-update.path
+```
+
+**Health and rollback handshake:** systemd stops the monitor and runs the
+existing updater as `pi`. The updater keeps the previous checkout, venv and
+SQLite backup pending; the root-owned supervisor restarts the candidate and
+checks that the service remains active with a stable nonzero MainPID for 20
+seconds. It acknowledges `healthy` **only after the checks pass**, allowing
+the updater to commit and delete its rollback venv. On startup failure, it
+stops the broken process **before** acknowledging failure; the updater then
+restores code, venv and SQLite, and the supervisor restarts the old version.
+The failed update is reported as failed even if recovery succeeds. Normal
+manual and boot updates retain their existing health-check behaviour.
+
+Add your Discord user ID to your private `.env` (not tracked in Git):
+
+```dotenv
+DISCORD_BOT_GUILD_ID=YOUR_DISCORD_SERVER_ID
+DISCORD_BOT_UPDATE_USER_IDS=YOUR_DISCORD_USER_ID
+```
+
+Restart the monitor once after updating `.env`. Only user IDs in
+`DISCORD_BOT_UPDATE_USER_IDS` can use `/update`; ordinary authorized bot
+operators, role members, and server administrators cannot use it unless
+listed there explicitly. The exact configured guild is also required. The
+command requires an **active** `loungefly-discord-update.path` listener; it
+creates only a fixed, private request marker in `data/` and executes no shell
+command, updater, or systemctl mutation inside the Discord bot.
+
+```bash
+sudo journalctl -u loungefly-discord-update.service -n 80 --no-pager
+sudo journalctl -u loungefly-monitor.service -n 80 --no-pager
+```
+
+The root-owned systemd supervisor performs only fixed stop/start systemctl actions,
+runs `update.sh` **as pi**, verifies candidate health before committing, and
+restores/restarts the previous version on failure. Never give the Discord bot passwordless generic sudo, root execution,
+or access to arbitrary shell commands. Install the unit files under
+`/etc/systemd/system` rather than launching a repo-controlled script as root.
 
 ## Running
 

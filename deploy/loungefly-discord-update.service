@@ -1,0 +1,23 @@
+[Unit]
+Description=Apply Discord-requested Loungefly update and restart monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/home/pi/LoungeflyPinger
+# Root runs only this separately installed, root-owned fixed-operation supervisor.
+# It stops the monitor, runs update.sh as pi, starts/verifies the candidate,
+# then acknowledges success or stops it before requesting SQLite/code rollback.
+ExecStartPre=/usr/bin/sleep 3
+ExecStartPre=/usr/bin/rm -f /home/pi/LoungeflyPinger/data/.discord-update-request
+ExecStart=/usr/local/libexec/loungefly-discord-update
+TimeoutStartSec=30min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/LoungeflyPinger /run
+UMask=0077
