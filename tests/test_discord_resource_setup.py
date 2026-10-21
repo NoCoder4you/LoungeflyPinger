@@ -6,7 +6,8 @@ import discord
 import pytest
 
 from app.notifications.resource_setup import (
-    ROLE_NAMES, WEBHOOK_NAMES, ensure_alert_roles, ensure_alert_webhooks,
+    ROLE_NAMES, WEBHOOK_NAMES, LEGACY_ROLE_NAMES, LEGACY_WEBHOOK_NAMES,
+    ensure_alert_roles, ensure_alert_webhooks,
 )
 
 
@@ -134,3 +135,73 @@ async def test_role_mentions_are_opt_in_and_creation_is_mentionable() -> None:
     guild.create_role = create
     await ensure_alert_roles(guild)
     assert mentionable_values == [True] * len(ROLE_NAMES)
+
+
+class LegacyRole:
+    def __init__(self, role_id: int, name: str) -> None:
+        self.id = role_id
+        self.name = name
+        self.edits = 0
+
+    async def edit(self, *, name: str, reason: str):
+        self.edits += 1
+        self.name = name
+        return self
+
+
+class LegacyWebhook:
+    def __init__(self, name: str, channel_id: int) -> None:
+        self.name = name
+        self.id = 777
+        self.user = SimpleNamespace(id=55)
+        self.url = f"https://discord.example/{channel_id}/777"
+        self.edits = 0
+
+    async def edit(self, *, name: str, reason: str):
+        self.edits += 1
+        self.name = name
+        return self
+
+
+def test_resource_names_have_no_brand_prefixes() -> None:
+    assert ROLE_NAMES["lf-new-products"] == "New Products"
+    assert ROLE_NAMES["lf-restocks"] == "Restocks"
+    assert WEBHOOK_NAMES == ROLE_NAMES
+    assert all(not name.startswith("LF Alerts | ") for name in ROLE_NAMES.values())
+    assert all(not name.startswith("Loungefly ") for name in WEBHOOK_NAMES.values())
+
+
+@pytest.mark.asyncio
+async def test_legacy_roles_renamed_and_reused_without_creating_duplicates() -> None:
+    guild = FakeGuild()
+    old = LegacyRole(4001, LEGACY_ROLE_NAMES["lf-restocks"])
+    guild.roles.append(old)
+    first = await ensure_alert_roles(guild)
+    assert first["lf-restocks"] is old
+    assert old.name == "Restocks"
+    assert old.edits == 1
+    assert guild.created == len(ROLE_NAMES) - 1
+    second = await ensure_alert_roles(guild, configured_ids={"lf-restocks": old.id})
+    assert second["lf-restocks"] is old
+    assert old.edits == 1
+    assert guild.created == len(ROLE_NAMES) - 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_owned_webhook_renamed_and_reused_without_duplication() -> None:
+    channel = FakeChannel(500)
+    old = LegacyWebhook(LEGACY_WEBHOOK_NAMES["lf-restocks"], channel.id)
+    channel.hooks.append(old)
+    first = await ensure_alert_webhooks({"lf-restocks": channel}, bot_user_id=55)
+    assert first["lf-restocks"] == (500, old.url)
+    assert old.name == "Restocks"
+    assert old.edits == 1
+    assert channel.created == 0
+    second = await ensure_alert_webhooks(
+        {"lf-restocks": channel}, bot_user_id=55,
+        configured_urls={"lf-restocks": old.url},
+        managed_channel_ids={"lf-restocks": channel.id},
+    )
+    assert second == first
+    assert old.edits == 1
+    assert channel.created == 0

@@ -11,19 +11,20 @@ from app.notifications.channel_setup import CHANNEL_ALERT_TYPES, CREATION_REASON
 LOGGER = logging.getLogger("monitor.discord_resources")
 
 ROLE_NAMES: dict[str, str] = {
-    "lf-new-products": "LF Alerts | New Products",
-    "lf-restocks": "LF Alerts | Restocks",
-    "lf-preorders": "LF Alerts | Preorders",
-    "lf-price-changes": "LF Alerts | Price Changes",
-    "lf-releases": "LF Alerts | Releases",
-    "lf-stock-updates": "LF Alerts | Stock Updates",
-    "lf-product-updates": "LF Alerts | Product Updates",
-    "lf-monitor-status": "LF Alerts | Monitor Status",
+    "lf-new-products": "New Products",
+    "lf-restocks": "Restocks",
+    "lf-preorders": "Preorders",
+    "lf-price-changes": "Price Changes",
+    "lf-releases": "Releases",
+    "lf-stock-updates": "Stock Updates",
+    "lf-product-updates": "Product Updates",
+    "lf-monitor-status": "Monitor Status",
 }
-WEBHOOK_NAMES: dict[str, str] = {
-    name: "Loungefly " + ROLE_NAMES[name].split("| ", 1)[1]
-    for name in CHANNEL_ALERT_TYPES
-}
+WEBHOOK_NAMES: dict[str, str] = dict(ROLE_NAMES)
+
+# Reuse and rename resources made by earlier versions instead of duplicating.
+LEGACY_ROLE_NAMES = {key: f"LF Alerts | {name}" for key, name in ROLE_NAMES.items()}
+LEGACY_WEBHOOK_NAMES = {key: f"Loungefly {name}" for key, name in WEBHOOK_NAMES.items()}
 
 
 async def ensure_alert_roles(
@@ -46,6 +47,11 @@ async def ensure_alert_roles(
                 continue
         else:
             matches = [role for role in guild.roles if role.name == name]
+            if not matches:
+                matches = [
+                    role for role in guild.roles
+                    if role.name == LEGACY_ROLE_NAMES[key]
+                ]
             if len(matches) > 1:
                 LOGGER.warning("discord_alert_role_ambiguous", extra={
                     "guild_id": guild.id, "role_name": name,
@@ -66,6 +72,16 @@ async def ensure_alert_roles(
                     })
                     continue
         if role is not None:
+            if role.name == LEGACY_ROLE_NAMES[key]:
+                try:
+                    role = await role.edit(name=name, reason=CREATION_REASON)
+                    LOGGER.info("discord_alert_role_renamed", extra={
+                        "guild_id": guild.id, "role_id": role.id, "role_name": name,
+                    })
+                except discord.HTTPException:
+                    LOGGER.warning("discord_alert_role_rename_failed", extra={
+                        "guild_id": guild.id, "role_id": role.id,
+                    })
             resolved[key] = role
     return resolved
 
@@ -103,7 +119,7 @@ async def ensure_alert_webhooks(
             continue
         ours = [
             hook for hook in webhooks
-            if hook.name == WEBHOOK_NAMES[key]
+            if hook.name in {WEBHOOK_NAMES[key], LEGACY_WEBHOOK_NAMES[key]}
             and hook.user is not None and hook.user.id == bot_user_id
             and hook.url
         ]
@@ -130,5 +146,17 @@ async def ensure_alert_webhooks(
                 })
                 continue
         if matching is not None and matching.url:
+            if matching.name == LEGACY_WEBHOOK_NAMES[key]:
+                try:
+                    matching = await matching.edit(
+                        name=WEBHOOK_NAMES[key], reason=CREATION_REASON,
+                    )
+                    LOGGER.info("discord_alert_webhook_renamed", extra={
+                        "channel_id": channel.id, "channel_key": key,
+                    })
+                except discord.HTTPException:
+                    LOGGER.warning("discord_alert_webhook_rename_failed", extra={
+                        "channel_id": channel.id, "channel_key": key,
+                    })
             result[key] = channel.id, matching.url
     return result

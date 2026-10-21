@@ -150,14 +150,14 @@ restart; unrelated webhooks/roles are never deleted or edited.
 
 | Text channel | Alert role | Managed webhook |
 | --- | --- | --- |
-| `lf-new-products` | LF Alerts \| New Products | Loungefly New Products |
-| `lf-restocks` | LF Alerts \| Restocks | Loungefly Restocks |
-| `lf-preorders` | LF Alerts \| Preorders | Loungefly Preorders |
-| `lf-price-changes` | LF Alerts \| Price Changes | Loungefly Price Changes |
-| `lf-releases` | LF Alerts \| Releases | Loungefly Releases |
-| `lf-stock-updates` | LF Alerts \| Stock Updates | Loungefly Stock Updates |
-| `lf-product-updates` | LF Alerts \| Product Updates | Loungefly Product Updates |
-| `lf-monitor-status` | LF Alerts \| Monitor Status | Loungefly Monitor Status |
+| `lf-new-products` | New Products | New Products |
+| `lf-restocks` | Restocks | Restocks |
+| `lf-preorders` | Preorders | Preorders |
+| `lf-price-changes` | Price Changes | Price Changes |
+| `lf-releases` | Releases | Releases |
+| `lf-stock-updates` | Stock Updates | Stock Updates |
+| `lf-product-updates` | Product Updates | Product Updates |
+| `lf-monitor-status` | Monitor Status | Monitor Status |
 
 Each group covers the relevant detailed event types, as listed in
 `app/notifications/channel_setup.py`. Channel/role creation and webhook
