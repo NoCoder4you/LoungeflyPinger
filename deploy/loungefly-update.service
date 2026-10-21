@@ -3,6 +3,9 @@ Description=Update Loungefly monitor before startup
 Wants=network-online.target
 After=network-online.target
 Before=loungefly-monitor.service
+# Avoid the normal boot updater running again when the external supervisor
+# starts the candidate while holding the production update lock.
+ConditionPathExists=!/home/pi/LoungeflyPinger/data/.discord-update-in-progress
 
 [Service]
 Type=oneshot
