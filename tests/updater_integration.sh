@@ -30,7 +30,7 @@ echo "updater integration/static safeguards: PASS"
 # End-to-end fast-forward in disposable repositories. All Python build actions
 # and service discovery are faked; no installed checkout or service is touched.
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/loungefly updater test.XXXXXX")
-trap 'rm -rf -- "$tmp"' EXIT
+trap 'result=$?; if (( result != 0 )); then echo "Updater integration failed near line $LINENO" >&2; for path in "$tmp"/failed-health.log "$tmp"/healthy.log "$tmp"/no-change.log "$tmp"/application*/logs/updater.log; do if [[ -f "$path" ]]; then echo "===== $path =====" >&2; tail -n 60 "$path" >&2; fi; done; fi; rm -rf -- "$tmp"; exit "$result"' EXIT
 git init --bare -q "$tmp/remote.git"
 git init -q -b main "$tmp/source"
 git -C "$tmp/source" config user.email test@example.invalid
