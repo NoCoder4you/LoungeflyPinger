@@ -33,4 +33,4 @@ def test_runtime_updater_state_is_ignored() -> None:
 
 
 def test_shell_scripts_parse() -> None:
-    subprocess.run(["bash", "-n", "update.sh", "deploy/update.sh"], cwd=ROOT, check=True)
+    subprocess.run(["bash", "-n", "update.sh", "deploy/update.sh", "deploy/loungefly-discord-update-supervisor.sh"], cwd=ROOT, check=True)
