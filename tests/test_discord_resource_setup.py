@@ -119,3 +119,18 @@ async def test_missing_manage_webhooks_isolated_per_channel() -> None:
     )
     assert "lf-restocks" not in result
     assert "lf-releases" in result
+
+
+@pytest.mark.asyncio
+async def test_role_mentions_are_opt_in_and_creation_is_mentionable() -> None:
+    guild = FakeGuild()
+    original = guild.create_role
+    mentionable_values = []
+
+    async def create(*, name, mentionable, reason):
+        mentionable_values.append(mentionable)
+        return await original(name=name, mentionable=mentionable, reason=reason)
+
+    guild.create_role = create
+    await ensure_alert_roles(guild)
+    assert mentionable_values == [True] * len(ROLE_NAMES)
