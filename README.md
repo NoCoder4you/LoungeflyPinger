@@ -111,7 +111,7 @@ are configured in `data/discord_channels.json`, not `.env`.
 | --- | --- | --- |
 | `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
 | `DISCORD_SOLD_OUT_ENABLED` | No | `true`; set to `false` to suppress sold-out embeds |
-| `DISCORD_ALERT_MENTION_MODE` | No | `none`; `role` enables a targeted role, legacy `everyone` is accepted but never pings |
+| `DISCORD_ALERT_MENTION_MODE` | No | `category`; pings only the relevant alert role if present. `none` sends silently, `role` uses an explicitly configured ID. Legacy `everyone` never mass-pings. |
 | `DISCORD_ALERT_ROLE_ID` | In role mode | Positive role ID mentioned by product alerts |
 | `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
 | `DISCORD_BOT_TOKEN` | When enabled | Bot token, kept only in the environment |
@@ -596,14 +596,16 @@ monitor errors. Supported stock events include **NEW PRODUCT**, **RESTOCK**, **P
 events. Price comparisons use normalized `Decimal` values, so currency symbols or trailing zeroes
 do not create false changes.
 
-Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The safe
-default is `none`; `role` requires `DISCORD_ALERT_ROLE_ID`. Legacy `everyone` values
-are accepted but never ping the server. Payloads explicitly
-allow only the selected mention type, so scraped product and retailer text cannot ping users or
-roles. Product-removal alerts never mention and can be suppressed entirely with
+Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=category|none|role|everyone`. The safe
+default is `category`, which pings only the relevant alert role when available and otherwise
+sends silently. `none` disables all pings; `role` requires `DISCORD_ALERT_ROLE_ID`.
+Legacy `everyone` settings never mass-ping (but may use a category role).
+Payloads explicitly allow only the selected role to be mentioned, so scraped product and
+retailer text cannot ping users or other roles. Product-removal alerts never mention and can be suppressed entirely with
 `DISCORD_PRODUCT_REMOVED_ENABLED=false`. Set `DISCORD_SOLD_OUT_ENABLED=false` to suppress
 **SOLD OUT** (`OUT_OF_STOCK`) webhook alerts while continuing to monitor and record stock changes.
-Webhook URLs and role IDs belong only in `.env`.
+Webhook URLs and category-role IDs are stored in private `data/discord_channels.json`;
+the optional fallback `DISCORD_ALERT_ROLE_ID` belongs in `.env`.
 
 Authorized bot operators can inspect and change every outbound event category at runtime with
 `/alerts list`, `/alerts enable <alert_type>`, and `/alerts disable <alert_type>`. These overrides
