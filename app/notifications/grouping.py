@@ -23,6 +23,8 @@ _MAX_FIELD_CHARS = 1024
 _RETAILER_FIELDS = {
     "Retailer", "Status", "Price", "Saving", "Previous Status",
     "Quick Links", "EMP Regional Stores", "Retailer ETA",
+    "SKU", "Product ID", "Exclusive", "Exclusive Retailer", "Exclusive Region",
+    "First Seen", "Restocked",
 }
 
 
@@ -94,7 +96,7 @@ def _link_line(offer: dict[str, str | None]) -> str:
     if offer.get("price"):
         currency = offer.get("currency") or ""
         price = (f"£{offer['price']}" if currency == "GBP"
-                 else f"\${offer['price']}" if currency == "USD"
+                 else f"${offer['price']}" if currency == "USD"
                  else f"{currency} {offer['price']}")
         line += f" — {price}"
     if offer.get("availability"):
@@ -111,6 +113,7 @@ def combined_payload(base: dict[str, Any], offers: list[dict[str, str | None]]) 
     payload = deepcopy(base)
     embed = payload["embeds"][0]
     embed.pop("author", None)
+    embed.pop("url", None)
     # A single retailer's price/status and cart button are misleading after merging.
     fields = [field for field in embed.get("fields", []) if field["name"] not in _RETAILER_FIELDS]
     used = len(embed.get("title", "")) + len(embed.get("description", ""))
