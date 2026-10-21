@@ -96,6 +96,7 @@ class DiscordBotConfig:
     guild_id: int | None = None
     allowed_user_ids: frozenset[int] = frozenset()
     allowed_role_ids: frozenset[int] = frozenset()
+    auto_create_alert_channels: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,12 +303,16 @@ def load_config(
     enabled_value = os.getenv("DISCORD_BOT_ENABLED", "false").strip().casefold()
     if enabled_value not in {"true", "false"}:
         raise ConfigurationError("DISCORD_BOT_ENABLED must be true or false")
+    auto_channels_value = os.getenv("DISCORD_AUTO_CREATE_ALERT_CHANNELS", "true").strip().casefold()
+    if auto_channels_value not in {"true", "false"}:
+        raise ConfigurationError("DISCORD_AUTO_CREATE_ALERT_CHANNELS must be true or false")
     discord_bot = DiscordBotConfig(
         enabled=enabled_value == "true",
         token=os.getenv("DISCORD_BOT_TOKEN") or None,
         guild_id=discord_id("DISCORD_BOT_GUILD_ID"),
         allowed_user_ids=discord_ids("DISCORD_BOT_ALLOWED_USER_IDS"),
         allowed_role_ids=discord_ids("DISCORD_BOT_ALLOWED_ROLE_IDS"),
+        auto_create_alert_channels=auto_channels_value == "true",
     )
     if discord_bot.enabled and not discord_bot.token:
         raise ConfigurationError("DISCORD_BOT_TOKEN is required when the bot is enabled")

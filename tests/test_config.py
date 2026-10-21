@@ -228,3 +228,16 @@ def test_invalid_type_webhook_is_rejected_without_leaking_secret(
     with pytest.raises(ConfigurationError, match="DISCORD_WEBHOOK_RESTOCK_URL") as exc:
         load_config(path, tmp_path / ".env")
     assert url not in str(exc.value)
+
+def test_auto_channel_setup_defaults_on_and_can_be_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "settings.yaml"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("DISCORD_AUTO_CREATE_ALERT_CHANNELS", raising=False)
+    assert load_config(path, tmp_path / ".env").discord_bot.auto_create_alert_channels
+    monkeypatch.setenv("DISCORD_AUTO_CREATE_ALERT_CHANNELS", "false")
+    assert not load_config(path, tmp_path / ".env").discord_bot.auto_create_alert_channels
+    monkeypatch.setenv("DISCORD_AUTO_CREATE_ALERT_CHANNELS", "invalid")
+    with pytest.raises(ConfigurationError, match="DISCORD_AUTO_CREATE_ALERT_CHANNELS"):
+        load_config(path, tmp_path / ".env")
