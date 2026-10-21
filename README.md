@@ -111,7 +111,7 @@ are configured in `data/discord_channels.json`, not `.env`.
 | --- | --- | --- |
 | `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
 | `DISCORD_SOLD_OUT_ENABLED` | No | `true`; set to `false` to suppress sold-out embeds |
-| `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
+| `DISCORD_ALERT_MENTION_MODE` | No | `none`; `role` enables a targeted role, legacy `everyone` is accepted but never pings |
 | `DISCORD_ALERT_ROLE_ID` | In role mode | Positive role ID mentioned by product alerts |
 | `DISCORD_BOT_ENABLED` | No | `false`; enables the Discord control gateway when `true` |
 | `DISCORD_BOT_TOKEN` | When enabled | Bot token, kept only in the environment |
@@ -235,7 +235,7 @@ These commands require a webhook in `data/discord_channels.json`, and do not tes
 bot-managed channel delivery because they do not connect to the Discord gateway.
 
 With created alert roles, normal product events mention the respective role rather
-than `@everyone`. Where a role is unavailable, existing mention settings apply.
+than `@everyone`. Where a role is unavailable, messages are silent unless a specific role is configured.
 Product removals and monitor recovery messages do not mention roles.
 
 ### Discord Control Bot
@@ -596,8 +596,9 @@ monitor errors. Supported stock events include **NEW PRODUCT**, **RESTOCK**, **P
 events. Price comparisons use normalized `Decimal` values, so currency symbols or trailing zeroes
 do not create false changes.
 
-Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The backward-compatible
-default is `everyone`; `role` additionally requires `DISCORD_ALERT_ROLE_ID`. Payloads explicitly
+Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=none|role|everyone`. The safe
+default is `none`; `role` requires `DISCORD_ALERT_ROLE_ID`. Legacy `everyone` values
+are accepted but never ping the server. Payloads explicitly
 allow only the selected mention type, so scraped product and retailer text cannot ping users or
 roles. Product-removal alerts never mention and can be suppressed entirely with
 `DISCORD_PRODUCT_REMOVED_ENABLED=false`. Set `DISCORD_SOLD_OUT_ENABLED=false` to suppress
