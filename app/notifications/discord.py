@@ -185,13 +185,13 @@ def build_discord_payload(
             if alert.previous_price is not None and alert.previous_price != product.price:
                 price = f"{_money(alert.previous_price, product.currency)} → {price}"
             add("Price", price)
-        # Display the source retailer's ISO currency code, not a converted amount.
-        add("Currency", product.currency)
             if (alert.alert_type is AlertType.PRICE_DROP and alert.previous_price and
                     alert.previous_price > product.price):
                 saving = alert.previous_price - product.price
                 percent = saving * Decimal("100") / alert.previous_price
                 add("Saving", f"{_money(saving, product.currency)} ({percent.quantize(Decimal('0.1'))}%)")
+        # Display the source retailer's ISO currency code, not a converted amount.
+        add("Currency", product.currency)
         if product.sku:
             add("SKU", product.sku)
         elif product.loungefly_product_code:
