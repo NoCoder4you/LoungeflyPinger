@@ -97,6 +97,7 @@ class DiscordBotConfig:
     allowed_user_ids: frozenset[int] = frozenset()
     allowed_role_ids: frozenset[int] = frozenset()
     auto_create_alert_channels: bool = True
+    update_user_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,6 +307,7 @@ def load_config(
         guild_id=discord_id("DISCORD_BOT_GUILD_ID"),
         allowed_user_ids=discord_ids("DISCORD_BOT_ALLOWED_USER_IDS"),
         allowed_role_ids=discord_ids("DISCORD_BOT_ALLOWED_ROLE_IDS"),
+        update_user_ids=discord_ids("DISCORD_BOT_UPDATE_USER_IDS"),
         auto_create_alert_channels=auto_channels_value == "true",
     )
     if discord_bot.enabled and not discord_bot.token:
