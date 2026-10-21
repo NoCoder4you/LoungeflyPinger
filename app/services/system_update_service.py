@@ -43,7 +43,9 @@ class UpdateRequestService:
             return False
 
     def pending(self) -> bool:
-        return self.marker.exists()
+        # A second request must not be queued while the privileged supervisor
+        # has consumed the request marker but is still verifying a candidate.
+        return self.marker.exists() or (self.marker.parent / ".discord-update-in-progress").exists()
 
     def queue(self, discord_user_id: int) -> bool:
         """Atomically create the fixed request marker; do not accept input paths.
