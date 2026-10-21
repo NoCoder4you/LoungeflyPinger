@@ -290,14 +290,31 @@ confirm success or failure.
 
 **One-time installation on the Raspberry Pi (requires administrator access):**
 
+The update supervisor must be installed **outside the pi-writable repository**
+as a root-owned executable. Install the updated startup updater unit as well,
+so a supervised candidate restart does not launch a nested update.
+
 ```bash
 cd /home/pi/LoungeflyPinger
-sudo install -m 0644 deploy/loungefly-discord-update.path /etc/systemd/system/
-sudo install -m 0644 deploy/loungefly-discord-update.service /etc/systemd/system/
+sudo install -o root -g root -m 0755 deploy/loungefly-discord-update-supervisor.sh /usr/local/libexec/loungefly-discord-update
+sudo install -o root -g root -m 0644 deploy/loungefly-update.service /etc/systemd/system/
+sudo install -o root -g root -m 0644 deploy/loungefly-discord-update.path /etc/systemd/system/
+sudo install -o root -g root -m 0644 deploy/loungefly-discord-update.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now loungefly-discord-update.path
 sudo systemctl is-active loungefly-discord-update.path
 ```
+
+**Health and rollback handshake:** systemd stops the monitor and runs the
+existing updater as `pi`. The updater keeps the previous checkout, venv and
+SQLite backup pending; the root-owned supervisor restarts the candidate and
+checks that the service remains active with a stable nonzero MainPID for 20
+seconds. It acknowledges `healthy` **only after the checks pass**, allowing
+the updater to commit and delete its rollback venv. On startup failure, it
+stops the broken process **before** acknowledging failure; the updater then
+restores code, venv and SQLite, and the supervisor restarts the old version.
+The failed update is reported as failed even if recovery succeeds. Normal
+manual and boot updates retain their existing health-check behaviour.
 
 Add your Discord user ID to your private `.env` (not tracked in Git):
 
@@ -319,9 +336,9 @@ sudo journalctl -u loungefly-discord-update.service -n 80 --no-pager
 sudo journalctl -u loungefly-monitor.service -n 80 --no-pager
 ```
 
-The root-owned systemd unit performs only fixed stop/start systemctl actions,
-runs `update.sh` **as pi**, and requests monitor restart on both success and
-failure. Never give the Discord bot passwordless generic sudo, root execution,
+The root-owned systemd supervisor performs only fixed stop/start systemctl actions,
+runs `update.sh` **as pi**, verifies candidate health before committing, and
+restores/restarts the previous version on failure. Never give the Discord bot passwordless generic sudo, root execution,
 or access to arbitrary shell commands. Install the unit files under
 `/etc/systemd/system` rather than launching a repo-controlled script as root.
 
