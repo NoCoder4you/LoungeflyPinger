@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
-bash -n update.sh deploy/update.sh deploy/restore-backup.sh
+bash -n update.sh deploy/update.sh deploy/restore-backup.sh deploy/loungefly-discord-update-supervisor.sh
 grep -Fq 'git merge --ff-only' update.sh
 grep -Fq 'merge-base --is-ancestor' update.sh
 grep -Fq 'flock -n' update.sh
