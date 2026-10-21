@@ -41,6 +41,17 @@ APP_DIR="${APP_DIR:-$SCRIPT_DIR}"
 REMOTE="${REMOTE:-origin}"
 BRANCH="${BRANCH:-main}"
 SERVICE="${SERVICE:-loungefly-monitor.service}"
+# A root-owned supervisor can manage stop/start without granting sudo to pi.
+# The updater must await its health decision before finalising an activation.
+EXTERNAL_READY_FILE="${LOUNGEFLY_EXTERNAL_READY_FILE:-}"
+EXTERNAL_ACK_FILE="${LOUNGEFLY_EXTERNAL_ACK_FILE:-}"
+EXTERNAL_HEALTH=0
+if [[ -n "$EXTERNAL_READY_FILE" && -n "$EXTERNAL_ACK_FILE" ]]; then
+    EXTERNAL_HEALTH=1
+elif [[ -n "$EXTERNAL_READY_FILE" || -n "$EXTERNAL_ACK_FILE" ]]; then
+    echo "ERROR: incomplete externally supervised health handshake" >&2
+    exit 1
+fi
 
 # Pick the Python used to build candidate virtual environments.
 # LoungeflyPinger requires Python 3.12+, but Raspberry Pi OS may still expose
@@ -72,6 +83,7 @@ MAX_BACKUPS="${MAX_BACKUPS:-10}"
 HEALTH_SECONDS="${HEALTH_SECONDS:-20}"
 STOP_TIMEOUT_SECONDS="${STOP_TIMEOUT_SECONDS:-60}"
 KEEP_VENVS="${KEEP_VENVS:-3}"
+EXTERNAL_ACK_TIMEOUT_SECONDS="${EXTERNAL_ACK_TIMEOUT_SECONDS:-120}"
 
 STAGE_ROOT=""
 CANDIDATE_VENV=""
@@ -301,7 +313,11 @@ restore_old_venv() {
 rollback_live_install() {
     warn "Rolling back the failed update."
 
-    if service_exists && service_is_active; then
+    if (( EXTERNAL_HEALTH == 1 )) && service_is_active; then
+        warn "Unsafe rollback refused: external supervisor has not stopped the candidate."
+        return 1
+    fi
+    if (( EXTERNAL_HEALTH == 0 )) && service_exists && service_is_active; then
         systemctl_do stop "$SERVICE" || warn "Could not stop failed service during rollback."
         wait_until_inactive || warn "Service did not fully stop during rollback."
     fi
@@ -350,6 +366,10 @@ on_exit() {
     trap - EXIT
     set +e
 
+    if (( status != 0 )) && (( EXTERNAL_HEALTH == 1 )) && [[ -f "$EXTERNAL_READY_FILE" ]]; then
+        printf 'failed\n' >"$EXTERNAL_READY_FILE" || true
+    fi
+
     if (( status != 0 )); then
         if (( ROLLBACK_NEEDED == 1 )); then
             rollback_live_install
@@ -386,6 +406,12 @@ trap on_exit EXIT
 [[ "$MAX_BACKUPS" =~ ^[0-9]+$ ]] || die "MAX_BACKUPS must be a non-negative integer."
 [[ "$HEALTH_SECONDS" =~ ^[1-9][0-9]*$ ]] || die "HEALTH_SECONDS must be a positive integer."
 [[ "$STOP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || die "STOP_TIMEOUT_SECONDS must be a positive integer."
+[[ "$EXTERNAL_ACK_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || die "EXTERNAL_ACK_TIMEOUT_SECONDS must be a positive integer."
+if (( EXTERNAL_HEALTH == 1 )); then
+    [[ -f "$EXTERNAL_READY_FILE" && -w "$EXTERNAL_READY_FILE" ]]         || die "Externally supervised ready file is missing or unwritable."
+    [[ -f "$EXTERNAL_ACK_FILE" && -r "$EXTERNAL_ACK_FILE" ]]         || die "Externally supervised acknowledgement file is missing or unreadable."
+    [[ ! -L "$EXTERNAL_ACK_FILE" ]]         || die "Externally supervised acknowledgement must not be a symlink."
+fi
 [[ "$KEEP_VENVS" =~ ^[1-9][0-9]*$ ]] || die "KEEP_VENVS must be a positive integer."
 
 require_command git
@@ -477,6 +503,9 @@ fi
 
 if [[ "$OLD_COMMIT" == "$NEW_COMMIT" ]]; then
     log "Already up to date at $(short_sha "$OLD_COMMIT")."
+    if (( EXTERNAL_HEALTH == 1 )); then
+        printf 'no_change\n' >"$EXTERNAL_READY_FILE"
+    fi
     exit 0
 fi
 
@@ -524,7 +553,14 @@ fi
 
 # ---------- activation window ----------
 
-if service_exists && service_is_active; then
+if (( EXTERNAL_HEALTH == 1 )); then
+    # The privileged controller stopped the monitor and confirmed it is down.
+    # Never attempt privileged service commands from the updater process.
+    if service_is_active; then
+        die "Externally supervised activation requires the monitor to be stopped."
+    fi
+    log "Monitor stopped by the external update supervisor."
+elif service_exists && service_is_active; then
     WAS_ACTIVE=1
     log "Stopping $SERVICE for safe activation."
     systemctl_do stop "$SERVICE"
@@ -562,7 +598,24 @@ mv -T -- "$NEW_LINK" "$VENV_LINK"
     "$VENV_LINK/bin/python" -c 'import app.main'
 )
 
-if (( WAS_ACTIVE == 1 )); then
+if (( EXTERNAL_HEALTH == 1 )); then
+    # Retain the old venv, Git revision and SQLite backup until root verifies
+    # the restarted candidate and explicitly acknowledges it as healthy.
+    printf 'candidate_ready\n' >"$EXTERNAL_READY_FILE"
+    log "Waiting for external startup health verification."
+    EXTERNAL_ACK_RESULT=""
+    for ((second = 1; second <= EXTERNAL_ACK_TIMEOUT_SECONDS; second++)); do
+        case "$(cat -- "$EXTERNAL_ACK_FILE" 2>/dev/null || true)" in
+            healthy) EXTERNAL_ACK_RESULT="healthy"; break ;;
+            failed) EXTERNAL_ACK_RESULT="failed"; break ;;
+        esac
+        sleep 1
+    done
+    if [[ "$EXTERNAL_ACK_RESULT" != "healthy" ]]; then
+        die "External startup verification failed or timed out; rolling back."
+    fi
+    log "External supervisor confirmed the restarted monitor is healthy."
+elif (( WAS_ACTIVE == 1 )); then
     log "Starting $SERVICE with the new version."
     systemctl_do start "$SERVICE"
 
