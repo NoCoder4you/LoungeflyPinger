@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "category_name": "Loungefly Alerts",
+  "fallback_webhooks": {
+    "product": null,
+    "admin": null
+  },
+  "channels": {
+    "lf-new-products": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-restocks": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-preorders": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-price-changes": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-releases": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-stock-updates": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-product-updates": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    },
+    "lf-monitor-status": {
+      "channel_id": null,
+      "webhook_url": null,
+      "role_id": null,
+      "webhook_channel_id": null
+    }
+  }
+}

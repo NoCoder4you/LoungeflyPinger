@@ -29,8 +29,8 @@ Important operational safeguards:
 - Logs rotate by size. Defaults retain the active 5 MiB file plus three rotated files (about 20 MiB
   maximum). Webhook values are never logged by application code. The service also writes to the
   system journal, whose global retention is controlled by `journald.conf`.
-- Secrets are environment-only. `.env`, databases, backups, virtual environments, and logs are
-  excluded from Git.
+- Secrets stay out of Git: the bot token is in `.env`; optional webhook URLs are
+  in ignored private `data/discord_channels.json`.
 
 ## Requirements
 
@@ -104,12 +104,11 @@ that compatibility entry point forwards to the root updater. Reinstall the packa
 ## Configuration
 
 Copy `.env.example` to `.env`; never commit `.env`. `python-dotenv` loads it for manual runs and
-systemd loads the same file with `EnvironmentFile`.
+systemd loads the same file with `EnvironmentFile`. Channel IDs and webhook URLs
+are configured in `data/discord_channels.json`, not `.env`.
 
 | Environment variable | Required | Default/effect |
 | --- | --- | --- |
-| `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
-| `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
 | `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
 | `DISCORD_SOLD_OUT_ENABLED` | No | `true`; set to `false` to suppress sold-out embeds |
 | `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
@@ -119,6 +118,7 @@ systemd loads the same file with `EnvironmentFile`.
 | `DISCORD_BOT_GUILD_ID` | Recommended | Guild used for immediate, guild-scoped command registration |
 | `DISCORD_BOT_ALLOWED_USER_IDS` | For user authorization | Comma-separated Discord user IDs |
 | `DISCORD_BOT_ALLOWED_ROLE_IDS` | For role authorization | Comma-separated Discord role IDs |
+| `DISCORD_AUTO_CREATE_ALERT_CHANNELS` | No | `true`; automatically create missing channels and save IDs to JSON |
 | `LOUNGEFLY_DATABASE_PATH` | No | `data/loungefly.db` |
 | `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
 | `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number between later backups |
@@ -139,6 +139,90 @@ watch are ANDed, list values match any entry, and separate watches are ORed. Sup
 include URL/product ID/SKU/name, required or excluded keywords, franchise, character, retailers,
 product types, exclusivity, preorder, and maximum price.
 
+### Automatic Discord alert channels, roles and webhooks
+
+When the optional Discord control bot is enabled, it reconciles eight alert
+categories in the **configured Discord guild only**. It creates missing text
+channels under the `Loungefly Alerts` category, creates a matching **mentionable**
+notification role for each type, and creates a separately named **bot-owned
+webhook** for each channel. All matching resources are reused on reconnect or
+restart; unrelated webhooks/roles are never deleted or edited.
+
+| Text channel | Alert role | Managed webhook |
+| --- | --- | --- |
+| `lf-new-products` | New Products | New Products |
+| `lf-restocks` | Restocks | Restocks |
+| `lf-preorders` | Preorders | Preorders |
+| `lf-price-changes` | Price Changes | Price Changes |
+| `lf-releases` | Releases | Releases |
+| `lf-stock-updates` | Stock Updates | Stock Updates |
+| `lf-product-updates` | Product Updates | Product Updates |
+| `lf-monitor-status` | Monitor Status | Monitor Status |
+
+Each group covers the relevant detailed event types, as listed in
+`app/notifications/channel_setup.py`. Channel/role creation and webhook
+creation are enabled by default with `DISCORD_AUTO_CREATE_ALERT_CHANNELS=true`.
+Set `DISCORD_BOT_ENABLED=true` and `DISCORD_BOT_GUILD_ID` in `.env`, and
+grant the bot **Manage Channels**, **Manage Roles**, **Manage Webhooks**,
+**View Channel**, **Send Messages**, and **Embed Links** in Discord.
+No Administrator permission or Message Content intent is required.
+
+### Private JSON configuration
+
+All channel IDs, role IDs and webhook URLs belong in
+`data/discord_channels.json`. The bot creates this file on first startup,
+fills in discovered IDs and generated webhook URLs, and restricts the file to
+its owner. It is excluded from Git. A secret-free template is tracked at
+`config/discord_channels.example.json`.
+
+A single entry looks like:
+
+```json
+{
+  "lf-restocks": {
+    "channel_id": 123456789012345678,
+    "role_id": 234567890123456789,
+    "webhook_url": "https://discord.com/api/webhooks/WEBHOOK_ID/TOKEN",
+    "webhook_channel_id": 123456789012345678
+  }
+}
+```
+
+This is an **illustrative entry**, not a complete configuration or valid
+webhook. In the full JSON, entries are inside `channels`, alongside
+`version`, `category_name` and `fallback_webhooks`. The existing JSON
+format without `role_id` and `webhook_channel_id` is accepted; the fields
+are populated when the bot discovers/creates resources.
+
+You can interchange channels by changing a `channel_id` to another channel
+in the configured server. A missing `channel_id` or `role_id` is discovered
+by name or created; an invalid/nonexistent manually specified ID is logged
+rather than silently overwritten. You can supply your own webhook URL by
+setting `webhook_url` and `webhook_channel_id` to `null`. The bot never
+overwrites this manually supplied webhook. The `webhook_channel_id` field
+is internal metadata for bot-managed hooks; if you manually change a channel ID,
+the bot finds or creates the correct webhook for the new channel.
+
+**Delivery order:** (1) alert-category webhook, (2) bot message in the
+corresponding channel if that webhook fails, (3) the optional product/admin
+webhook from `fallback_webhooks` if channel delivery also fails. If there
+is no configured category webhook, delivery starts with the bot channel.
+A failed attempt is never marked delivered, so later retry remains possible.
+The bot keeps the same product embeds and purchase link buttons.
+
+Category roles are used for targeted notifications instead of `@everyone`
+when present; `DISCORD_ALERT_MENTION_MODE=none` disables them. Product-removal
+and monitor-recovery messages remain non-pinging. Members must be assigned
+the relevant role to receive role mentions; this setup does **not**
+automatically assign subscriber roles to users.
+
+**Restart `loungefly-monitor.service` after editing JSON.** Treat webhook
+URLs as secret bearer credentials. The bot token and guild/authorization
+configuration remain in `.env`, but channel IDs and webhooks do not.
+Older `DISCORD_WEBHOOK_URL`, `DISCORD_ADMIN_WEBHOOK_URL` and
+`DISCORD_WEBHOOK_*_URL` environment values are no longer read. Copy any
+existing fallback URLs into the private JSON before deploying.
+
 ### Discord webhook test
 
 ```bash
@@ -147,20 +231,22 @@ sudo -u pi .venv/bin/python -m app.tools.test_notification
 sudo -u pi .venv/bin/python -m app.tools.test_notification --admin
 ```
 
-These commands refuse to send when the applicable URL is blank. Treat webhook URLs as passwords;
-rotate one in Discord immediately if it is exposed.
+These commands require a webhook in `data/discord_channels.json`, and do not test
+bot-managed channel delivery because they do not connect to the Discord gateway.
 
-Discord notifications mention `@everyone` so subscribers are alerted, except for product-removal
-notifications. The webhook's Discord channel permissions must allow everyone mentions for the
-mention to notify channel members.
+With created alert roles, normal product events mention the respective role rather
+than `@everyone`. Where a role is unavailable, existing mention settings apply.
+Product removals and monitor recovery messages do not mention roles.
 
 ### Discord Control Bot
 
 The optional control bot runs on the monitor's asyncio loop and is separate from outbound webhook
 alerts. In the Discord Developer Portal, create an application and bot, keep its token in `.env`,
-and invite it with the `bot` and `applications.commands` scopes. It needs only **View Channels** and
-**Send Messages** (plus **Attach Files** for `/watch export`); Administrator and Message Content
-intent and other privileged intents are not required. Set `DISCORD_BOT_GUILD_ID=<server id>` for
+and invite it with the `bot` and `applications.commands` scopes. For automatic channel/role/webhook setup it additionally requires **Manage Channels**,
+**Manage Roles**, **Manage Webhooks**, and **Embed Links**; for the control
+bot alone, **View Channels** and **Send Messages** suffice (plus **Attach
+Files** for `/watch export`). Administrator,
+Message Content intent, and other privileged intents are not required. Set `DISCORD_BOT_GUILD_ID=<server id>` for
 production so commands are registered only in that server and synchronize promptly. Leaving the
 guild ID blank registers global application commands, which can take longer to appear. Leaving
 `DISCORD_BOT_ENABLED=false` makes no gateway connection and preserves the pre-bot operation.

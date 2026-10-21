@@ -18,6 +18,9 @@ from app.services.watchlist_manager import StoredWatchRule, WatchlistManager
 from app.services.retailer_manager import RetailerManager, ScanAlreadyRunning
 from app.scheduler import Scheduler
 from app.services.notification_settings import NotificationSettingsService
+from app.notifications import DiscordNotifier
+from app.notifications.channel_setup import ensure_alert_channels, CHANNEL_ALERT_TYPES
+from app.notifications.resource_setup import ensure_alert_roles, ensure_alert_webhooks
 
 LOGGER = logging.getLogger("monitor.discord_control")
 
@@ -109,11 +112,14 @@ class DiscordControlService:
     def __init__(self, config: DiscordBotConfig, manager: WatchlistManager, database: Database,
                  app_config: AppConfig, retailers: RetailerManager | None = None,
                  scheduler: Scheduler | None = None,
-                 notification_settings: NotificationSettingsService | None = None) -> None:
+                 notification_settings: NotificationSettingsService | None = None,
+                 notifier: DiscordNotifier | None = None) -> None:
         self.config, self.manager, self.database, self.app_config = config, manager, database, app_config
         self.started_at = time.monotonic()
         self.retailers, self.scheduler = retailers, scheduler
         self.notification_settings = notification_settings
+        self.notifier = notifier
+        self._channel_setup_lock = asyncio.Lock()
         self.client: discord.Client | None = None
         self.tree: app_commands.CommandTree | None = None
         self._task: asyncio.Task[None] | None = None
@@ -153,7 +159,80 @@ class DiscordControlService:
             })
 
         await self._sync_commands()
+        await self._configure_alert_channels()
         await self._update_presence()
+
+    async def _configure_alert_channels(self) -> None:
+        if self.notifier is None:
+            return
+        assert self.client is not None
+        if self.config.guild_id is None:
+            LOGGER.warning("discord_alert_channels_require_guild_id")
+            return
+        guild = self.client.get_guild(self.config.guild_id)
+        if guild is None:
+            # Only provision and deliver within the explicitly configured guild.
+            return
+        async with self._channel_setup_lock:
+            store = self.app_config.channel_store
+            try:
+                if store is not None:
+                    store.load_or_create()
+                routes = await ensure_alert_channels(
+                    guild,
+                    existing_ids=store.channel_ids if store is not None else None,
+                    category_name=store.category_name if store is not None else "Loungefly Alerts",
+                    create_missing=self.config.auto_create_alert_channels,
+                )
+                by_name = {
+                    name: routes[types[0]] for name, types in CHANNEL_ALERT_TYPES.items()
+                    if types[0] in routes
+                }
+                if store is not None:
+                    store.save_discovered_resources(
+                        channel_ids={name: channel.id for name, channel in by_name.items()},
+                    )
+                roles = await ensure_alert_roles(
+                    guild, configured_ids=store.role_ids if store is not None else None,
+                    create_missing=self.config.auto_create_alert_channels,
+                )
+                if store is not None:
+                    store.save_discovered_resources(
+                        role_ids={name: role.id for name, role in roles.items()},
+                    )
+                webhooks = await ensure_alert_webhooks(
+                    by_name,
+                    bot_user_id=self.client.user.id,
+                    configured_urls=store.channel_webhooks if store is not None else None,
+                    managed_channel_ids=(
+                        store.managed_webhook_channel_ids if store is not None else None
+                    ),
+                    create_missing=self.config.auto_create_alert_channels,
+                )
+                if store is not None:
+                    store.save_discovered_resources(managed_webhooks=webhooks)
+                    store.load_or_create()
+                    self.notifier.set_routing(
+                        product_webhook=store.fallback_product_webhook,
+                        admin_webhook=store.fallback_admin_webhook,
+                        type_webhooks=store.type_webhooks,
+                    )
+            except Exception:
+                LOGGER.exception("discord_alert_channel_setup_failed")
+                return
+            self.notifier.set_auto_channels(routes)
+            self.notifier.set_auto_roles({
+                alert_type: role.id
+                for name, role in roles.items()
+                for alert_type in CHANNEL_ALERT_TYPES[name]
+            })
+            LOGGER.info("discord_alert_channels_ready", extra={
+                "guild_id": guild.id,
+                "channel_count": len(by_name),
+                "webhook_count": len(webhooks),
+                "role_count": len(roles),
+                "routed_types": len(routes),
+            })
 
     async def update_scan_presence(self, key: str, display_name: str, active: bool) -> None:
         """Reflect the most recently started active retailer scan in Discord."""
@@ -236,6 +315,9 @@ class DiscordControlService:
             LOGGER.exception("discord_control_stopped_unexpectedly")
 
     async def close(self) -> None:
+        if self.notifier is not None:
+            self.notifier.set_auto_channels({})
+            self.notifier.set_auto_roles({})
         if self.client is not None and not self.client.is_closed():
             await self.client.close()
         if self._task is not None:

@@ -11,8 +11,11 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from dotenv import load_dotenv
 
+from app.models import AlertType
+
 if TYPE_CHECKING:
     from app.watchlist import Watchlist
+    from app.notifications.channel_config import ChannelRoutingStore
 
 
 class ConfigurationError(ValueError):
@@ -74,7 +77,7 @@ class LoggingConfig:
 
 @dataclass(frozen=True, slots=True)
 class NotificationConfig:
-    """Secret notification endpoints loaded exclusively from the environment."""
+    """Notification destinations loaded from private JSON, never from environment."""
 
     discord_webhook_url: str | None = None
     discord_admin_webhook_url: str | None = None
@@ -82,6 +85,8 @@ class NotificationConfig:
     discord_alert_role_id: int | None = None
     product_removed_enabled: bool = True
     sold_out_enabled: bool = True
+    # Explicit event-type webhooks override the existing product/admin fallbacks.
+    discord_type_webhooks: dict[AlertType, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +96,7 @@ class DiscordBotConfig:
     guild_id: int | None = None
     allowed_user_ids: frozenset[int] = frozenset()
     allowed_role_ids: frozenset[int] = frozenset()
+    auto_create_alert_channels: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +114,7 @@ class AppConfig:
     backup_initial_delay_seconds: float = 30
     backup_count: int = 7
     discord_bot: DiscordBotConfig = field(default_factory=DiscordBotConfig)
+    channel_store: ChannelRoutingStore | None = None
 
 
 def _positive(value: Any, name: str, cast: type = float) -> Any:
@@ -253,13 +260,22 @@ def load_config(
     sold_out_value = os.getenv("DISCORD_SOLD_OUT_ENABLED", "true").strip().casefold()
     if sold_out_value not in {"true", "false"}:
         raise ConfigurationError("DISCORD_SOLD_OUT_ENABLED must be true or false")
+    # Load channel IDs and webhook URLs from a private, deployment-local JSON.
+    # Only bot token, guild and mention settings belong in the environment.
+    from app.notifications.channel_config import ChannelRoutingStore, ChannelConfigurationError
+    channel_store = ChannelRoutingStore(Path(env_path).parent / "data" / "discord_channels.json")
+    try:
+        channel_store.load_or_create()
+    except ChannelConfigurationError as exc:
+        raise ConfigurationError(str(exc)) from exc
     notifications = NotificationConfig(
-        discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
-        discord_admin_webhook_url=os.getenv("DISCORD_ADMIN_WEBHOOK_URL") or None,
+        discord_webhook_url=channel_store.fallback_product_webhook,
+        discord_admin_webhook_url=channel_store.fallback_admin_webhook,
         discord_alert_mention_mode=mention_mode,
         discord_alert_role_id=role_id,
         product_removed_enabled=product_removed_value == "true",
         sold_out_enabled=sold_out_value == "true",
+        discord_type_webhooks=channel_store.type_webhooks,
     )
     def discord_id(name: str) -> int | None:
         raw_value = os.getenv(name, "").strip()
@@ -281,12 +297,16 @@ def load_config(
     enabled_value = os.getenv("DISCORD_BOT_ENABLED", "false").strip().casefold()
     if enabled_value not in {"true", "false"}:
         raise ConfigurationError("DISCORD_BOT_ENABLED must be true or false")
+    auto_channels_value = os.getenv("DISCORD_AUTO_CREATE_ALERT_CHANNELS", "true").strip().casefold()
+    if auto_channels_value not in {"true", "false"}:
+        raise ConfigurationError("DISCORD_AUTO_CREATE_ALERT_CHANNELS must be true or false")
     discord_bot = DiscordBotConfig(
         enabled=enabled_value == "true",
         token=os.getenv("DISCORD_BOT_TOKEN") or None,
         guild_id=discord_id("DISCORD_BOT_GUILD_ID"),
         allowed_user_ids=discord_ids("DISCORD_BOT_ALLOWED_USER_IDS"),
         allowed_role_ids=discord_ids("DISCORD_BOT_ALLOWED_ROLE_IDS"),
+        auto_create_alert_channels=auto_channels_value == "true",
     )
     if discord_bot.enabled and not discord_bot.token:
         raise ConfigurationError("DISCORD_BOT_TOKEN is required when the bot is enabled")
@@ -330,5 +350,5 @@ def load_config(
     return AppConfig(
         monitor, database_path, logging_config, notifications, retailers, watchlist, price_alerts,
         release_alerts, backup_directory, backup_interval_hours, backup_initial_delay_seconds,
-        backup_count, discord_bot,
+        backup_count, discord_bot, channel_store,
     )

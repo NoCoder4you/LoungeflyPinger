@@ -229,3 +229,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Locally managed Discord channel IDs and secret webhook tokens
+/data/discord_channels.json
+/data/discord_channels.json.*
