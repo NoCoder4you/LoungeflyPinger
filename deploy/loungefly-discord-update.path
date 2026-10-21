@@ -1,0 +1,9 @@
+[Unit]
+Description=Listen for authorized Discord update requests
+
+[Path]
+PathExists=/home/pi/LoungeflyPinger/data/.discord-update-request
+Unit=loungefly-discord-update.service
+
+[Install]
+WantedBy=multi-user.target
