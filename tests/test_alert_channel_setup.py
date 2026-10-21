@@ -90,3 +90,35 @@ async def test_missing_permissions_dont_prevent_other_channels() -> None:
     routes = await ensure_alert_channels(guild)
     assert AlertType.RELEASING_SOON not in routes
     assert AlertType.RESTOCK in routes
+
+
+@pytest.mark.asyncio
+async def test_configured_channel_ids_take_precedence_over_names() -> None:
+    guild = FakeGuild()
+    custom = FakeChannel("my-personal-restock-channel", 8765)
+    guild.text_channels = [custom]
+    routes = await ensure_alert_channels(guild, existing_ids={"lf-restocks": 8765})
+    assert routes[AlertType.RESTOCK] is custom
+    assert guild.created_channels == len(CHANNEL_ALERT_TYPES) - 1
+
+
+@pytest.mark.asyncio
+async def test_stale_manual_channel_id_is_not_silently_replaced() -> None:
+    guild = FakeGuild()
+    guild.text_channels = [FakeChannel("lf-restocks", 100)]
+    routes = await ensure_alert_channels(guild, existing_ids={"lf-restocks": 999})
+    assert AlertType.RESTOCK not in routes
+    assert len([ch for ch in guild.text_channels if ch.name == "lf-restocks"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_disabled_auto_creation_still_resolves_manual_channel_ids() -> None:
+    guild = FakeGuild()
+    existing = FakeChannel("custom", 1234)
+    guild.text_channels.append(existing)
+    routes = await ensure_alert_channels(
+        guild, existing_ids={"lf-restocks": 1234}, create_missing=False
+    )
+    assert routes[AlertType.RESTOCK] is existing
+    assert guild.created_categories == 0
+    assert guild.created_channels == 0

@@ -64,16 +64,23 @@ def test_price_alert_configuration(tmp_path: Path) -> None:
     assert config.price_alerts.minimum_drop_value == 7
 
 
-def test_discord_webhooks_are_loaded_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_discord_webhooks_load_from_json_not_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
     path = tmp_path / "settings.yaml"
     path.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/product")
-    monkeypatch.setenv("DISCORD_ADMIN_WEBHOOK_URL", "https://discord.example/admin")
-
-    config = load_config(path, tmp_path / ".env")
-
-    assert config.notifications.discord_webhook_url == "https://discord.example/product"
-    assert config.notifications.discord_admin_webhook_url == "https://discord.example/admin"
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/ignored")
+    initial = load_config(path, tmp_path / ".env")
+    assert initial.notifications.discord_webhook_url is None
+    json_path = tmp_path / "data" / "discord_channels.json"
+    data = json.loads(json_path.read_text())
+    data["fallback_webhooks"]["product"] = "https://discord.example/product"
+    data["fallback_webhooks"]["admin"] = "https://discord.example/admin"
+    json_path.write_text(json.dumps(data))
+    loaded = load_config(path, tmp_path / ".env")
+    assert loaded.notifications.discord_webhook_url == "https://discord.example/product"
+    assert loaded.notifications.discord_admin_webhook_url == "https://discord.example/admin"
 
 
 def test_product_removed_notifications_can_be_disabled(
@@ -198,36 +205,42 @@ def test_discord_bot_configuration_parsing(tmp_path: Path, monkeypatch: pytest.M
     assert config.allowed_user_ids == frozenset({1, 2})
     assert config.allowed_role_ids == frozenset({3})
 
-def test_event_specific_webhooks_load_without_changing_defaults(
+def test_event_specific_webhooks_are_loaded_from_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    import json
+    from app.models import AlertType
     path = tmp_path / "settings.yaml"
     path.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("DISCORD_WEBHOOK_RESTOCK_URL", "https://discord.example/restocks")
-    monkeypatch.setenv("DISCORD_WEBHOOK_PRICE_DROP_URL", "https://discord.example/prices")
-    monkeypatch.setenv("DISCORD_WEBHOOK_MONITOR_ERROR_URL", "https://discord.example/errors")
-    monkeypatch.setenv("DISCORD_WEBHOOK_NEW_PRODUCT_URL", "  ")
-    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/default")
-    from app.models import AlertType
-    cfg = load_config(path, tmp_path / ".env").notifications
-    assert cfg.discord_webhook_url == "https://discord.example/default"
-    assert cfg.discord_type_webhooks == {
+    monkeypatch.setenv("DISCORD_WEBHOOK_RESTOCK_URL", "https://discord.example/ignored")
+    config = load_config(path, tmp_path / ".env")
+    assert not config.notifications.discord_type_webhooks
+    json_path = tmp_path / "data" / "discord_channels.json"
+    data = json.loads(json_path.read_text())
+    data["channels"]["lf-restocks"]["webhook_url"] = "https://discord.example/restocks"
+    json_path.write_text(json.dumps(data))
+    loaded = load_config(path, tmp_path / ".env")
+    assert loaded.notifications.discord_type_webhooks == {
         AlertType.RESTOCK: "https://discord.example/restocks",
-        AlertType.PRICE_DROP: "https://discord.example/prices",
-        AlertType.MONITOR_ERROR: "https://discord.example/errors",
+        AlertType.AVAILABILITY: "https://discord.example/restocks",
     }
 
 
-@pytest.mark.parametrize("url", ["http://discord.example", "not-a-url", "https://"])
-def test_invalid_type_webhook_is_rejected_without_leaking_secret(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, url: str
+def test_invalid_json_webhook_raises_config_error_without_leaking_secret(
+    tmp_path: Path
 ) -> None:
+    import json
     path = tmp_path / "settings.yaml"
     path.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("DISCORD_WEBHOOK_RESTOCK_URL", url)
-    with pytest.raises(ConfigurationError, match="DISCORD_WEBHOOK_RESTOCK_URL") as exc:
+    load_config(path, tmp_path / ".env")
+    json_path = tmp_path / "data" / "discord_channels.json"
+    data = json.loads(json_path.read_text())
+    data["channels"]["lf-restocks"]["webhook_url"] = "http://bad.example/secret"
+    json_path.write_text(json.dumps(data))
+    with pytest.raises(ConfigurationError) as exc:
         load_config(path, tmp_path / ".env")
-    assert url not in str(exc.value)
+    assert "secret" not in str(exc.value)
+
 
 def test_auto_channel_setup_defaults_on_and_can_be_disabled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

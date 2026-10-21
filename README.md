@@ -29,8 +29,8 @@ Important operational safeguards:
 - Logs rotate by size. Defaults retain the active 5 MiB file plus three rotated files (about 20 MiB
   maximum). Webhook values are never logged by application code. The service also writes to the
   system journal, whose global retention is controlled by `journald.conf`.
-- Secrets are environment-only. `.env`, databases, backups, virtual environments, and logs are
-  excluded from Git.
+- Secrets stay out of Git: the bot token is in `.env`; optional webhook URLs are
+  in ignored private `data/discord_channels.json`.
 
 ## Requirements
 
@@ -104,13 +104,11 @@ that compatibility entry point forwards to the root updater. Reinstall the packa
 ## Configuration
 
 Copy `.env.example` to `.env`; never commit `.env`. `python-dotenv` loads it for manual runs and
-systemd loads the same file with `EnvironmentFile`.
+systemd loads the same file with `EnvironmentFile`. Channel IDs and webhook URLs
+are configured in `data/discord_channels.json`, not `.env`.
 
 | Environment variable | Required | Default/effect |
 | --- | --- | --- |
-| `DISCORD_WEBHOOK_URL` | No | Product alert webhook; blank disables product delivery |
-| `DISCORD_ADMIN_WEBHOOK_URL` | No | Retailer failure/recovery webhook; blank disables admin delivery |
-| `DISCORD_WEBHOOK_<ALERT_TYPE>_URL` | No | Optional webhook for a particular event type, e.g. `DISCORD_WEBHOOK_RESTOCK_URL` |
 | `DISCORD_PRODUCT_REMOVED_ENABLED` | No | `true`; set to `false` to suppress product-removal embeds |
 | `DISCORD_SOLD_OUT_ENABLED` | No | `true`; set to `false` to suppress sold-out embeds |
 | `DISCORD_ALERT_MENTION_MODE` | No | `everyone` for compatibility; may be `none`, `role`, or `everyone` |
@@ -120,6 +118,7 @@ systemd loads the same file with `EnvironmentFile`.
 | `DISCORD_BOT_GUILD_ID` | Recommended | Guild used for immediate, guild-scoped command registration |
 | `DISCORD_BOT_ALLOWED_USER_IDS` | For user authorization | Comma-separated Discord user IDs |
 | `DISCORD_BOT_ALLOWED_ROLE_IDS` | For role authorization | Comma-separated Discord role IDs |
+| `DISCORD_AUTO_CREATE_ALERT_CHANNELS` | No | `true`; automatically create missing channels and save IDs to JSON |
 | `LOUNGEFLY_DATABASE_PATH` | No | `data/loungefly.db` |
 | `LOUNGEFLY_BACKUP_DIRECTORY` | No | `data/backups` |
 | `LOUNGEFLY_BACKUP_INTERVAL_HOURS` | No | `24`; positive number between later backups |
@@ -140,70 +139,59 @@ watch are ANDed, list values match any entry, and separate watches are ORed. Sup
 include URL/product ID/SKU/name, required or excluded keywords, franchise, character, retailers,
 product types, exclusivity, preorder, and maximum price.
 
-### Separate Discord channels by alert type
+### JSON-based Discord channel routing
 
-**Automatic setup (recommended):** when `DISCORD_BOT_ENABLED=true`,
+All alert channel IDs and webhook URLs are stored in the **private, editable**
+`data/discord_channels.json` file. The application creates it on first startup
+with empty IDs and webhooks; do not commit this file. A secret-free example
+is tracked as `config/discord_channels.example.json`. Use **JSON**, not
+`.env`, to switch alert destinations:
+
+```json
+{
+  "version": 1,
+  "category_name": "Loungefly Alerts",
+  "fallback_webhooks": {"product": null, "admin": null},
+  "channels": {
+    "lf-new-products": {"channel_id": null, "webhook_url": null},
+    "lf-restocks": {"channel_id": 123456789012345678, "webhook_url": null},
+    "lf-preorders": {"channel_id": null, "webhook_url": null},
+    "lf-price-changes": {"channel_id": null, "webhook_url": null},
+    "lf-releases": {"channel_id": null, "webhook_url": null},
+    "lf-stock-updates": {"channel_id": null, "webhook_url": null},
+    "lf-product-updates": {"channel_id": null, "webhook_url": null},
+    "lf-monitor-status": {"channel_id": null, "webhook_url": null}
+  }
+}
+```
+
+The displayed ID is illustrative; replace it with the ID of an existing
+text channel in the configured guild, or leave it `null` for auto-discovery.
+The bot will **create the Loungefly Alerts category and any missing channels**,
+or reuse existing uniquely named channels, when `DISCORD_BOT_ENABLED=true`,
 `DISCORD_BOT_GUILD_ID` is set, and `DISCORD_AUTO_CREATE_ALERT_CHANNELS=true`
-(the default), the control bot automatically creates a **Loungefly Alerts** category
-and the following text channels if they do not already exist:
+(the default). It writes the resulting IDs into JSON with owner-only file
+permissions. It will not overwrite manually specified IDs or create a new
+channel to replace a stale manually configured ID. Already existing channels
+are not moved, renamed or deleted.
 
-- `#lf-new-products` — new products
-- `#lf-restocks` — restocks and available items
-- `#lf-preorders` — preorders, backorders and coming soon
-- `#lf-price-changes` — increases and drops
-- `#lf-releases` — release dates, release updates, reminders and ETAs
-- `#lf-stock-updates` — low stock and sold out
-- `#lf-product-updates` — status/product updates and removals
-- `#lf-monitor-status` — monitor failures and recovery
+To send a category via webhook instead, enter the Discord webhook URL in that
+channel's `webhook_url` field. Webhooks take precedence over channel IDs.
+Multiple categories can share the same destination. The `fallback_webhooks`
+values are used if bot delivery is unavailable: `product` for product alerts,
+`admin` for monitor failures/recovery. All alert types map to the eight
+categories defined in `app/notifications/channel_setup.py`.
 
-The bot **reuses existing text channels** with matching names (wherever they
-are in the server), never deletes or moves channels, and skips ambiguous
-duplicate names. On every reconnect it checks again, without creating
-duplicates. Allow the bot **Manage Channels, View Channel, Send Messages, Embed
-Links** (and mention permissions if desired). It sends messages directly as the
-bot, retaining rich embeds and Add to Cart link buttons; **no webhook creation
-or secrets are needed** for these channels. It cannot provision without a
-configured guild, and missing permissions are logged while existing webhook
-fallbacks continue working. Disable automatic setup with
-`DISCORD_AUTO_CREATE_ALERT_CHANNELS=false`.
+**After editing JSON, restart `loungefly-monitor.service`** to reload routes.
+The bot needs **Manage Channels**, **View Channel**, **Send Messages**, and
+**Embed Links** to provision and publish. Treat webhook URLs as credentials:
+keep JSON private and rotate any exposed webhook. The bot token remains in
+`.env`. Old `DISCORD_WEBHOOK_URL`, `DISCORD_ADMIN_WEBHOOK_URL` and
+`DISCORD_WEBHOOK_*_URL` environment variables are no longer read. Move
+existing webhook URLs to JSON before upgrading if you need those fallbacks.
 
-**Optional manual routes:** For more granular routing, create channels yourself
-and go to **Edit Channel → Integrations → Webhooks → New Webhook** to get a webhook
-URL. Enter it in the private `.env` file. A specific webhook takes precedence
-over the corresponding bot-managed channel. For example:
-
-```dotenv
-DISCORD_WEBHOOK_NEW_PRODUCT_URL=
-DISCORD_WEBHOOK_RESTOCK_URL=
-DISCORD_WEBHOOK_PREORDER_OPEN_URL=
-DISCORD_WEBHOOK_PRICE_DROP_URL=
-DISCORD_WEBHOOK_OUT_OF_STOCK_URL=
-DISCORD_WEBHOOK_RELEASE_DATE_FOUND_URL=
-DISCORD_WEBHOOK_MONITOR_ERROR_URL=
-```
-
-Fill in each desired variable with its actual Discord webhook URL (do not commit
-those URLs). Any of the alert types listed in `app/models.py` can be configured
-with `DISCORD_WEBHOOK_<ALERT_TYPE>_URL`, for example
-`DISCORD_WEBHOOK_RELEASING_SOON_URL`. You can point multiple types at one webhook
-to group them into a shared channel.
-
-For each event, a specific webhook takes precedence, followed by an available
-bot-managed channel. When bot-managed channel setup is disabled, unavailable,
-or fails to send, product alerts fall back to `DISCORD_WEBHOOK_URL` and monitor
-error/recovery alerts fall back to `DISCORD_ADMIN_WEBHOOK_URL`. When the
-control bot is disabled, behaviour is unchanged. Mention and enable/disable
-settings still apply. Notifications are not duplicated between channels;
-previously delivered events are not replayed when routing changes.
-
-After saving `.env`, restart the monitor, then verify each configured channel
-using the `--alert-type` test flag:
-
-```bash
-.venv/bin/python -m app.tools.test_notification --alert-type NEW_PRODUCT
-.venv/bin/python -m app.tools.test_notification --alert-type RESTOCK
-.venv/bin/python -m app.tools.test_notification --alert-type MONITOR_ERROR
-```
+Notification enable/disable settings, mention policies, persistent
+deduplication and existing slash commands remain unchanged.
 
 ### Discord webhook test
 
@@ -213,8 +201,8 @@ sudo -u pi .venv/bin/python -m app.tools.test_notification
 sudo -u pi .venv/bin/python -m app.tools.test_notification --admin
 ```
 
-These commands refuse to send when the applicable URL is blank. Treat webhook URLs as passwords;
-rotate one in Discord immediately if it is exposed.
+These commands require a webhook in `data/discord_channels.json`, and do not test
+bot-managed channel delivery because they do not connect to the Discord gateway.
 
 Discord notifications mention `@everyone` so subscribers are alerted, except for product-removal
 notifications. The webhook's Discord channel permissions must allow everyone mentions for the
