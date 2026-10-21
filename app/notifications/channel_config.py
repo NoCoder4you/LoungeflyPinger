@@ -26,7 +26,10 @@ def _default_document() -> dict:
         "category_name": CATEGORY_NAME,
         "fallback_webhooks": {"product": None, "admin": None},
         "channels": {
-            name: {"channel_id": None, "webhook_url": None}
+            name: {
+                "channel_id": None, "role_id": None,
+                "webhook_url": None, "webhook_channel_id": None,
+            }
             for name in CHANNEL_ALERT_TYPES
         },
     }
@@ -74,15 +77,24 @@ def _validate(doc: object) -> dict:
         raise ChannelConfigurationError("Unknown Discord channel key(s): " + ", ".join(sorted(unknown)))
     normalized = {}
     for name in CHANNEL_ALERT_TYPES:
-        route = channels.get(name, {"channel_id": None, "webhook_url": None})
-        if not isinstance(route, dict) or set(route) != {"channel_id", "webhook_url"}:
-            raise ChannelConfigurationError(f"channels.{name} must contain channel_id and webhook_url")
-        channel_id = route["channel_id"]
-        if channel_id is not None and (type(channel_id) is not int or channel_id <= 0):
-            raise ChannelConfigurationError(f"channels.{name}.channel_id must be a positive integer or null")
+        route = channels.get(name, _default_document()["channels"][name])
+        if not isinstance(route, dict) or not {"channel_id", "webhook_url"} <= set(route) or (
+            set(route) - {"channel_id", "role_id", "webhook_url", "webhook_channel_id"}
+        ):
+            raise ChannelConfigurationError(
+                f"channels.{name} must contain channel_id and webhook_url"
+            )
+        for key in ("channel_id", "role_id", "webhook_channel_id"):
+            value = route.get(key)
+            if value is not None and (type(value) is not int or value <= 0):
+                raise ChannelConfigurationError(
+                    f"channels.{name}.{key} must be a positive integer or null"
+                )
         normalized[name] = {
-            "channel_id": channel_id,
+            "channel_id": route["channel_id"],
+            "role_id": route.get("role_id"),
             "webhook_url": _webhook(route["webhook_url"], f"channels.{name}.webhook_url"),
+            "webhook_channel_id": route.get("webhook_channel_id"),
         }
     return {
         "version": 1,
@@ -127,6 +139,18 @@ class ChannelRoutingStore:
         return {name: item["channel_id"] for name, item in self._document["channels"].items()}
 
     @property
+    def role_ids(self) -> dict[str, int | None]:
+        return {name: item["role_id"] for name, item in self._document["channels"].items()}
+
+    @property
+    def channel_webhooks(self) -> dict[str, str | None]:
+        return {name: item["webhook_url"] for name, item in self._document["channels"].items()}
+
+    @property
+    def managed_webhook_channel_ids(self) -> dict[str, int | None]:
+        return {name: item["webhook_channel_id"] for name, item in self._document["channels"].items()}
+
+    @property
     def fallback_product_webhook(self) -> str | None:
         return self._document["fallback_webhooks"]["product"]
 
@@ -140,16 +164,50 @@ class ChannelRoutingStore:
             alert_type: item["webhook_url"]
             for name, item in self._document["channels"].items()
             if item["webhook_url"]
+            and (item["webhook_channel_id"] is None
+                 or item["webhook_channel_id"] == item["channel_id"])
             for alert_type in CHANNEL_ALERT_TYPES[name]
         }
 
     def save_discovered_ids(self, discovered: dict[str, int]) -> None:
-        """Only fill missing IDs, reloading first to protect manual overrides."""
+        """Backwards-compatible channel-only discovery API."""
+        self.save_discovered_resources(channel_ids=discovered)
+
+    def save_discovered_resources(
+        self, *,
+        channel_ids: dict[str, int] | None = None,
+        role_ids: dict[str, int] | None = None,
+        managed_webhooks: dict[str, tuple[int, str]] | None = None,
+    ) -> None:
+        """Persist discovered IDs and owned webhooks without changing manual values.
+
+        Manually entered webhook URLs have webhook_channel_id=null and are never
+        replaced. Automatically generated webhooks may rotate when their channel
+        changes, but must never be committed to the tracked example JSON.
+        """
         self.load_or_create()
+        channels = self._document["channels"]
         changed = False
-        for name, channel_id in discovered.items():
-            if name in self._document["channels"] and self._document["channels"][name]["channel_id"] is None:
-                self._document["channels"][name]["channel_id"] = channel_id
+        for name, channel_id in (channel_ids or {}).items():
+            if name in channels and channels[name]["channel_id"] is None:
+                channels[name]["channel_id"] = channel_id
+                changed = True
+        for name, role_id in (role_ids or {}).items():
+            if name in channels and channels[name]["role_id"] is None:
+                channels[name]["role_id"] = role_id
+                changed = True
+        for name, (channel_id, webhook_url) in (managed_webhooks or {}).items():
+            if name not in channels:
+                continue
+            item = channels[name]
+            if item["channel_id"] != channel_id:
+                # Protect manual changes made while provisioning.
+                continue
+            if item["webhook_url"] and item["webhook_channel_id"] is None:
+                continue  # Operator-owned webhook takes precedence.
+            if item["webhook_channel_id"] != channel_id or item["webhook_url"] != webhook_url:
+                item["webhook_url"] = webhook_url
+                item["webhook_channel_id"] = channel_id
                 changed = True
         if not changed:
             return
