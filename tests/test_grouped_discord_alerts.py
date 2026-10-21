@@ -117,7 +117,7 @@ async def test_two_retailers_edit_one_webhook_embed_without_second_ping(tmp_path
         links = fields["Retailer Links"]
         assert "https://geekcore.example/stitch" in links
         assert "https://boxlunch.example/stitch" in links
-        assert "£69.99" in links and "£74.99" in links
+        assert "£69.99 (GBP)" in links and "£74.99 (GBP)" in links
         assert not any(field in fields for field in ("Retailer", "Price", "Quick Links"))
         delivered = await (await db.connection.execute(
             "SELECT COUNT(*) FROM notification_deliveries"
@@ -243,3 +243,31 @@ def test_product_title_normalisation_is_conservative():
     different_colour = Alert(AlertType.RESTOCK, bag("BoxLunch", name="Disney Stitch Blue Mini Backpack"))
     assert group_key(first) == group_key(equivalent)
     assert group_key(first) != group_key(different_colour)
+
+def test_grouped_embed_shows_currency_for_each_retailer() -> None:
+    from app.notifications.discord import build_discord_payload
+    a = Alert(AlertType.NEW_PRODUCT, bag("GeekCore"))
+    b = Alert(AlertType.NEW_PRODUCT, replace(bag("BoxLunch"), currency="USD"))
+    c = Alert(AlertType.NEW_PRODUCT, replace(bag("ThirdShop"), currency="AUD"))
+    combined = combined_payload(
+        build_discord_payload(a), [offer_for(a), offer_for(b), offer_for(c)]
+    )
+    assert combined is not None
+    fields = {field["name"]: field["value"] for field in combined["embeds"][0]["fields"]}
+    assert "Currency" not in fields  # One retailer's currency is not universal.
+    assert "£69.99 (GBP)" in fields["Retailer Links"]
+    assert "$74.99 (USD)" in fields["Retailer Links"]
+    assert "A$74.99 (AUD)" in fields["Retailer Links"]
+
+
+def test_legacy_metadata_is_removed_from_grouped_embeds() -> None:
+    from app.notifications.discord import build_discord_payload
+    a = Alert(AlertType.RESTOCK, bag("GeekCore"))
+    b = Alert(AlertType.RESTOCK, bag("BoxLunch"))
+    base = build_discord_payload(a)
+    for name in ("Previous Status", "Matched", "Priority", "First Seen"):
+        base["embeds"][0]["fields"].append({"name": name, "value": "old", "inline": True})
+    combined = combined_payload(base, [offer_for(a), offer_for(b)])
+    assert combined is not None
+    names = {field["name"] for field in combined["embeds"][0]["fields"]}
+    assert not {"Previous Status", "Matched", "Priority", "First Seen", "Currency"} & names
