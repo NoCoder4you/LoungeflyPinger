@@ -55,7 +55,7 @@ async def ensure_alert_roles(
             if role is None and create_missing:
                 try:
                     role = await guild.create_role(
-                        name=name, mentionable=False, reason=CREATION_REASON,
+                        name=name, mentionable=True, reason=CREATION_REASON,
                     )
                     LOGGER.info("discord_alert_role_created", extra={
                         "guild_id": guild.id, "role_id": role.id, "role_name": name,

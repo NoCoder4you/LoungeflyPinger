@@ -606,3 +606,76 @@ async def test_bot_channel_send_failure_falls_back_to_webhook(tmp_path: Path, pr
         notifier.set_auto_channels({AlertType.RESTOCK: channel})
         assert await notifier.send(Alert(AlertType.RESTOCK, product))
         assert session.calls[0][0] == "https://discord.example/fallback?with_components=true"
+
+
+@pytest.mark.asyncio
+async def test_failed_category_webhook_falls_back_to_bot_with_targeted_role(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "failed-hook.db") as database:
+        session = FakeSession(statuses=[500])
+        channel = FakeAlertChannel(888)
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_type_webhooks={
+                AlertType.RESTOCK: "https://discord.example/restock-webhook",
+            }), database, session=session
+        )
+        notifier.set_auto_channels({AlertType.RESTOCK: channel})
+        notifier.set_auto_roles({AlertType.RESTOCK: 12345})
+        alert = Alert(AlertType.RESTOCK, product, occurrence_id="failed-webhook-episode")
+        assert await notifier.send(alert)
+        assert await notifier.send(alert)
+        assert len(session.calls) == 1
+        assert len(channel.messages) == 1
+        assert session.calls[0][1]["content"] == "<@&12345>"
+        assert channel.messages[0]["content"] == "<@&12345>"
+        assert channel.messages[0]["allowed_mentions"].roles[0].id == 12345
+        row = await (await database.connection.execute(
+            "SELECT destination FROM notification_deliveries"
+        )).fetchone()
+        assert row == ("discord_channel_888",)
+
+
+@pytest.mark.asyncio
+async def test_failed_webhook_and_bot_remain_retryable(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "all-failed.db") as database:
+        session = FakeSession(statuses=[500])
+        channel = FakeAlertChannel()
+        channel.fail = True
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_type_webhooks={
+                AlertType.RESTOCK: "https://discord.example/restocks",
+            }), database, session=session
+        )
+        notifier.set_auto_channels({AlertType.RESTOCK: channel})
+        alert = Alert(AlertType.RESTOCK, product, occurrence_id="retryable")
+        assert not await notifier.send(alert)
+        assert not await notifier.send(alert)
+        assert len(session.calls) == 2
+        count = await (await database.connection.execute(
+            "SELECT count(*) FROM notification_deliveries"
+        )).fetchone()
+        assert count == (0,)
+
+
+def test_role_mentions_are_targeted_and_respect_none_and_silent_removals(
+    product: Product
+) -> None:
+    config = NotificationConfig()
+    role_payload = build_discord_payload(
+        Alert(AlertType.RESTOCK, product), config, category_role_id=1234
+    )
+    assert role_payload["content"] == "<@&1234>"
+    assert role_payload["allowed_mentions"] == {"parse": [], "roles": ["1234"]}
+    no_mentions = build_discord_payload(
+        Alert(AlertType.RESTOCK, product),
+        NotificationConfig(discord_alert_mention_mode="none"),
+        category_role_id=1234,
+    )
+    assert "content" not in no_mentions
+    removed = build_discord_payload(
+        Alert(AlertType.PRODUCT_REMOVED, product), config, category_role_id=1234
+    )
+    assert "content" not in removed

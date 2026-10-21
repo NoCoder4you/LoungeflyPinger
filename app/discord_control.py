@@ -19,7 +19,8 @@ from app.services.retailer_manager import RetailerManager, ScanAlreadyRunning
 from app.scheduler import Scheduler
 from app.services.notification_settings import NotificationSettingsService
 from app.notifications import DiscordNotifier
-from app.notifications.channel_setup import ensure_alert_channels
+from app.notifications.channel_setup import ensure_alert_channels, CHANNEL_ALERT_TYPES
+from app.notifications.resource_setup import ensure_alert_roles, ensure_alert_webhooks
 
 LOGGER = logging.getLogger("monitor.discord_control")
 
@@ -177,30 +178,59 @@ class DiscordControlService:
             try:
                 if store is not None:
                     store.load_or_create()
-                    self.notifier.set_routing(
-                        product_webhook=store.fallback_product_webhook,
-                        admin_webhook=store.fallback_admin_webhook,
-                        type_webhooks=store.type_webhooks,
-                    )
                 routes = await ensure_alert_channels(
                     guild,
                     existing_ids=store.channel_ids if store is not None else None,
                     category_name=store.category_name if store is not None else "Loungefly Alerts",
                     create_missing=self.config.auto_create_alert_channels,
                 )
+                by_name = {
+                    name: routes[types[0]] for name, types in CHANNEL_ALERT_TYPES.items()
+                    if types[0] in routes
+                }
                 if store is not None:
-                    from app.notifications.channel_setup import CHANNEL_ALERT_TYPES
-                    store.save_discovered_ids({
-                        name: routes[types[0]].id for name, types in CHANNEL_ALERT_TYPES.items()
-                        if types[0] in routes
-                    })
+                    store.save_discovered_resources(
+                        channel_ids={name: channel.id for name, channel in by_name.items()},
+                    )
+                roles = await ensure_alert_roles(
+                    guild, configured_ids=store.role_ids if store is not None else None,
+                    create_missing=self.config.auto_create_alert_channels,
+                )
+                if store is not None:
+                    store.save_discovered_resources(
+                        role_ids={name: role.id for name, role in roles.items()},
+                    )
+                webhooks = await ensure_alert_webhooks(
+                    by_name,
+                    bot_user_id=self.client.user.id,
+                    configured_urls=store.channel_webhooks if store is not None else None,
+                    managed_channel_ids=(
+                        store.managed_webhook_channel_ids if store is not None else None
+                    ),
+                    create_missing=self.config.auto_create_alert_channels,
+                )
+                if store is not None:
+                    store.save_discovered_resources(managed_webhooks=webhooks)
+                    store.load_or_create()
+                    self.notifier.set_routing(
+                        product_webhook=store.fallback_product_webhook,
+                        admin_webhook=store.fallback_admin_webhook,
+                        type_webhooks=store.type_webhooks,
+                    )
             except Exception:
                 LOGGER.exception("discord_alert_channel_setup_failed")
                 return
             self.notifier.set_auto_channels(routes)
+            self.notifier.set_auto_roles({
+                alert_type: role.id
+                for name, role in roles.items()
+                for alert_type in CHANNEL_ALERT_TYPES[name]
+            })
             LOGGER.info("discord_alert_channels_ready", extra={
                 "guild_id": guild.id,
-                "channel_count": len({channel.id for channel in routes.values()}),
+                "channel_count": len(by_name),
+                "webhook_count": len(webhooks),
+                "role_count": len(roles),
                 "routed_types": len(routes),
             })
 
@@ -287,6 +317,7 @@ class DiscordControlService:
     async def close(self) -> None:
         if self.notifier is not None:
             self.notifier.set_auto_channels({})
+            self.notifier.set_auto_roles({})
         if self.client is not None and not self.client.is_closed():
             await self.client.close()
         if self._task is not None:

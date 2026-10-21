@@ -119,7 +119,10 @@ def _mention(config: NotificationConfig, *, removed: bool) -> tuple[str | None, 
     return "@everyone", {"parse": ["everyone"]}
 
 
-def build_discord_payload(alert: Alert, config: NotificationConfig | None = None) -> dict[str, Any]:
+def build_discord_payload(
+    alert: Alert, config: NotificationConfig | None = None,
+    *, category_role_id: int | None = None,
+) -> dict[str, Any]:
     """Build a webhook payload while enforcing Discord limits and safe mentions."""
     config = config or NotificationConfig()
     product = alert.product
@@ -257,7 +260,14 @@ def build_discord_payload(alert: Alert, config: NotificationConfig | None = None
     removed_or_operational = alert.alert_type in {
         AlertType.PRODUCT_REMOVED, AlertType.MONITOR_ERROR, AlertType.MONITOR_RECOVERED,
     }
-    content, allowed_mentions = _mention(config, removed=removed_or_operational)
+    # Prefer a targeted opt-in category role over @everyone, but preserve
+    # explicit "none" and the legacy no-mention policy for removals/recovery.
+    if (category_role_id is not None and config.discord_alert_mention_mode != "none"
+            and alert.alert_type not in {AlertType.PRODUCT_REMOVED, AlertType.MONITOR_RECOVERED}):
+        role_text = str(category_role_id)
+        content, allowed_mentions = f"<@&{role_text}>", {"parse": [], "roles": [role_text]}
+    else:
+        content, allowed_mentions = _mention(config, removed=removed_or_operational)
     payload["allowed_mentions"] = allowed_mentions
     if content is not None:
         payload["content"] = content
@@ -275,10 +285,14 @@ class DiscordNotifier(NotificationProvider):
         self._owns_session = session is None
         self._delivery_lock = asyncio.Lock()
         self._auto_channels: dict[AlertType, discord.TextChannel] = {}
+        self._auto_roles: dict[AlertType, int] = {}
 
     def set_auto_channels(self, channels: dict[AlertType, discord.TextChannel]) -> None:
         """Atomically publish the currently available bot-managed alert channels."""
         self._auto_channels = dict(channels)
+
+    def set_auto_roles(self, roles: dict[AlertType, int]) -> None:
+        self._auto_roles = dict(roles)
 
     def set_routing(self, *, product_webhook: str | None, admin_webhook: str | None,
                     type_webhooks: dict[AlertType, str]) -> None:
@@ -290,7 +304,9 @@ class DiscordNotifier(NotificationProvider):
         )
 
     async def _send_to_channel(self, alert: Alert, channel: discord.TextChannel) -> None:
-        payload = build_discord_payload(alert, self._config)
+        payload = build_discord_payload(
+            alert, self._config, category_role_id=self._auto_roles.get(alert.alert_type)
+        )
         mentions = payload["allowed_mentions"]
         allowed_mentions = discord.AllowedMentions(
             everyone="everyone" in mentions.get("parse", []),
@@ -368,20 +384,35 @@ class DiscordNotifier(NotificationProvider):
                 "event_type": alert.alert_type.value,
             })
             return True
-        webhook, destination = self._webhook(alert)
-        # Explicit type-specific webhooks take precedence over automatic channels.
-        channel = (None if self._config.discord_type_webhooks.get(alert.alert_type)
-                   else self._auto_channels.get(alert.alert_type))
-        context = {"retailer": alert.product.retailer if alert.product else None,
-                   "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,
-                   "product_url": alert.product.url if alert.product else None,
-                   "event_type": alert.alert_type.value}
-        if channel is None and not webhook:
+
+        type_webhook = self._config.discord_type_webhooks.get(alert.alert_type)
+        fallback_webhook = (
+            self._config.discord_admin_webhook_url if alert.is_admin
+            else self._config.discord_webhook_url
+        )
+        channel = self._auto_channels.get(alert.alert_type)
+        context = {
+            "retailer": alert.product.retailer if alert.product else None,
+            "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,
+            "product_url": alert.product.url if alert.product else None,
+            "event_type": alert.alert_type.value,
+        }
+        if not type_webhook and channel is None and not fallback_webhook:
             LOGGER.warning("Discord destination is not configured", extra=context)
             return False
+
         async with self._delivery_lock:
             if await self._was_delivered(alert):
                 LOGGER.info("Suppressing duplicate Discord alert", extra=context)
+                return True
+
+            # Named per-category webhook -> bot message in the same channel ->
+            # legacy JSON-configured fallback webhook. When no named webhook
+            # exists, prefer the bot-managed channel over the fallback webhook.
+            if type_webhook and await self._deliver_webhook(
+                alert, type_webhook, context,
+                f"discord_{alert.alert_type.value.lower()}",
+            ):
                 return True
             if channel is not None:
                 try:
@@ -391,33 +422,48 @@ class DiscordNotifier(NotificationProvider):
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    LOGGER.error("Discord channel delivery failed: %s", type(exc).__name__, extra=context)
-                    if not webhook:
-                        return False
-                    # A failed bot send can still fall back to a configured webhook.
-            if not webhook:
-                return False
-            if self._session is None or self._session.closed:
-                self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
-                self._owns_session = True
-            try:
-                request_url = _component_webhook_url(webhook, enabled=alert.product is not None)
-                response = await self._session.post(
-                    request_url, json=build_discord_payload(alert, self._config)
-                )
-                try:
-                    if not 200 <= response.status < 300:
-                        LOGGER.error("Discord webhook rejected notification", extra={**context, "status": response.status})
-                        return False
-                    await self._record_delivery(alert, destination)
+                    LOGGER.error("Discord bot channel delivery failed: %s",
+                                 type(exc).__name__, extra=context)
+            if fallback_webhook and fallback_webhook != type_webhook:
+                if await self._deliver_webhook(
+                    alert, fallback_webhook, context,
+                    "discord_admin" if alert.is_admin else "discord",
+                ):
                     return True
-                finally:
-                    response.release()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                LOGGER.error("Discord webhook delivery failed: %s", type(exc).__name__, extra=context)
-                return False
+            return False
+
+    async def _deliver_webhook(
+        self, alert: Alert, webhook: str, context: dict[str, Any],
+        destination: str,
+    ) -> bool:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
+            self._owns_session = True
+        try:
+            request_url = _component_webhook_url(webhook, enabled=alert.product is not None)
+            response = await self._session.post(
+                request_url,
+                json=build_discord_payload(
+                    alert, self._config,
+                    category_role_id=self._auto_roles.get(alert.alert_type),
+                ),
+            )
+            try:
+                if not 200 <= response.status < 300:
+                    LOGGER.error("Discord webhook rejected notification", extra={
+                        **context, "status": response.status,
+                    })
+                    return False
+                await self._record_delivery(alert, destination)
+                return True
+            finally:
+                response.release()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            LOGGER.error("Discord webhook delivery failed: %s",
+                         type(exc).__name__, extra=context)
+            return False
 
     async def close(self) -> None:
         if self._owns_session and self._session is not None:
