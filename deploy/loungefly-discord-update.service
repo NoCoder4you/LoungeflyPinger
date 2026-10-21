@@ -1,0 +1,28 @@
+[Unit]
+Description=Apply Discord-requested Loungefly update and restart monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# This root-owned unit controls only systemd stop/start. The GitHub updater
+# must run as the unprivileged repository owner, never as root.
+User=root
+Group=root
+WorkingDirectory=/home/pi/LoungeflyPinger
+# Give Discord a short opportunity to deliver the ephemeral acknowledgement.
+ExecStartPre=/usr/bin/sleep 3
+# Consume the marker before stopping the bot (so later requests can be queued).
+ExecStartPre=/usr/bin/rm -f /home/pi/LoungeflyPinger/data/.discord-update-request
+ExecStartPre=/usr/bin/systemctl stop loungefly-monitor.service
+ExecStart=/usr/sbin/runuser -u pi -- /home/pi/LoungeflyPinger/update.sh
+# Runs after success or failure; queue the restart rather than waiting on
+# systemd inside the unit that is currently being torn down.
+ExecStopPost=/usr/bin/systemctl start --no-block loungefly-monitor.service
+TimeoutStartSec=20min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/LoungeflyPinger
+UMask=0077
