@@ -536,3 +536,73 @@ async def test_type_webhook_without_default_still_deduplicates(
         assert [url for url, _ in session.calls] == [
             "https://discord.example/restocks?with_components=true"
         ]
+
+class FakeAlertChannel:
+    def __init__(self, channel_id: int = 123) -> None:
+        self.id = channel_id
+        self.messages: list[dict[str, object]] = []
+        self.fail = False
+
+    async def send(self, **kwargs) -> None:
+        if self.fail:
+            raise RuntimeError("missing permission")
+        self.messages.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_bot_managed_channel_delivery_keeps_embed_buttons_mentions_and_deduplication(
+    tmp_path: Path, product: Product
+) -> None:
+    async with Database(tmp_path / "channel.db") as database:
+        channel = FakeAlertChannel()
+        session = FakeSession()
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_webhook_url="https://discord.example/default"),
+            database, session=session
+        )
+        notifier.set_auto_channels({AlertType.RESTOCK: channel})
+        alert = Alert(AlertType.RESTOCK, product, occurrence_id="bot-channel-restock")
+        assert await notifier.send(alert)
+        assert await notifier.send(alert)
+        assert not session.calls
+        assert len(channel.messages) == 1
+        sent = channel.messages[0]
+        assert sent["content"] == "@everyone"
+        assert sent["embed"].title == product.name
+        assert sent["view"].children[0].url == product.url
+        assert sent["allowed_mentions"].everyone is True
+        row = await (await database.connection.execute(
+            "SELECT destination FROM notification_deliveries"
+        )).fetchone()
+        assert row == ("discord_channel_123",)
+
+
+@pytest.mark.asyncio
+async def test_explicit_type_webhook_overrides_bot_channel(tmp_path: Path, product: Product) -> None:
+    async with Database(tmp_path / "priority.db") as database:
+        session = FakeSession()
+        channel = FakeAlertChannel()
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_type_webhooks={
+                AlertType.RESTOCK: "https://discord.example/special",
+            }), database, session=session
+        )
+        notifier.set_auto_channels({AlertType.RESTOCK: channel})
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert not channel.messages
+        assert session.calls[0][0] == "https://discord.example/special?with_components=true"
+
+
+@pytest.mark.asyncio
+async def test_bot_channel_send_failure_falls_back_to_webhook(tmp_path: Path, product: Product) -> None:
+    async with Database(tmp_path / "fallback.db") as database:
+        session = FakeSession()
+        channel = FakeAlertChannel()
+        channel.fail = True
+        notifier = DiscordNotifier(
+            NotificationConfig(discord_webhook_url="https://discord.example/fallback"),
+            database, session=session
+        )
+        notifier.set_auto_channels({AlertType.RESTOCK: channel})
+        assert await notifier.send(Alert(AlertType.RESTOCK, product))
+        assert session.calls[0][0] == "https://discord.example/fallback?with_components=true"

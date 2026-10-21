@@ -43,7 +43,7 @@ class Application:
         )
         self.discord_control = DiscordControlService(
             config.discord_bot, self.watchlists, self.database, config, self.retailers,
-            self.scheduler, self.notification_settings
+            self.scheduler, self.notification_settings, notifier=self.notifier
         )
         self.retailers.set_scan_activity_callback(
             self.discord_control.update_scan_presence

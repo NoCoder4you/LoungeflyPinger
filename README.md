@@ -142,9 +142,35 @@ product types, exclusivity, preorder, and maximum price.
 
 ### Separate Discord channels by alert type
 
-Create the channels in Discord, then for each go to **Edit Channel → Integrations →
-Webhooks → New Webhook** and copy its webhook URL into the private `.env` file.
-For example, use these variables for different channels:
+**Automatic setup (recommended):** when `DISCORD_BOT_ENABLED=true`,
+`DISCORD_BOT_GUILD_ID` is set, and `DISCORD_AUTO_CREATE_ALERT_CHANNELS=true`
+(the default), the control bot automatically creates a **Loungefly Alerts** category
+and the following text channels if they do not already exist:
+
+- `#lf-new-products` — new products
+- `#lf-restocks` — restocks and available items
+- `#lf-preorders` — preorders, backorders and coming soon
+- `#lf-price-changes` — increases and drops
+- `#lf-releases` — release dates, release updates, reminders and ETAs
+- `#lf-stock-updates` — low stock and sold out
+- `#lf-product-updates` — status/product updates and removals
+- `#lf-monitor-status` — monitor failures and recovery
+
+The bot **reuses existing text channels** with matching names (wherever they
+are in the server), never deletes or moves channels, and skips ambiguous
+duplicate names. On every reconnect it checks again, without creating
+duplicates. Allow the bot **Manage Channels, View Channel, Send Messages, Embed
+Links** (and mention permissions if desired). It sends messages directly as the
+bot, retaining rich embeds and Add to Cart link buttons; **no webhook creation
+or secrets are needed** for these channels. It cannot provision without a
+configured guild, and missing permissions are logged while existing webhook
+fallbacks continue working. Disable automatic setup with
+`DISCORD_AUTO_CREATE_ALERT_CHANNELS=false`.
+
+**Optional manual routes:** For more granular routing, create channels yourself
+and go to **Edit Channel → Integrations → Webhooks → New Webhook** to get a webhook
+URL. Enter it in the private `.env` file. A specific webhook takes precedence
+over the corresponding bot-managed channel. For example:
 
 ```dotenv
 DISCORD_WEBHOOK_NEW_PRODUCT_URL=
@@ -162,12 +188,13 @@ with `DISCORD_WEBHOOK_<ALERT_TYPE>_URL`, for example
 `DISCORD_WEBHOOK_RELEASING_SOON_URL`. You can point multiple types at one webhook
 to group them into a shared channel.
 
-For each event, its specific webhook takes precedence. If none is set, product
-alerts use `DISCORD_WEBHOOK_URL` and monitor error/recovery alerts use
-`DISCORD_ADMIN_WEBHOOK_URL`, exactly as before. No configuration changes are
-required for existing installations. Mention and enable/disable settings still
-apply. Notifications are not duplicated between channels; previously delivered
-events are not replayed when routing changes.
+For each event, a specific webhook takes precedence, followed by an available
+bot-managed channel. When bot-managed channel setup is disabled, unavailable,
+or fails to send, product alerts fall back to `DISCORD_WEBHOOK_URL` and monitor
+error/recovery alerts fall back to `DISCORD_ADMIN_WEBHOOK_URL`. When the
+control bot is disabled, behaviour is unchanged. Mention and enable/disable
+settings still apply. Notifications are not duplicated between channels;
+previously delivered events are not replayed when routing changes.
 
 After saving `.env`, restart the monitor, then verify each configured channel
 using the `--alert-type` test flag:
@@ -197,9 +224,10 @@ mention to notify channel members.
 
 The optional control bot runs on the monitor's asyncio loop and is separate from outbound webhook
 alerts. In the Discord Developer Portal, create an application and bot, keep its token in `.env`,
-and invite it with the `bot` and `applications.commands` scopes. It needs only **View Channels** and
-**Send Messages** (plus **Attach Files** for `/watch export`); Administrator and Message Content
-intent and other privileged intents are not required. Set `DISCORD_BOT_GUILD_ID=<server id>` for
+and invite it with the `bot` and `applications.commands` scopes. For automatic channel setup it additionally requires **Manage Channels**
+and **Embed Links**; for the control bot alone, **View Channels** and **Send
+Messages** suffice (plus **Attach Files** for `/watch export`). Administrator,
+Message Content intent, and other privileged intents are not required. Set `DISCORD_BOT_GUILD_ID=<server id>` for
 production so commands are registered only in that server and synchronize promptly. Leaving the
 guild ID blank registers global application commands, which can take longer to appear. Leaving
 `DISCORD_BOT_ENABLED=false` makes no gateway connection and preserves the pre-bot operation.

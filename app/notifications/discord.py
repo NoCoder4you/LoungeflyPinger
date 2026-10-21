@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 import aiohttp
+import discord
 
 from app.config import NotificationConfig
 from app.database import Database
@@ -272,6 +273,38 @@ class DiscordNotifier(NotificationProvider):
         self._settings = settings
         self._owns_session = session is None
         self._delivery_lock = asyncio.Lock()
+        self._auto_channels: dict[AlertType, discord.TextChannel] = {}
+
+    def set_auto_channels(self, channels: dict[AlertType, discord.TextChannel]) -> None:
+        """Atomically publish the currently available bot-managed alert channels."""
+        self._auto_channels = dict(channels)
+
+    async def _send_to_channel(self, alert: Alert, channel: discord.TextChannel) -> None:
+        payload = build_discord_payload(alert, self._config)
+        mentions = payload["allowed_mentions"]
+        allowed_mentions = discord.AllowedMentions(
+            everyone="everyone" in mentions.get("parse", []),
+            users=False,
+            roles=[discord.Object(id=int(role_id)) for role_id in mentions.get("roles", [])],
+            replied_user=False,
+        )
+        view: discord.ui.View | None = None
+        if payload.get("components"):
+            view = discord.ui.View()
+            for row in payload["components"]:
+                for button in row["components"]:
+                    view.add_item(discord.ui.Button(
+                        style=discord.ButtonStyle.link,
+                        label=button["label"],
+                        url=button["url"],
+                        emoji=button.get("emoji", {}).get("name"),
+                    ))
+        await channel.send(
+            content=payload.get("content"),
+            embed=discord.Embed.from_dict(payload["embeds"][0]),
+            allowed_mentions=allowed_mentions,
+            view=view,
+        )
 
     def _webhook(self, alert: Alert) -> tuple[str | None, str]:
         # No override: keep existing product/admin delivery destinations.
@@ -326,17 +359,34 @@ class DiscordNotifier(NotificationProvider):
             })
             return True
         webhook, destination = self._webhook(alert)
+        # Explicit type-specific webhooks take precedence over automatic channels.
+        channel = (None if self._config.discord_type_webhooks.get(alert.alert_type)
+                   else self._auto_channels.get(alert.alert_type))
         context = {"retailer": alert.product.retailer if alert.product else None,
                    "product_id": alert.product.retailer_product_id if alert.product else alert.product_id,
                    "product_url": alert.product.url if alert.product else None,
                    "event_type": alert.alert_type.value}
-        if not webhook:
-            LOGGER.warning("Discord webhook is not configured", extra=context)
+        if channel is None and not webhook:
+            LOGGER.warning("Discord destination is not configured", extra=context)
             return False
         async with self._delivery_lock:
             if await self._was_delivered(alert):
                 LOGGER.info("Suppressing duplicate Discord alert", extra=context)
                 return True
+            if channel is not None:
+                try:
+                    await self._send_to_channel(alert, channel)
+                    await self._record_delivery(alert, f"discord_channel_{channel.id}")
+                    return True
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    LOGGER.error("Discord channel delivery failed: %s", type(exc).__name__, extra=context)
+                    if not webhook:
+                        return False
+                    # A failed bot send can still fall back to a configured webhook.
+            if not webhook:
+                return False
             if self._session is None or self._session.closed:
                 self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
                 self._owns_session = True
