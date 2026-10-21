@@ -185,6 +185,8 @@ def build_discord_payload(
             if alert.previous_price is not None and alert.previous_price != product.price:
                 price = f"{_money(alert.previous_price, product.currency)} → {price}"
             add("Price", price)
+        # Display the source retailer's ISO currency code, not a converted amount.
+        add("Currency", product.currency)
             if (alert.alert_type is AlertType.PRICE_DROP and alert.previous_price and
                     alert.previous_price > product.price):
                 saving = alert.previous_price - product.price
@@ -211,8 +213,6 @@ def build_discord_payload(
             add("Character", product.character)
         if product.parks_origin:
             add("Parks Origin", product.parks_origin)
-        if alert.previous_availability is not None and alert.previous_availability != product.availability:
-            add("Previous Status", _status(alert.previous_availability))
         if product.release is not None:
             if alert.previous_release is not None:
                 add("Previous Release", format_release(alert.previous_release))
@@ -222,18 +222,13 @@ def build_discord_payload(
         if product.regional_offers:
             offer_lines = []
             for offer in product.regional_offers:
-                price = _money(offer.price, offer.currency) if offer.price is not None else "Price unavailable"
+                price = f"{_money(offer.price, offer.currency)} ({offer.currency})" if offer.price is not None else f"Price unavailable ({offer.currency})"
                 offer_lines.append(
                     f"[{offer.region}]({offer.url}) — {price} — {_status(offer.availability)}"
                 )
             add("EMP Regional Stores", "\n".join(offer_lines), inline=False, preserve_lines=True)
         if product.estimated_arrival_text or product.estimated_arrival_date:
             add("Retailer ETA", product.estimated_arrival_text or product.estimated_arrival_date.isoformat())
-        if alert.watch_matches:
-            add("Matched", "\n".join(match.name for match in alert.watch_matches), inline=False)
-            add("Priority", alert.priority.value.upper())
-        if alert.first_seen:
-            add("First Seen", f"<t:{int(alert.first_seen.timestamp())}:f>")
         if alert.alert_type is AlertType.RESTOCK:
             add("Restocked", f"<t:{int(alert.timestamp.timestamp())}:f>")
         links = []
