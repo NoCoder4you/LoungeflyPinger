@@ -593,8 +593,10 @@ orange identifies backorders, low stock, price increases and warnings; red ident
 monitor errors. Supported stock events include **NEW PRODUCT**, **RESTOCK**, **PREORDER**,
 **BACKORDER**, **COMING SOON**, **NOW AVAILABLE/RELEASED**, **PRICE DROP**, **PRICE INCREASE**,
 **STATUS CHANGE**, **PRODUCT UPDATED**, and **SOLD OUT**, plus existing release and monitor-health
-events. Price comparisons use normalized `Decimal` values, so currency symbols or trailing zeroes
-do not create false changes.
+events. Product embeds show each retailer's original ISO currency code (`GBP`, `USD`, `EUR`,
+`AUD`, etc.) in a **Currency** field; grouped retailer links label individual prices with the
+matching currency code. No currency conversion is performed. Price comparisons use normalized
+`Decimal` values, so currency symbols or trailing zeroes do not create false changes.
 
 Mentions are controlled by `DISCORD_ALERT_MENTION_MODE=category|none|role|everyone`. The safe
 default is `category`, which pings only the relevant alert role when available and otherwise
