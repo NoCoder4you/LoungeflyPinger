@@ -18,9 +18,28 @@ IN_PROGRESS="$APP_DIR/data/.discord-update-in-progress"
 SESSION=""
 CHILD=""
 RESTART_REQUIRED=0
+ORIGINAL_REV=""
+ORIGINAL_VENV=""
 
 log() { printf '%s\n' "discord-updater: $*" >&2; }
 is_active() { "$SYSTEMCTL" is-active --quiet "$SERVICE"; }
+installed_revision() {
+    "$RUNUSER" -u "$UPDATER_USER" -- /usr/bin/git -C "$APP_DIR" rev-parse --verify HEAD
+}
+prior_version_restored() {
+    local installed=""
+    installed="$(installed_revision)" || return 1
+    [[ "$installed" == "$ORIGINAL_REV" ]] || {
+        log "Rollback incomplete: Git checkout is not the previous commit."
+        return 1
+    }
+    if [[ -n "$ORIGINAL_VENV" ]]; then
+        [[ "$(readlink -f -- "$APP_DIR/.venv" 2>/dev/null || true)" == "$ORIGINAL_VENV" ]] || {
+            log "Rollback incomplete: previous virtual environment is not active."
+            return 1
+        }
+    fi
+}
 
 health_check() {
     local main_pid="" observed=""
@@ -52,9 +71,12 @@ cleanup() {
         CHILD=""
     fi
     if (( RESTART_REQUIRED == 1 )); then
-        # On failed update, the child's EXIT trap should have restored the
-        # previous commit, venv and database before we start the monitor.
-        "$SYSTEMCTL" start --no-block "$SERVICE" || true
+        # Never restart a potentially broken candidate when rollback failed.
+        if [[ -n "$ORIGINAL_REV" ]] && prior_version_restored; then
+            "$SYSTEMCTL" start --no-block "$SERVICE" || true
+        else
+            log "Not restarting because the previous revision was not restored."
+        fi
     fi
     rm -f -- "$IN_PROGRESS"
     if [[ -n "$SESSION" ]]; then rm -rf -- "$SESSION"; fi
@@ -69,6 +91,8 @@ trap 'exit 129' HUP
 [[ "$READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { log "Invalid READY_TIMEOUT_SECONDS"; exit 1; }
 [[ -f "$APP_DIR/update.sh" ]] || { log "No production updater found"; exit 1; }
 [[ ! -e "$IN_PROGRESS" ]] || { log "Another update already owns the marker"; exit 1; }
+ORIGINAL_REV="$(installed_revision)"
+ORIGINAL_VENV="$(readlink -f -- "$APP_DIR/.venv" 2>/dev/null || true)"
 
 # Prevent loungefly-update.service (a Wants= dependency of monitor.service)
 # from starting a second updater while we verify the new candidate.
@@ -130,6 +154,7 @@ case "$state" in
             wait "$CHILD" || true
             CHILD=""
             log "Restarting the restored previous version."
+            prior_version_restored || exit 1
             health_check || { log "Restored monitor failed startup checks."; exit 1; }
             RESTART_REQUIRED=0
             exit 1
@@ -152,6 +177,7 @@ case "$state" in
         wait "$CHILD" || true
         CHILD=""
         log "Restarting the previous version."
+        prior_version_restored || exit 1
         health_check || { log "Previous monitor failed restart checks."; exit 1; }
         RESTART_REQUIRED=0
         exit 1
