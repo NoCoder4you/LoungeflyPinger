@@ -267,3 +267,15 @@ def test_explicit_none_mention_mode_remains_supported(tmp_path: Path, monkeypatc
     monkeypatch.setenv("DISCORD_ALERT_MENTION_MODE", "none")
     config = load_config(env_path=tmp_path / ".env")
     assert config.notifications.discord_alert_mention_mode == "none"
+
+def test_discord_update_allowlist_is_explicit_and_validated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DISCORD_BOT_UPDATE_USER_IDS", raising=False)
+    assert load_config(env_path=tmp_path / ".env").discord_bot.update_user_ids == frozenset()
+
+    monkeypatch.setenv("DISCORD_BOT_UPDATE_USER_IDS", "42, 77")
+    config = load_config(env_path=tmp_path / ".env")
+    assert config.discord_bot.update_user_ids == frozenset({42, 77})
+
+    monkeypatch.setenv("DISCORD_BOT_UPDATE_USER_IDS", "42,not-an-id")
+    with pytest.raises(ConfigurationError):
+        load_config(env_path=tmp_path / ".env")
