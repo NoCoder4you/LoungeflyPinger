@@ -75,3 +75,110 @@ test -L "$tmp/application with spaces/.venv"
 test -x "$tmp/application with spaces/.venv/bin/python"
 ! compgen -G "$tmp/application with spaces/.update-stage.*" >/dev/null
 echo "updater disposable fast-forward integration: PASS"
+
+
+# Exercise production startup verification with fake systemctl + Python:
+# a commit passing compile/import/tests must still roll back if its service dies.
+cat >"$tmp/fake-python" <<'FAKEPY2'
+#!/usr/bin/env bash
+set -eu
+if [[ ${1:-} == -m && ${2:-} == venv ]]; then
+    mkdir -p "$3/bin"
+    cp "$0" "$3/bin/python"
+elif [[ ${1:-} == - ]]; then
+    exec python3 "$@"
+fi
+exit 0
+FAKEPY2
+chmod +x "$tmp/fake-python"
+cat >"$tmp/fake-bin/systemctl" <<'SYSTEMCTL'
+#!/usr/bin/env bash
+set -eu
+cmd="$1"
+shift
+if [[ "$cmd" == start && "${1:-}" == --no-block ]]; then shift; fi
+case "$cmd" in
+  stop) printf 'inactive\n' >"$APP_DIR/monitor-state";;
+  start)
+    printf 'active\n' >"$APP_DIR/monitor-state"
+    if [[ "$(cat "$APP_DIR/version")" == "broken" ]]; then
+      printf 'broken-database' >"$APP_DIR/data/loungefly.db"
+    fi
+    ;;
+  is-active)
+    [[ "$(cat "$APP_DIR/monitor-state")" == active &&
+       "$(cat "$APP_DIR/version")" != broken ]] || exit 3;;
+  show) printf '4123\n';;
+  cat) exit 0;;
+  *) echo "unexpected systemctl $cmd" >&2; exit 99;;
+esac
+SYSTEMCTL
+chmod +x "$tmp/fake-bin/systemctl"
+cat >"$tmp/fake-runuser" <<'RUNUSER'
+#!/usr/bin/env bash
+set -eu
+[[ "$1" == -u && "$3" == -- ]] || exit 2
+shift 3
+exec "$@"
+RUNUSER
+chmod +x "$tmp/fake-runuser"
+mkdir -p "$tmp/application with spaces/data"
+python3 - "$tmp/application with spaces/data/loungefly.db" <<'PREPAREDB'
+import sqlite3
+import sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("CREATE TABLE marker(value TEXT)")
+c.execute("INSERT INTO marker VALUES ('prior data')")
+c.commit()
+c.close()
+PREPAREDB
+printf 'active\n' >"$tmp/application with spaces/monitor-state"
+old_commit="$(git -C "$tmp/application with spaces" rev-parse HEAD)"
+old_venv="$(readlink "$tmp/application with spaces/.venv")"
+printf 'broken\n' >"$tmp/source/version"
+git -C "$tmp/source" add version
+git -C "$tmp/source" commit -qm broken-production-startup
+git -C "$tmp/source" push -q
+supervisor="$PWD/deploy/loungefly-discord-update-supervisor.sh"
+common_env=(APP_DIR="$tmp/application with spaces" SYSTEMCTL="$tmp/fake-bin/systemctl"
+            RUNUSER="$tmp/fake-runuser" UPDATER_USER="$(id -un)"
+            PYTHON_BIN="$tmp/fake-python" HEALTH_SECONDS=2 READY_TIMEOUT_SECONDS=30
+            FETCH_RETRY_SECONDS=0 WORK_DIR="$tmp" PATH="$tmp/fake-bin:$PATH")
+if env "${common_env[@]}" bash "$supervisor" >"$tmp/failed-health.log" 2>&1; then
+  echo 'A broken production startup must fail the Discord update' >&2
+  exit 1
+fi
+test "$(git -C "$tmp/application with spaces" rev-parse HEAD)" = "$old_commit"
+test "$(readlink "$tmp/application with spaces/.venv")" = "$old_venv"
+test "$(cat "$tmp/application with spaces/monitor-state")" = active
+python3 - "$tmp/application with spaces/data/loungefly.db" <<'CHECKDB'
+import sqlite3
+import sys
+c = sqlite3.connect(sys.argv[1])
+assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+assert c.execute("SELECT value FROM marker").fetchone()[0] == "prior data"
+c.close()
+CHECKDB
+grep -Fq 'Candidate startup verification failed' "$tmp/failed-health.log"
+grep -Fq 'Rolling back the failed update' "$tmp/application with spaces/logs/updater.log"
+test ! -e "$tmp/application with spaces/data/.discord-update-in-progress"
+echo "Discord updater failed-startup rollback: PASS"
+
+printf 'working\n' >"$tmp/source/version"
+git -C "$tmp/source" add version
+git -C "$tmp/source" commit -qm healthy-production-startup
+git -C "$tmp/source" push -q
+env "${common_env[@]}" bash "$supervisor" >"$tmp/healthy.log" 2>&1
+test "$(cat "$tmp/application with spaces/version")" = working
+test "$(git -C "$tmp/application with spaces" rev-parse HEAD)" = \
+  "$(git -C "$tmp/source" rev-parse HEAD)"
+test "$(cat "$tmp/application with spaces/monitor-state")" = active
+test -f "$tmp/application with spaces/.update-backups/last-good-commit.txt"
+grep -Fq 'Discord update committed after healthy startup' "$tmp/healthy.log"
+test ! -e "$tmp/application with spaces/data/.discord-update-in-progress"
+echo "Discord updater verified healthy activation: PASS"
+
+env "${common_env[@]}" bash "$supervisor" >"$tmp/no-change.log" 2>&1
+grep -Fq 'Already up to date; restarting the current monitor' "$tmp/no-change.log"
+test "$(cat "$tmp/application with spaces/monitor-state")" = active
+echo "Discord updater already-current restart: PASS"
